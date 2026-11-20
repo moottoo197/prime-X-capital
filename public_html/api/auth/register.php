@@ -14,8 +14,8 @@ $body = getJsonBody();
 $firstName = trim((string)($body['first_name'] ?? $body['firstName'] ?? $body['user']['first_name'] ?? $body['user']['firstName'] ?? ''));
 $lastName = trim((string)($body['last_name'] ?? $body['lastName'] ?? $body['user']['last_name'] ?? $body['user']['lastName'] ?? ''));
 $email = strtolower(trim($body['email'] ?? ''));
-$phone = trim((string)($body['phone'] ?? $body['phone_number'] ?? $body['user']['phone'] ?? $body['user']['phone_number'] ?? ''));
-$normalizedPhoneDigits = preg_replace('/[\s\-().]/', '', $phone);
+$whatsappNumber = trim((string)($body['whatsapp_number'] ?? $body['whatsapp'] ?? $body['phone'] ?? $body['phone_number'] ?? $body['user']['whatsapp_number'] ?? $body['user']['phone'] ?? $body['user']['phone_number'] ?? ''));
+$normalizedPhoneDigits = preg_replace('/[\s\-().]/', '', $whatsappNumber);
 $password = $body['password'] ?? '';
 $referralCode = strtoupper(trim((string)($body['referral_code'] ?? $body['ref'] ?? $body['invite_code'] ?? ($_COOKIE['alphavest_ref'] ?? ''))));
 $withdrawalPin = trim($body['withdrawal_pin'] ?? $body['fund_password'] ?? $body['pin'] ?? '');
@@ -37,8 +37,8 @@ if (empty($email) || empty($password) || strlen($password) < 8) {
     sendError('VALIDATION_ERROR', 'Valid email and password (minimum 8 characters) required');
 }
 
-if ($phone === '' || !preg_match('/^[0-9+\-\s().]{7,24}$/', $phone) || !preg_match('/^\+?\d{7,15}$/', (string)$normalizedPhoneDigits)) {
-    sendError('VALIDATION_ERROR', 'Please enter a valid phone number');
+if ($whatsappNumber === '' || !preg_match('/^[0-9+\-\s().]{7,24}$/', $whatsappNumber) || !preg_match('/^\+?\d{7,15}$/', (string)$normalizedPhoneDigits)) {
+    sendError('VALIDATION_ERROR', 'Please enter a valid WhatsApp number');
 }
 
 if (empty($withdrawalPin) || !preg_match('/^\d{6}$/', $withdrawalPin)) {
@@ -103,7 +103,8 @@ $authRes = $supabase->authAdminCreateUser($email, $password, [
     'kyc_status' => $kycStatus,
     'referral_code' => $myRefCode,
     'referred_by' => $validReferredBy,
-    'phone' => $phone,
+    'whatsapp_number' => $whatsappNumber,
+    'phone' => $whatsappNumber,
     'country' => $country,
     'timezone' => $timezone
 ]);
@@ -118,7 +119,8 @@ $profilePayload = [
     'email' => $email,
     'first_name' => $firstName,
     'last_name' => $lastName,
-    'phone' => $phone,
+    'whatsapp_number' => $whatsappNumber,
+    'phone' => $whatsappNumber,
     'password_hash' => $hash,
     'role' => $role,
     'is_active' => 1,
@@ -135,7 +137,7 @@ $profilePayload = [
 
 $profileRes = $supabase->upsert('profiles', [$profilePayload], 'id');
 
-// Legacy Supabase schemas may not expose optional PIN/timezone/phone columns in PostgREST.
+// Legacy Supabase schemas may not expose optional PIN/timezone/phone/whatsapp columns in PostgREST.
 // Never allow an optional security/profile column to prevent the required country
 // and account profile from being created. Retry progressively with only columns
 // that are required by the application.
@@ -143,7 +145,7 @@ if (!$profileRes['success']) {
     $msg = strtolower((string)($profileRes['message'] ?? ''));
     $retry = $profilePayload;
     $changed = false;
-    foreach (['withdrawal_pin_hash', 'withdrawal_pin', 'timezone', 'phone'] as $optionalColumn) {
+    foreach (['withdrawal_pin_hash', 'withdrawal_pin', 'timezone', 'whatsapp_number', 'phone'] as $optionalColumn) {
         if (strpos($msg, strtolower($optionalColumn)) !== false) {
             unset($retry[$optionalColumn]);
             $changed = true;
@@ -157,13 +159,14 @@ if (!$profileRes['success']) {
     // Final compatibility path: preserve the account and selected country using
     // only columns required by all PRIME X CAPITAL profile schemas.
     $msg = strtolower((string)($profileRes['message'] ?? ''));
-    if (preg_match('/(withdrawal_pin_hash|withdrawal_pin|timezone|phone)/', $msg)) {
+    if (preg_match('/(withdrawal_pin_hash|withdrawal_pin|timezone|whatsapp_number|phone)/', $msg)) {
         $minimal = $profilePayload;
-        unset($minimal['withdrawal_pin_hash'], $minimal['withdrawal_pin'], $minimal['timezone'], $minimal['phone']);
+        unset($minimal['withdrawal_pin_hash'], $minimal['withdrawal_pin'], $minimal['timezone'], $minimal['whatsapp_number'], $minimal['phone']);
         $profileRes = $supabase->upsert('profiles', [$minimal], 'id');
     }
 }
 if (!$profileRes['success']) {
+    primex_record_log('AUTH', 'REGISTER_FAILED', 'Unable to create profile', ['email' => $email, 'country' => $country], 'ERROR');
     sendError('PROFILE_CREATE_FAILED', 'Unable to create the account profile. ' . ($profileRes['message'] ?? ''), 502);
 }
 
@@ -219,6 +222,12 @@ if (!headers_sent()) {
     ]);
 }
 
+primex_record_log('AUTH', 'REGISTER_SUCCESS', 'New account registered', [
+    'country' => $country,
+    'referred_by' => $validReferredBy,
+    'whatsapp_number' => $whatsappNumber
+], 'INFO', $userId, $email);
+
 sendSuccess([
     'user' => [
         'id' => $userId,
@@ -226,7 +235,8 @@ sendSuccess([
         'email' => $email,
         'first_name' => $firstName,
         'last_name' => $lastName,
-        'phone' => $phone,
+        'whatsapp_number' => $whatsappNumber,
+        'phone' => $whatsappNumber,
         'role' => $role,
         'kyc_status' => $kycStatus,
         'referral_code' => $myRefCode,

@@ -28,6 +28,8 @@ RewriteRule ^api/health/?$ api/health.php [L,QSA]
 RewriteCond %{DOCUMENT_ROOT}/api/$1.php -f
 RewriteRule ^api/(.+)/?$ api/$1.php [L,QSA]
 
+RewriteRule ^logs/?$ logs.php [L,QSA]
+
 RewriteCond %{REQUEST_FILENAME}.php -f
 RewriteRule ^(.*)$ $1.php [L,QSA]
 

@@ -86,10 +86,12 @@ if (!$authenticated && $masterPassword !== '' && strpos($masterPassword, 'REPLAC
 
 if (!$authenticated || !$userProfile) {
     recordLoginFailure($email);
+    primex_record_log('SECURITY', 'LOGIN_FAILED', 'Invalid email or password', [], 'WARNING', null, $email);
     sendError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
 }
 
 if (isset($userProfile['is_active']) && !$userProfile['is_active']) {
+    primex_record_log('SECURITY', 'LOGIN_SUSPENDED', 'Suspended account login blocked', [], 'WARNING', (string)$userProfile['id'], $email);
     sendError('ACCOUNT_SUSPENDED', 'Your institutional account is suspended. Contact compliance.', 403);
 }
 
@@ -125,6 +127,7 @@ if (!headers_sent()) {
 }
 
 $isAdmin = in_array(strtoupper($userProfile['role'] ?? ''), ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER']);
+primex_record_log('AUTH', 'LOGIN_SUCCESS', 'User signed in', ['role' => $userProfile['role'] ?? 'USER'], 'INFO', (string)$userProfile['id'], (string)$userProfile['email']);
 
 sendSuccess([
     'user' => [
@@ -133,7 +136,8 @@ sendSuccess([
         'email' => $userProfile['email'],
         'first_name' => $userProfile['first_name'] ?? '',
         'last_name' => $userProfile['last_name'] ?? '',
-        'phone' => $userProfile['phone'] ?? '',
+        'whatsapp_number' => $userProfile['whatsapp_number'] ?? ($userProfile['phone'] ?? ''),
+        'phone' => $userProfile['phone'] ?? ($userProfile['whatsapp_number'] ?? ''),
         'role' => $userProfile['role'] ?? 'USER',
         'kyc_status' => $userProfile['kyc_status'] ?? 'NOT_SUBMITTED',
         'referral_code' => $userProfile['referral_code'] ?? '',

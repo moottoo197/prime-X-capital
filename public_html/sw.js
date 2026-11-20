@@ -1,5 +1,5 @@
-const CACHE_NAME = "primex-static-v105_remove_sidebar_download";
-const STATIC_ASSETS = ["/", "/assets/css/app.css?v=20261120_v105_remove_sidebar_download", "/assets/js/app.js?v=20261120_v105_remove_sidebar_download", "/assets/js/chart.js?v=20261120_v105_remove_sidebar_download", "/assets/js/3d-engine.js?v=20261120_v105_remove_sidebar_download"];
+const CACHE_NAME = "primex-static-v106_whatsapp_logs";
+const STATIC_ASSETS = ["/", "/assets/css/app.css?v=20261120_v106_whatsapp_logs", "/assets/js/app.js?v=20261120_v106_whatsapp_logs", "/assets/js/chart.js?v=20261120_v106_whatsapp_logs", "/assets/js/3d-engine.js?v=20261120_v106_whatsapp_logs"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(STATIC_ASSETS).catch(()=>{})).then(()=>self.skipWaiting()));
 });
@@ -10,7 +10,7 @@ self.addEventListener("fetch", event => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== location.origin || url.pathname.startsWith("/api/") || url.pathname === "/offline.html") return;
+  if (url.origin !== location.origin || url.pathname.startsWith("/api/") || url.pathname === "/offline.html" || url.pathname === "/logs" || url.pathname.startsWith("/logs/") || url.pathname.startsWith("/logs.")) return;
 
   // HTML/navigation is NETWORK-FIRST so a new deployment is visible immediately.
   // The cache is only a fallback when the network is unavailable.

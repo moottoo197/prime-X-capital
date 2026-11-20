@@ -4117,12 +4117,12 @@ const App = {
       return;
     }
     if (!phone) {
-      this.toast('Please enter your phone number', 'error');
+      this.toast('Please enter your WhatsApp number', 'error');
       if (phoneInput) phoneInput.focus();
       return;
     }
     if (!/^[0-9+\-\s().]{7,24}$/.test(phone) || !/^\+?\d{7,15}$/.test(normalizedPhoneDigits)) {
-      this.toast('Please enter a valid phone number', 'error');
+      this.toast('Please enter a valid WhatsApp number', 'error');
       if (phoneInput) phoneInput.focus();
       return;
     }
@@ -4162,6 +4162,7 @@ const App = {
         firstName: firstName,
         lastName: lastName,
         email,
+        whatsapp_number: phone,
         phone,
         phone_number: phone,
         password,

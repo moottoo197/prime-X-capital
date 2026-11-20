@@ -28,12 +28,32 @@ if (!defined('SUPABASE_URL') || !SUPABASE_URL || !defined('SUPABASE_SERVICE_ROLE
 // Load the REST client shipped with the public API layer.
 require_once __DIR__ . '/SupabaseClient.php';
 
+// Load server-side log engine from outside webroot when deployed alongside /server.
+$serverLogsPath = dirname(__DIR__, 2) . '/server/logs.php';
+if (is_file($serverLogsPath)) {
+    require_once $serverLogsPath;
+}
+
+function primex_record_log(
+    string $category,
+    string $event,
+    string $message = '',
+    array $context = [],
+    string $level = 'INFO',
+    ?string $actorId = null,
+    ?string $actorEmail = null
+): void {
+    if (function_exists('primex_write_log')) {
+        primex_write_log($category, $event, $message, $context, $level, $actorId, $actorEmail);
+    }
+}
+
 // Disable PHP display_errors to guarantee pristine JSON responses
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
 // Global headers: JSON format, CORS handling, cache busting
-if (!headers_sent()) {
+if (!headers_sent() && !defined('PRIMEX_LOGS_WEB_ENTRY')) {
     header('Content-Type: application/json; charset=utf-8');
     
     // Credentials-enabled CORS. Accept only AlphaVest production origins.
@@ -97,6 +117,18 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS
  * Global Exception Handler
  */
 set_exception_handler(function ($e) {
+    primex_record_log('SYSTEM', 'UNHANDLED_EXCEPTION', $e->getMessage(), [
+        'file' => basename($e->getFile()),
+        'line' => $e->getLine()
+    ], 'ERROR');
+    if (defined('PRIMEX_LOGS_WEB_ENTRY')) {
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=utf-8');
+        }
+        http_response_code(500);
+        echo 'Server logs console encountered an unexpected error.';
+        exit();
+    }
     if (!headers_sent()) {
         header('Content-Type: application/json; charset=utf-8');
     }
@@ -167,7 +199,7 @@ function ensureCsrfCookie(): string {
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'OPTIONS') {
     $csrfCookie = ensureCsrfCookie();
-    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+    if (!defined('PRIMEX_LOGS_WEB_ENTRY') && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
         $csrfHeader = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
         if ($csrfHeader === '' || !hash_equals($csrfCookie, $csrfHeader)) {
             sendError('CSRF_FAILED', 'Security token missing or invalid. Refresh the page and try again.', 403);
@@ -381,7 +413,8 @@ function getCurrentUser(): ?array {
             $adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
             $previewAllowedPath = (strpos($requestPath, '/api/admin/') === false)
                 && (strpos($requestPath, '/api/auth/me.php') === false)
-                && (strpos($requestPath, '/api/auth/logout.php') === false);
+                && (strpos($requestPath, '/api/auth/logout.php') === false)
+                && (strpos($requestPath, '/logs') === false);
             if ($requestMethod === 'GET' && $previewId !== '' && $previewAllowedPath
                 && in_array(strtoupper((string)($sessionOwner['role'] ?? '')), $adminRoles, true)
                 && $previewId !== (string)$sessionOwner['id']) {
