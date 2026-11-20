@@ -9,7 +9,8 @@ if (!$user) {
     sendError('UNAUTHORIZED', 'Not authenticated', 401);
 }
 
-$isAdmin = in_array(strtoupper($user['role'] ?? ''), ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER']);
+$user = primex_normalize_effective_user($user);
+$isAdmin = in_array(strtoupper((string)($user['role'] ?? '')), ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'], true);
 $country = !empty($user['country']) ? trim((string)$user['country']) : (!empty($_COOKIE['alphavest_country']) ? trim((string)$_COOKIE['alphavest_country']) : '');
 $timezone = !empty($user['timezone']) ? trim((string)$user['timezone']) : (!empty($_COOKIE['alphavest_timezone']) ? trim((string)$_COOKIE['alphavest_timezone']) : 'Asia/Karachi');
 

@@ -183,31 +183,11 @@ $wallets = [
 $supabase->upsert('wallet_balances', $wallets, 'user_id,wallet_type,asset');
 
 // 5. Create Session
-$token = bin2hex(random_bytes(32));
-$sessionId = bin2hex(random_bytes(16));
-$expiresAt = gmdate('Y-m-d H:i:s', time() + 315360000); // 10-year persistent session; refreshed while active
-$ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-$ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+$profilePayload['numeric_uid'] = $numericUid;
+primex_create_session($profilePayload);
 
-$supabase->insert('user_sessions', [[
-    'id' => $sessionId,
-    'user_id' => $userId,
-    'token' => hash('sha256', $token),
-    'ip_address' => $ip,
-    'user_agent' => $ua,
-    'created_at' => gmdate('Y-m-d H:i:s'),
-    'expires_at' => $expiresAt
-]]);
-
-// Set session cookie
+// Set preference cookies
 if (!headers_sent()) {
-    setcookie('alphavest_session', $token, [
-        'expires' => time() + 315360000,
-        'path' => '/',
-        'httponly' => true,
-        'samesite' => 'Lax',
-        'secure' => isHttpsRequest()
-    ]);
     setcookie('alphavest_country', $country, [
         'expires' => time() + 7200,
         'path' => '/',

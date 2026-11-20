@@ -64,6 +64,13 @@ if (!headers_sent() && !defined('PRIMEX_LOGS_WEB_ENTRY')) {
     $origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
     $allowedOrigins = defined('ALLOWED_ORIGINS') ? ALLOWED_ORIGINS : [];
     $allowedHosts = ['alphavest-app.com', 'www.alphavest-app.com'];
+    $currentHostHeader = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? '')));
+    if ($currentHostHeader !== '') {
+        $currentHostOnly = strtolower((string)(parse_url('http://' . $currentHostHeader, PHP_URL_HOST) ?? ''));
+        if ($currentHostOnly !== '') {
+            $allowedHosts[] = $currentHostOnly;
+        }
+    }
 
     foreach ($allowedOrigins as $configuredOrigin) {
         $parts = parse_url(trim($configuredOrigin));
@@ -175,18 +182,30 @@ function isHttpsRequest(): bool {
             return true;
         }
     }
+    if (!empty($_SERVER['HTTP_X_FORWARDED_SCHEME']) && strtolower((string)$_SERVER['HTTP_X_FORWARDED_SCHEME']) === 'https') {
+        return true;
+    }
     if (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower((string)$_SERVER['HTTP_X_FORWARDED_SSL']) === 'on') {
+        return true;
+    }
+    if (!empty($_SERVER['HTTP_CF_VISITOR']) && stripos((string)$_SERVER['HTTP_CF_VISITOR'], '"https"') !== false) {
         return true;
     }
     return ((int)($_SERVER['SERVER_PORT'] ?? 0) === 443);
 }
 
 function ensureCsrfCookie(): string {
+    if (!empty($GLOBALS['PRIMEX_CSRF_COOKIE']) && preg_match('/^[a-f0-9]{64}$/', (string)$GLOBALS['PRIMEX_CSRF_COOKIE'])) {
+        return (string)$GLOBALS['PRIMEX_CSRF_COOKIE'];
+    }
     $existing = (string)($_COOKIE['alphavest_csrf'] ?? '');
     if ($existing !== '' && preg_match('/^[a-f0-9]{64}$/', $existing)) {
+        $GLOBALS['PRIMEX_CSRF_COOKIE'] = $existing;
         return $existing;
     }
     $token = bin2hex(random_bytes(32));
+    $GLOBALS['PRIMEX_CSRF_COOKIE'] = $token;
+    $_COOKIE['alphavest_csrf'] = $token;
     if (!headers_sent()) {
         setcookie('alphavest_csrf', $token, [
             'expires' => time() + 7200,
@@ -453,6 +472,269 @@ function clearLoginFailures(string $email): void {
     }
 }
 
+function primex_uuid_v4(): string {
+    $bytes = random_bytes(16);
+    $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+    $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+    $hex = bin2hex($bytes);
+    return sprintf(
+        '%s-%s-%s-%s-%s',
+        substr($hex, 0, 8),
+        substr($hex, 8, 4),
+        substr($hex, 12, 4),
+        substr($hex, 16, 4),
+        substr($hex, 20, 12)
+    );
+}
+
+function primex_deterministic_uuid(string $seed): string {
+    $hex = substr(hash('sha256', 'primex|' . strtolower(trim($seed))), 0, 32);
+    $versionHex = '4' . substr($hex, 13, 3);
+    $variantNibble = dechex((hexdec($hex[16]) & 0x3) | 0x8);
+    $variantHex = $variantNibble . substr($hex, 17, 3);
+    return sprintf(
+        '%s-%s-%s-%s-%s',
+        substr($hex, 0, 8),
+        substr($hex, 8, 4),
+        $versionHex,
+        $variantHex,
+        substr($hex, 20, 12)
+    );
+}
+
+function primex_admin_emails(): array {
+    $raw = defined('ADMIN_EMAILS') ? ADMIN_EMAILS : [];
+    if (is_string($raw)) {
+        $raw = explode(',', $raw);
+    }
+    if (!is_array($raw)) {
+        return [];
+    }
+    return array_values(array_filter(array_unique(array_map(static function ($e) {
+        return strtolower(trim((string)$e));
+    }, $raw))));
+}
+
+function primex_is_admin_email(string $email): bool {
+    $normalized = strtolower(trim($email));
+    return $normalized !== '' && in_array($normalized, primex_admin_emails(), true);
+}
+
+function primex_find_profile_by_email(SupabaseClient $supabase, string $email): ?array {
+    $normalized = strtolower(trim($email));
+    if ($normalized === '' || !$supabase->isConfigured()) {
+        return null;
+    }
+    $profRes = $supabase->select('profiles', ['email' => 'eq.' . $normalized, 'limit' => '1']);
+    if ($profRes['success'] && !empty($profRes['data'][0])) {
+        return $profRes['data'][0];
+    }
+    $ilikeRes = $supabase->select('profiles', ['email' => 'ilike.' . $normalized, 'limit' => '1']);
+    if ($ilikeRes['success'] && !empty($ilikeRes['data'][0])) {
+        return $ilikeRes['data'][0];
+    }
+    return null;
+}
+
+function primex_sessions_dir(): ?string {
+    $candidates = [
+        dirname(__DIR__, 2) . '/server/storage/sessions',
+        rtrim(sys_get_temp_dir(), '/\\') . '/primex_sessions'
+    ];
+    foreach ($candidates as $dir) {
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0750, true);
+        }
+        if (is_dir($dir) && is_writable($dir)) {
+            return $dir;
+        }
+    }
+    return null;
+}
+
+function primex_session_file_path(string $tokenHash): ?string {
+    $safeHash = preg_replace('/[^a-f0-9]/i', '', $tokenHash);
+    if (strlen($safeHash) !== 64) {
+        return null;
+    }
+    $dir = primex_sessions_dir();
+    return $dir !== null ? ($dir . '/' . strtolower($safeHash) . '.json') : null;
+}
+
+function primex_file_session_write(string $tokenHash, array $record): bool {
+    $file = primex_session_file_path($tokenHash);
+    if ($file === null) {
+        return false;
+    }
+    $encoded = json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    return $encoded !== false && @file_put_contents($file, $encoded, LOCK_EX) !== false;
+}
+
+function primex_file_session_read(string $tokenHash): ?array {
+    $file = primex_session_file_path($tokenHash);
+    if ($file === null || !is_file($file) || !is_readable($file)) {
+        return null;
+    }
+    $raw = @file_get_contents($file);
+    if ($raw === false || $raw === '') {
+        return null;
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return null;
+    }
+    $expiresAt = strtotime((string)($decoded['expires_at'] ?? '')) ?: 0;
+    if ($expiresAt > 0 && $expiresAt <= time()) {
+        @unlink($file);
+        return null;
+    }
+    return $decoded;
+}
+
+function primex_delete_session_by_token(string $token): void {
+    $trimmed = trim($token);
+    if ($trimmed === '') {
+        return;
+    }
+    $tokenHash = hash('sha256', $trimmed);
+    $file = primex_session_file_path($tokenHash);
+    if ($file !== null && is_file($file)) {
+        @unlink($file);
+    }
+    $supabase = getSupabaseClient();
+    if ($supabase->isConfigured()) {
+        $supabase->delete('user_sessions', ['token' => 'eq.' . $tokenHash]);
+    }
+}
+
+function primex_delete_sessions_by_user(string $userId): void {
+    $uid = trim($userId);
+    if ($uid === '') {
+        return;
+    }
+    $supabase = getSupabaseClient();
+    if ($supabase->isConfigured()) {
+        $supabase->delete('user_sessions', ['user_id' => 'eq.' . $uid]);
+    }
+    $dir = primex_sessions_dir();
+    if ($dir !== null && is_dir($dir)) {
+        $files = @glob($dir . '/*.json');
+        if (is_array($files)) {
+            foreach ($files as $file) {
+                $raw = @file_get_contents($file);
+                if ($raw === false || $raw === '') continue;
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded) && (string)($decoded['user_id'] ?? '') === $uid) {
+                    @unlink($file);
+                }
+            }
+        }
+    }
+}
+
+function primex_create_session(array $userProfile, int $ttlSeconds = 315360000): array {
+    $supabase = getSupabaseClient();
+    $token = bin2hex(random_bytes(32));
+    $tokenHash = hash('sha256', $token);
+    $sessionId = primex_uuid_v4();
+    $now = gmdate('Y-m-d H:i:s');
+    $expiresAt = gmdate('Y-m-d H:i:s', time() + $ttlSeconds);
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
+    $ua = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+    $userId = (string)($userProfile['id'] ?? '');
+
+    $sessionPayload = [
+        'id' => $sessionId,
+        'user_id' => $userId,
+        'token' => $tokenHash,
+        'ip_address' => $ip,
+        'user_agent' => $ua,
+        'created_at' => $now,
+        'expires_at' => $expiresAt
+    ];
+
+    $dbSaved = false;
+    if ($supabase->isConfigured() && $userId !== '') {
+        $insertRes = $supabase->insert('user_sessions', [$sessionPayload]);
+        if (!empty($insertRes['success'])) {
+            $dbSaved = true;
+        } else {
+            // Compatibility retry if legacy user_sessions table omits optional metadata columns
+            $minimalPayload = [
+                'id' => $sessionId,
+                'user_id' => $userId,
+                'token' => $tokenHash,
+                'expires_at' => $expiresAt
+            ];
+            $retryRes = $supabase->insert('user_sessions', [$minimalPayload]);
+            if (!empty($retryRes['success'])) {
+                $dbSaved = true;
+            } else {
+                primex_record_log('AUTH', 'SESSION_DB_FALLBACK', (string)($retryRes['message'] ?? $insertRes['message'] ?? 'user_sessions insert failed'), [
+                    'error' => $retryRes['error'] ?? $insertRes['error'] ?? null,
+                    'http_code' => $retryRes['http_code'] ?? $insertRes['http_code'] ?? 0
+                ], 'WARNING', $userId, (string)($userProfile['email'] ?? ''));
+            }
+        }
+    }
+
+    if (!$dbSaved) {
+        $snapshot = [
+            'id' => $userId,
+            'numeric_uid' => $userProfile['numeric_uid'] ?? null,
+            'email' => (string)($userProfile['email'] ?? ''),
+            'first_name' => (string)($userProfile['first_name'] ?? ''),
+            'last_name' => (string)($userProfile['last_name'] ?? ''),
+            'whatsapp_number' => (string)($userProfile['whatsapp_number'] ?? ($userProfile['phone'] ?? '')),
+            'phone' => (string)($userProfile['phone'] ?? ($userProfile['whatsapp_number'] ?? '')),
+            'role' => (string)($userProfile['role'] ?? 'USER'),
+            'is_active' => $userProfile['is_active'] ?? 1,
+            'kyc_status' => (string)($userProfile['kyc_status'] ?? 'NOT_SUBMITTED'),
+            'referral_code' => (string)($userProfile['referral_code'] ?? ''),
+            'referred_by' => $userProfile['referred_by'] ?? null,
+            'country' => (string)($userProfile['country'] ?? ''),
+            'timezone' => (string)($userProfile['timezone'] ?? 'Asia/Karachi'),
+            'two_factor_enabled' => !empty($userProfile['two_factor_enabled']),
+            'has_withdrawal_pin' => !empty($userProfile['has_withdrawal_pin']) || !empty($userProfile['withdrawal_pin']) || !empty($userProfile['withdrawal_pin_hash'])
+        ];
+        primex_file_session_write($tokenHash, [
+            'id' => $sessionId,
+            'user_id' => $userId,
+            'token' => $tokenHash,
+            'expires_at' => $expiresAt,
+            'created_at' => $now,
+            'profile_snapshot' => $snapshot
+        ]);
+    }
+
+    $_COOKIE['alphavest_session'] = $token;
+    if (!headers_sent()) {
+        setcookie('alphavest_session', $token, [
+            'expires' => time() + $ttlSeconds,
+            'path' => '/',
+            'httponly' => true,
+            'samesite' => 'Lax',
+            'secure' => isHttpsRequest()
+        ]);
+    }
+
+    return [
+        'token' => $token,
+        'session_id' => $sessionId,
+        'db_saved' => $dbSaved
+    ];
+}
+
+function primex_normalize_effective_user(array $user): array {
+    $email = strtolower(trim((string)($user['email'] ?? '')));
+    $role = strtoupper(trim((string)($user['role'] ?? 'USER')));
+    $adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
+    if ($email !== '' && primex_is_admin_email($email) && !in_array($role, $adminRoles, true)) {
+        $user['role'] = 'SUPER_ADMIN';
+    }
+    return $user;
+}
+
 /**
  * Resolve authenticated user from Supabase Auth or Profiles
  */
@@ -462,67 +744,96 @@ function getCurrentUser(): ?array {
         return null;
     }
 
+    $tokenHash = hash('sha256', $token);
     $supabase = getSupabaseClient();
-    if (!$supabase->isConfigured()) {
-        return null;
+    $sessionOwner = null;
+    $session = null;
+    $fromDb = false;
+
+    if ($supabase->isConfigured()) {
+        // Fast path: every successful login is also recorded in user_sessions.
+        // Sessions are intentionally persistent until explicit logout/password reset/admin
+        // deletion. We still keep an expires_at column for compatibility with the existing
+        // schema and refresh it on every authenticated request.
+        $sessionRes = $supabase->select('user_sessions', [
+            'token' => 'eq.' . $tokenHash,
+            'limit' => '1'
+        ]);
+
+        if ($sessionRes['success'] && !empty($sessionRes['data'][0])) {
+            $session = $sessionRes['data'][0];
+            $userId = $session['user_id'];
+            $profileRes = $supabase->select('profiles', ['id' => "eq.{$userId}", 'limit' => '1']);
+            if ($profileRes['success'] && !empty($profileRes['data'][0])) {
+                $sessionOwner = $profileRes['data'][0];
+                $fromDb = true;
+            }
+        }
     }
 
-    // Fast path: every successful login is also recorded in user_sessions.
-    // Sessions are intentionally persistent until explicit logout/password reset/admin
-    // deletion. We still keep an expires_at column for compatibility with the existing
-    // schema and refresh it on every authenticated request.
-    $sessionRes = $supabase->select('user_sessions', [
-        'token' => 'eq.' . hash('sha256', $token),
-        'limit' => '1'
-    ]);
+    // Resilient fallback if Supabase user_sessions table is missing, unreachable, or
+    // could not store a non-FK master-admin session row.
+    if ($sessionOwner === null) {
+        $fileSession = primex_file_session_read($tokenHash);
+        if (is_array($fileSession) && !empty($fileSession['user_id'])) {
+            $userId = (string)$fileSession['user_id'];
+            if ($supabase->isConfigured()) {
+                $profileRes = $supabase->select('profiles', ['id' => "eq.{$userId}", 'limit' => '1']);
+                if ($profileRes['success'] && !empty($profileRes['data'][0])) {
+                    $sessionOwner = $profileRes['data'][0];
+                }
+            }
+            if ($sessionOwner === null && !empty($fileSession['profile_snapshot']) && is_array($fileSession['profile_snapshot'])) {
+                $sessionOwner = $fileSession['profile_snapshot'];
+            }
+            if ($sessionOwner !== null) {
+                $fileSession['expires_at'] = gmdate('Y-m-d H:i:s', time() + 315360000);
+                primex_file_session_write($tokenHash, $fileSession);
+            }
+        }
+    }
 
-    if ($sessionRes['success'] && !empty($sessionRes['data'][0])) {
-        $session = $sessionRes['data'][0];
-        $userId = $session['user_id'];
-        $profileRes = $supabase->select('profiles', ['id' => "eq.{$userId}", 'limit' => '1']);
-        if ($profileRes['success'] && !empty($profileRes['data'][0])) {
-            // Keep the same opaque token and extend the server-side session far into
-            // the future on every authenticated request. Explicit logout, password
-            // reset, or admin deletion still removes the session record.
+    if ($sessionOwner !== null) {
+        $sessionOwner = primex_normalize_effective_user($sessionOwner);
+        if ($fromDb && !empty($session['id']) && $supabase->isConfigured()) {
             $newExpiry = gmdate('Y-m-d H:i:s', time() + 315360000);
             $supabase->update('user_sessions', [
                 'expires_at' => $newExpiry
             ], ['id' => 'eq.' . $session['id']]);
-            if (!headers_sent()) {
-                setcookie('alphavest_session', $token, [
-                    'expires' => time() + 315360000,
-                    'path' => '/',
-                    'httponly' => true,
-                    'samesite' => 'Lax',
-                    'secure' => isHttpsRequest()
-                ]);
-            }
-            $sessionOwner = $profileRes['data'][0];
-
-            // Admin user-view mode is read-only and only applies to GET requests.
-            // It never replaces the real session owner for admin endpoints.
-            $requestMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-            $requestPath = (string)($_SERVER['REQUEST_URI'] ?? '');
-            $previewId = trim((string)($_SERVER['HTTP_X_ALPHAVEST_ADMIN_VIEW_USER'] ?? ''));
-            $adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
-            $previewAllowedPath = (strpos($requestPath, '/api/admin/') === false)
-                && (strpos($requestPath, '/api/auth/me.php') === false)
-                && (strpos($requestPath, '/api/auth/logout.php') === false)
-                && (strpos($requestPath, '/logs') === false);
-            if ($requestMethod === 'GET' && $previewId !== '' && $previewAllowedPath
-                && in_array(strtoupper((string)($sessionOwner['role'] ?? '')), $adminRoles, true)
-                && $previewId !== (string)$sessionOwner['id']) {
-                $previewRes = $supabase->select('profiles', ['id' => 'eq.' . $previewId, 'limit' => '1']);
-                if ($previewRes['success'] && !empty($previewRes['data'][0])) {
-                    $target = $previewRes['data'][0];
-                    $target['_admin_preview'] = true;
-                    $target['_admin_viewer_id'] = (string)$sessionOwner['id'];
-                    return $target;
-                }
-            }
-
-            return $sessionOwner;
         }
+        if (!headers_sent()) {
+            setcookie('alphavest_session', $token, [
+                'expires' => time() + 315360000,
+                'path' => '/',
+                'httponly' => true,
+                'samesite' => 'Lax',
+                'secure' => isHttpsRequest()
+            ]);
+        }
+
+        // Admin user-view mode is read-only and only applies to GET requests.
+        // It never replaces the real session owner for admin endpoints.
+        $requestMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        $requestPath = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $previewId = trim((string)($_SERVER['HTTP_X_ALPHAVEST_ADMIN_VIEW_USER'] ?? ''));
+        $adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
+        $previewAllowedPath = (strpos($requestPath, '/api/admin/') === false)
+            && (strpos($requestPath, '/api/auth/me.php') === false)
+            && (strpos($requestPath, '/api/auth/logout.php') === false)
+            && (strpos($requestPath, '/logs') === false);
+        if ($requestMethod === 'GET' && $previewId !== '' && $previewAllowedPath
+            && in_array(strtoupper((string)($sessionOwner['role'] ?? '')), $adminRoles, true)
+            && $previewId !== (string)$sessionOwner['id'] && $supabase->isConfigured()) {
+            $previewRes = $supabase->select('profiles', ['id' => 'eq.' . $previewId, 'limit' => '1']);
+            if ($previewRes['success'] && !empty($previewRes['data'][0])) {
+                $target = $previewRes['data'][0];
+                $target['_admin_preview'] = true;
+                $target['_admin_viewer_id'] = (string)$sessionOwner['id'];
+                return $target;
+            }
+        }
+
+        return $sessionOwner;
     }
 
     // Bearer JWTs are intentionally not accepted as an authentication path.

@@ -555,33 +555,38 @@ const App = {
 
         // State-changing requests require a double-submit CSRF token. Fetch it
         // lazily so the existing API call flow remains unchanged.
-        if (normalizedMethod !== 'GET' && normalizedMethod !== 'HEAD' && normalizedMethod !== 'OPTIONS') {
+        const needsCsrf = (normalizedMethod !== 'GET' && normalizedMethod !== 'HEAD' && normalizedMethod !== 'OPTIONS');
+        const fetchFreshCsrf = async () => {
+          try {
+            const csrfRes = await fetch(`${baseUrl}/api/auth/csrf.php`, {
+              method: 'GET',
+              credentials: 'include',
+              cache: 'no-store',
+              headers: { 'Accept': 'application/json' }
+            });
+            if (csrfRes.ok) {
+              const csrfJson = await csrfRes.json();
+              const fresh = String(csrfJson?.data?.csrf_token || '').trim();
+              if (/^[a-f0-9]{64}$/i.test(fresh)) return fresh;
+            }
+          } catch (e) {}
+          return '';
+        };
+        if (needsCsrf) {
           let csrf = '';
           try {
             const match = document.cookie.match(/(?:^|; )alphavest_csrf=([^;]+)/);
-            csrf = match ? decodeURIComponent(match[1]) : '';
+            const candidate = match ? decodeURIComponent(match[1]).trim() : '';
+            csrf = /^[a-f0-9]{64}$/i.test(candidate) ? candidate : '';
             if (!csrf) {
-              const csrfRes = await fetch(`${baseUrl}/api/auth/csrf.php`, {
-                method: 'GET',
-                credentials: 'include',
-                cache: 'no-store',
-                headers: { 'Accept': 'application/json' }
-              });
-              if (csrfRes.ok) {
-                const csrfJson = await csrfRes.json();
-                csrf = csrfJson?.data?.csrf_token || '';
-              }
+              csrf = await fetchFreshCsrf();
             }
           } catch (e) {}
           if (csrf) headers['X-CSRF-Token'] = csrf;
         }
 
-        if (body && !(body instanceof FormData)) {
-          headers['Content-Type'] = 'application/json';
-          if (body.idempotency_key) headers['X-Idempotency-Key'] = String(body.idempotency_key);
-        }
-
         let lastError = null;
+        let csrfRefreshed = false;
         for (let attempt = 0; attempt <= retries; attempt++) {
           try {
             const res = await fetch(url, {
@@ -621,6 +626,23 @@ const App = {
               text = await res.text();
             } catch (readErr) {
               return { success: false, status: res.status, message: 'Unable to read response from server.' };
+            }
+
+            // If a stale or mismatched CSRF cookie caused a 403 CSRF_FAILED on a
+            // state-changing request, refresh /api/auth/csrf.php once and retry.
+            if (needsCsrf && res.status === 403 && !csrfRefreshed) {
+              try {
+                const parsed403 = JSON.parse(text);
+                if (parsed403 && parsed403.error_code === 'CSRF_FAILED') {
+                  csrfRefreshed = true;
+                  const freshToken = await fetchFreshCsrf();
+                  if (freshToken) {
+                    headers['X-CSRF-Token'] = freshToken;
+                    attempt = Math.max(-1, attempt - 1);
+                    continue;
+                  }
+                }
+              } catch (e) {}
             }
 
             // Preserve the backend's real JSON error (for example USER_NOT_FOUND
@@ -785,11 +807,13 @@ const App = {
     }
 
     this.updateHeaderAuth();
-    if (this.state.user?.is_admin === true && !this.state.adminPreviewUser) {
+    if (this.isStaffOrAdmin(this.state.user) && !this.state.adminPreviewUser) {
       const allowedTabs = ['overview', 'users', 'referrals', 'deposits', 'withdrawals', 'kyc', 'signals', 'signal-schedules', 'adjustments', 'settings'];
       const cachedTab = localStorage.getItem('alphavest_admin_last_tab') || 'overview';
       this.state.adminTab = allowedTabs.includes(cachedTab) ? cachedTab : 'overview';
-      this.navigate('admin');
+      if (this.state.currentView !== 'admin') {
+        this.navigate('admin');
+      }
     }
   },
 
@@ -919,7 +943,7 @@ const App = {
           if (cached) user = JSON.parse(cached);
         } catch(e) {}
       }
-      const isAdmin = Boolean(user && user.is_admin === true);
+      const isAdmin = this.isStaffOrAdmin(user);
       if (!isAdmin) {
         this.toast('Administrative access requires administrator sign-in. Opening login...', 'warning');
         this.openModal('modal-auth');
@@ -931,7 +955,7 @@ const App = {
     }
 
     this.state.currentView = view;
-    if (this.state.user?.is_admin === true && !this.state.adminPreviewUser) {
+    if (this.isStaffOrAdmin(this.state.user) && !this.state.adminPreviewUser) {
       localStorage.setItem('alphavest_admin_last_view', view);
     }
     document.querySelectorAll('.bottom-nav .nav-item').forEach(nav => {
@@ -940,8 +964,7 @@ const App = {
 
     const adminBanner = document.getElementById('admin-global-banner');
     if (adminBanner) {
-      const email = (this.state.user?.email || '').toLowerCase().trim();
-      const isAdmin = Boolean(this.state.user && (this.state.user.is_admin || this.state.user.role === 'ADMIN' || this.state.user.role === 'SUPER_ADMIN'));
+      const isAdmin = this.isStaffOrAdmin(this.state.user);
       adminBanner.style.display = (isAdmin && view !== 'admin') ? 'block' : 'none';
     }
 
@@ -4033,17 +4056,26 @@ const App = {
       const publicLanding = document.getElementById('av-public-landing');
       if (publicLanding) publicLanding.hidden = true;
 
+      const isAdmin = this.isStaffOrAdmin(this.state.user);
+      if (isAdmin) {
+        this.state.adminPreviewUser = null;
+        this.state.adminPreviewUserId = null;
+      }
+
       this.closeModal('modal-auth');
       if (typeof this.updateHeaderAuth === 'function') {
         try { this.updateHeaderAuth(); } catch (uiErr) { console.warn('[Login UI]', uiErr); }
       }
 
-      const isAdmin = this.isStaffOrAdmin(this.state.user);
       this.navigate(isAdmin ? 'admin' : 'home');
       this.toast(isAdmin ? 'Welcome Administrator! Navigating to Admin Governance Desk...' : 'Signed in successfully!', 'success');
 
       Promise.allSettled([
-        this.checkAuth(),
+        this.checkAuth().then(() => {
+          if (!this.state.user) {
+            this.toast('Session cookie could not be verified by browser. Please refresh or check cookie settings.', 'error');
+          }
+        }),
         this.loadBalances(),
         this.loadNotifications(),
         this.loadSignals()
@@ -4305,6 +4337,13 @@ const App = {
     if (res.success && res.data) {
       this.state.adminMetrics = res.data;
       this.renderAdminOverview();
+    } else if (this.state.currentView === 'admin') {
+      const status = Number(res?.status || 0);
+      const errMsg = res?.message || 'Unable to load admin governance overview.';
+      this.toast(errMsg, 'error');
+      if (status === 401) {
+        this.openModal('modal-auth');
+      }
     }
     if (this.state.adminTab === 'users') {
       this.loadAdminUsers();

@@ -25,7 +25,7 @@ if (empty($userId)) {
 }
 
 $hash = password_hash($newPassword, PASSWORD_BCRYPT);
-$supabase->delete('user_sessions', ['user_id' => 'eq.' . $userId]);
+primex_delete_sessions_by_user($userId);
 
 $supabase->update('profiles', [
     'password_hash' => $hash,

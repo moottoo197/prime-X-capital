@@ -1,5 +1,5 @@
-const CACHE_NAME = "primex-static-v106_whatsapp_logs";
-const STATIC_ASSETS = ["/", "/assets/css/app.css?v=20261120_v106_whatsapp_logs", "/assets/js/app.js?v=20261120_v106_whatsapp_logs", "/assets/js/chart.js?v=20261120_v106_whatsapp_logs", "/assets/js/3d-engine.js?v=20261120_v106_whatsapp_logs"];
+const CACHE_NAME = "primex-static-v107_admin_login_fix";
+const STATIC_ASSETS = ["/", "/assets/css/app.css?v=20261120_v107_admin_login_fix", "/assets/js/app.js?v=20261120_v107_admin_login_fix", "/assets/js/chart.js?v=20261120_v107_admin_login_fix", "/assets/js/3d-engine.js?v=20261120_v107_admin_login_fix"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(STATIC_ASSETS).catch(()=>{})).then(()=>self.skipWaiting()));
 });

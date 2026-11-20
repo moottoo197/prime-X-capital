@@ -125,8 +125,8 @@ if ($currentUser === null) {
             } elseif (($rateMsg = checkLoginRateLimit($email, true)) !== null) {
                 $authError = $rateMsg;
             } else {
-                $profRes = $supabase->select('profiles', ['email' => 'eq.' . $email, 'limit' => '1']);
-                $userProfile = ($profRes['success'] && !empty($profRes['data'][0])) ? $profRes['data'][0] : null;
+                $userProfile = primex_find_profile_by_email($supabase, $email);
+                $isWhitelistedAdmin = primex_is_admin_email($email);
                 $authenticated = false;
 
                 if ($userProfile && !empty($userProfile['password_hash']) && password_verify($password, (string)$userProfile['password_hash'])) {
@@ -139,29 +139,51 @@ if ($currentUser === null) {
                     }
                 }
 
-                $adminEmails = defined('ADMIN_EMAILS') ? ADMIN_EMAILS : [];
-                $masterPassword = defined('ADMIN_MASTER_PASSWORD') ? ADMIN_MASTER_PASSWORD : '';
+                $masterPassword = defined('ADMIN_MASTER_PASSWORD') ? (string)ADMIN_MASTER_PASSWORD : '';
                 if (
                     !$authenticated &&
                     $masterPassword !== '' &&
                     strpos($masterPassword, 'REPLACE_WITH_') !== 0 &&
-                    in_array($email, $adminEmails, true) &&
+                    $isWhitelistedAdmin &&
                     hash_equals($masterPassword, $password)
                 ) {
                     $authenticated = true;
-                    $adminId = $userProfile['id'] ?? 'usr_admin_master_01';
-                    $userProfile = [
+                    $adminId = !empty($userProfile['id']) ? (string)$userProfile['id'] : primex_deterministic_uuid('admin:' . $email);
+                    $masterProfile = [
                         'id' => $adminId,
                         'email' => $email,
                         'password_hash' => password_hash($password, PASSWORD_BCRYPT),
                         'role' => 'SUPER_ADMIN',
                         'is_active' => 1,
                         'kyc_status' => 'APPROVED',
-                        'referral_code' => 'ALPHAPRO',
-                        'created_at' => gmdate('Y-m-d H:i:s'),
+                        'referral_code' => !empty($userProfile['referral_code']) ? (string)$userProfile['referral_code'] : ('ADM' . strtoupper(substr(hash('sha256', $email), 0, 6))),
+                        'created_at' => !empty($userProfile['created_at']) ? (string)$userProfile['created_at'] : gmdate('Y-m-d H:i:s'),
                         'updated_at' => gmdate('Y-m-d H:i:s')
                     ];
-                    $supabase->upsert('profiles', [$userProfile], 'id');
+                    $upsertRes = $supabase->upsert('profiles', [$masterProfile], 'id');
+                    if (empty($upsertRes['success'])) {
+                        $supabase->upsert('profiles', [[
+                            'id' => $adminId,
+                            'email' => $email,
+                            'password_hash' => $masterProfile['password_hash'],
+                            'role' => 'SUPER_ADMIN',
+                            'is_active' => 1
+                        ]], 'id');
+                    }
+                    $userProfile = array_merge($userProfile ?: [], $masterProfile);
+                }
+
+                if ($authenticated && $userProfile && $isWhitelistedAdmin) {
+                    $currentRole = strtoupper(trim((string)($userProfile['role'] ?? 'USER')));
+                    if (!in_array($currentRole, $adminRoles, true)) {
+                        $userProfile['role'] = 'SUPER_ADMIN';
+                        if (!empty($userProfile['id'])) {
+                            $supabase->update('profiles', [
+                                'role' => 'SUPER_ADMIN',
+                                'updated_at' => gmdate('Y-m-d H:i:s')
+                            ], ['id' => 'eq.' . $userProfile['id']]);
+                        }
+                    }
                 }
 
                 $profileRole = strtoupper(trim((string)($userProfile['role'] ?? 'USER')));
@@ -183,27 +205,7 @@ if ($currentUser === null) {
                     $authError = 'Invalid administrator credentials or insufficient privileges.';
                 } else {
                     clearLoginFailures($email);
-                    $token = bin2hex(random_bytes(32));
-                    $sessionId = bin2hex(random_bytes(16));
-                    $expiresAt = gmdate('Y-m-d H:i:s', time() + 315360000);
-                    $supabase->insert('user_sessions', [[
-                        'id' => $sessionId,
-                        'user_id' => $userProfile['id'],
-                        'token' => hash('sha256', $token),
-                        'ip_address' => (string)($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'),
-                        'user_agent' => (string)($_SERVER['HTTP_USER_AGENT'] ?? ''),
-                        'created_at' => gmdate('Y-m-d H:i:s'),
-                        'expires_at' => $expiresAt
-                    ]]);
-                    if (!headers_sent()) {
-                        setcookie('alphavest_session', $token, [
-                            'expires' => time() + 315360000,
-                            'path' => '/',
-                            'httponly' => true,
-                            'samesite' => 'Lax',
-                            'secure' => isHttpsRequest()
-                        ]);
-                    }
+                    primex_create_session($userProfile);
                     if (function_exists('primex_write_log')) {
                         primex_write_log(
                             'AUTH',
@@ -306,8 +308,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
         if ($action === 'logout') {
             $token = extractBearerToken();
-            if ($token && $supabase->isConfigured()) {
-                $supabase->delete('user_sessions', ['token' => 'eq.' . hash('sha256', $token)]);
+            if ($token) {
+                primex_delete_session_by_token($token);
             }
             if (!headers_sent()) {
                 setcookie('alphavest_session', '', [

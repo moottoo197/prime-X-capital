@@ -23,16 +23,16 @@ if (!$supabase->isConfigured()) {
 
 checkLoginRateLimit($email);
 
-// 1. Check profile in Supabase profiles table
-$profRes = $supabase->select('profiles', ['email' => "eq.{$email}", 'limit' => '1']);
-$userProfile = ($profRes['success'] && !empty($profRes['data'][0])) ? $profRes['data'][0] : null;
+// 1. Check profile in Supabase profiles table (exact or case-insensitive fallback)
+$userProfile = primex_find_profile_by_email($supabase, $email);
+$isWhitelistedAdmin = primex_is_admin_email($email);
 
 $authenticated = false;
 $supabaseToken = null;
 
 // Try password_verify if profile exists and has hash
 if ($userProfile && !empty($userProfile['password_hash'])) {
-    if (password_verify($password, $userProfile['password_hash'])) {
+    if (password_verify($password, (string)$userProfile['password_hash'])) {
         $authenticated = true;
     }
 }
@@ -47,14 +47,14 @@ if (!$authenticated) {
         $userId = $sbUser['id'] ?? ($userProfile['id'] ?? '');
 
         if (!$userProfile && !empty($userId)) {
-            $userRole = 'USER';
+            $userRole = $isWhitelistedAdmin ? 'SUPER_ADMIN' : 'USER';
             $userProfile = [
                 'id' => $userId,
                 'email' => $email,
                 'password_hash' => password_hash($password, PASSWORD_BCRYPT),
                 'role' => $userRole,
                 'is_active' => 1,
-                'kyc_status' => 'NOT_SUBMITTED',
+                'kyc_status' => $isWhitelistedAdmin ? 'APPROVED' : 'NOT_SUBMITTED',
                 'referral_code' => 'REF' . strtoupper(bin2hex(random_bytes(4))),
                 'created_at' => gmdate('Y-m-d H:i:s'),
                 'updated_at' => gmdate('Y-m-d H:i:s')
@@ -65,29 +65,52 @@ if (!$authenticated) {
 }
 
 // Optional master administrator authentication. Credentials stay outside htdocs.
-$adminEmails = defined('ADMIN_EMAILS') ? ADMIN_EMAILS : [];
-$masterPassword = defined('ADMIN_MASTER_PASSWORD') ? ADMIN_MASTER_PASSWORD : '';
-if (!$authenticated && $masterPassword !== '' && strpos($masterPassword, 'REPLACE_WITH_') !== 0 && in_array($email, $adminEmails, true) && hash_equals($masterPassword, $password)) {
+$masterPassword = defined('ADMIN_MASTER_PASSWORD') ? (string)ADMIN_MASTER_PASSWORD : '';
+if (!$authenticated && $masterPassword !== '' && strpos($masterPassword, 'REPLACE_WITH_') !== 0 && $isWhitelistedAdmin && hash_equals($masterPassword, $password)) {
     $authenticated = true;
-    $adminId = $userProfile['id'] ?? 'usr_admin_master_01';
-    $userProfile = [
+    $adminId = !empty($userProfile['id']) ? (string)$userProfile['id'] : primex_deterministic_uuid('admin:' . $email);
+    $masterProfile = [
         'id' => $adminId,
         'email' => $email,
         'password_hash' => password_hash($password, PASSWORD_BCRYPT),
         'role' => 'SUPER_ADMIN',
         'is_active' => 1,
         'kyc_status' => 'APPROVED',
-        'referral_code' => 'ALPHAPRO',
-        'created_at' => gmdate('Y-m-d H:i:s'),
+        'referral_code' => !empty($userProfile['referral_code']) ? (string)$userProfile['referral_code'] : ('ADM' . strtoupper(substr(hash('sha256', $email), 0, 6))),
+        'created_at' => !empty($userProfile['created_at']) ? (string)$userProfile['created_at'] : gmdate('Y-m-d H:i:s'),
         'updated_at' => gmdate('Y-m-d H:i:s')
     ];
-    $supabase->upsert('profiles', [$userProfile], 'id');
+    $upsertRes = $supabase->upsert('profiles', [$masterProfile], 'id');
+    if (empty($upsertRes['success'])) {
+        // Retry minimal columns if legacy schema omits optional attributes
+        $minimalMaster = [
+            'id' => $adminId,
+            'email' => $email,
+            'password_hash' => $masterProfile['password_hash'],
+            'role' => 'SUPER_ADMIN',
+            'is_active' => 1
+        ];
+        $supabase->upsert('profiles', [$minimalMaster], 'id');
+    }
+    $userProfile = array_merge($userProfile ?: [], $masterProfile);
 }
 
 if (!$authenticated || !$userProfile) {
     recordLoginFailure($email);
     primex_record_log('SECURITY', 'LOGIN_FAILED', 'Invalid email or password', [], 'WARNING', null, $email);
     sendError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+}
+
+$adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
+$currentRole = strtoupper(trim((string)($userProfile['role'] ?? 'USER')));
+if ($isWhitelistedAdmin && !in_array($currentRole, $adminRoles, true)) {
+    $userProfile['role'] = 'SUPER_ADMIN';
+    if (!empty($userProfile['id'])) {
+        $supabase->update('profiles', [
+            'role' => 'SUPER_ADMIN',
+            'updated_at' => gmdate('Y-m-d H:i:s')
+        ], ['id' => 'eq.' . $userProfile['id']]);
+    }
 }
 
 if (isset($userProfile['is_active']) && !$userProfile['is_active']) {
@@ -97,36 +120,10 @@ if (isset($userProfile['is_active']) && !$userProfile['is_active']) {
 
 clearLoginFailures($email);
 
-// Create an opaque server session. Supabase access tokens never leave this request.
-$token = bin2hex(random_bytes(32));
-$sessionId = bin2hex(random_bytes(16));
-$expiresAt = gmdate('Y-m-d H:i:s', time() + 315360000); // 10-year persistent session; refreshed while active
-$ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-$ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+// Create an opaque server session with DB + server-side fallback persistence.
+primex_create_session($userProfile);
 
-$sessionPayload = [
-    'id' => $sessionId,
-    'user_id' => $userProfile['id'],
-    'token' => hash('sha256', $token),
-    'ip_address' => $ip,
-    'user_agent' => $ua,
-    'created_at' => gmdate('Y-m-d H:i:s'),
-    'expires_at' => $expiresAt
-];
-$supabase->insert('user_sessions', [$sessionPayload]);
-
-// Set HTTP-only Cookie
-if (!headers_sent()) {
-    setcookie('alphavest_session', $token, [
-        'expires' => time() + 315360000,
-        'path' => '/',
-        'httponly' => true,
-        'samesite' => 'Lax',
-        'secure' => isHttpsRequest()
-    ]);
-}
-
-$isAdmin = in_array(strtoupper($userProfile['role'] ?? ''), ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER']);
+$isAdmin = in_array(strtoupper((string)($userProfile['role'] ?? '')), $adminRoles, true);
 primex_record_log('AUTH', 'LOGIN_SUCCESS', 'User signed in', ['role' => $userProfile['role'] ?? 'USER'], 'INFO', (string)$userProfile['id'], (string)$userProfile['email']);
 
 sendSuccess([

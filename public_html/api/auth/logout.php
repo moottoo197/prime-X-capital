@@ -6,10 +6,7 @@ require_once dirname(__DIR__) . '/bootstrap.php';
 
 $token = extractBearerToken();
 if (!empty($token)) {
-    $supabase = getSupabaseClient();
-    if ($supabase->isConfigured()) {
-        $supabase->delete('user_sessions', ['token' => 'eq.' . hash('sha256', $token)]);
-    }
+    primex_delete_session_by_token($token);
 }
 
 if (!headers_sent()) {
