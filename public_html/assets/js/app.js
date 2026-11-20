@@ -389,6 +389,15 @@ const App = {
       this.state.user ? this.loadSignals() : Promise.resolve(null)
     ])).catch(() => Promise.allSettled([this.loadSystemConfig(), this.loadTickers()])).then(() => {
       try {
+        const params = new URLSearchParams(window.location.search || '');
+        const requestedView = (params.get('view') || '').trim().toLowerCase();
+        const hashRaw = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
+        if (requestedView === 'admin' || hashRaw === 'admin') {
+          this.navigate('admin');
+        }
+      } catch (e) {}
+
+      try {
         const pendingRef = this.getPendingReferralCode();
         if (pendingRef && !this.state.user) {
           this.openModal('modal-auth');
@@ -553,9 +562,27 @@ const App = {
           headers['X-AlphaVest-Admin-View-User'] = String(this.state.adminPreviewUserId);
         }
 
-        // State-changing requests require a double-submit CSRF token. Fetch it
-        // lazily so the existing API call flow remains unchanged.
+        // State-changing requests require a double-submit CSRF token and explicit
+        // JSON content headers. Restore Content-Type + X-Idempotency-Key so
+        // shared-hosting WAFs and API endpoints parse JSON payloads cleanly.
+        if (body && !(body instanceof FormData)) {
+          headers['Content-Type'] = 'application/json';
+          if (body.idempotency_key) {
+            headers['X-Idempotency-Key'] = String(body.idempotency_key);
+          }
+        }
+
         const needsCsrf = (normalizedMethod !== 'GET' && normalizedMethod !== 'HEAD' && normalizedMethod !== 'OPTIONS');
+        const readCsrfFromCookies = () => {
+          try {
+            const matches = Array.from(document.cookie.matchAll(/(?:^|;\s*)alphavest_csrf=([^;]+)/g));
+            for (let i = matches.length - 1; i >= 0; i--) {
+              const candidate = decodeURIComponent(matches[i][1] || '').trim();
+              if (/^[a-f0-9]{64}$/i.test(candidate)) return candidate;
+            }
+          } catch (e) {}
+          return '';
+        };
         const fetchFreshCsrf = async () => {
           try {
             const csrfRes = await fetch(`${baseUrl}/api/auth/csrf.php`, {
@@ -573,15 +600,10 @@ const App = {
           return '';
         };
         if (needsCsrf) {
-          let csrf = '';
-          try {
-            const match = document.cookie.match(/(?:^|; )alphavest_csrf=([^;]+)/);
-            const candidate = match ? decodeURIComponent(match[1]).trim() : '';
-            csrf = /^[a-f0-9]{64}$/i.test(candidate) ? candidate : '';
-            if (!csrf) {
-              csrf = await fetchFreshCsrf();
-            }
-          } catch (e) {}
+          let csrf = readCsrfFromCookies();
+          if (!csrf) {
+            csrf = await fetchFreshCsrf();
+          }
           if (csrf) headers['X-CSRF-Token'] = csrf;
         }
 
@@ -807,6 +829,13 @@ const App = {
     }
 
     this.updateHeaderAuth();
+    if (this.state.user) {
+      if (window.AlphaLanding && typeof window.AlphaLanding.hide === 'function') {
+        window.AlphaLanding.hide();
+      }
+      const landingEl = document.getElementById('av-public-landing');
+      if (landingEl) landingEl.hidden = true;
+    }
     if (this.isStaffOrAdmin(this.state.user) && !this.state.adminPreviewUser) {
       const allowedTabs = ['overview', 'users', 'referrals', 'deposits', 'withdrawals', 'kyc', 'signals', 'signal-schedules', 'adjustments', 'settings'];
       const cachedTab = localStorage.getItem('alphavest_admin_last_tab') || 'overview';
@@ -839,7 +868,7 @@ const App = {
     if (this.state.user) {
       const previewUser = this.state.adminPreviewUser;
       const displayUser = previewUser || this.state.user;
-      const isAdmin = !previewUser && this.state.user.is_admin === true;
+      const isAdmin = !previewUser && this.isStaffOrAdmin(this.state.user);
       
       if (adminBtn) adminBtn.style.display = isAdmin ? 'inline-flex' : 'none';
       if (profAdminBtn) profAdminBtn.style.display = isAdmin ? 'block' : 'none';
@@ -4037,6 +4066,7 @@ const App = {
     }
 
     if (!res || !res.success) {
+      console.warn('[Login Failed]', { status: res?.status, error_code: res?.error_code, message: res?.message });
       const msg = (res && (res.message || (res.error && res.error.message))) || 'Login failed. Please verify email and password.';
       this.toast(msg, 'error');
       return;
@@ -4074,6 +4104,8 @@ const App = {
         this.checkAuth().then(() => {
           if (!this.state.user) {
             this.toast('Session cookie could not be verified by browser. Please refresh or check cookie settings.', 'error');
+          } else if (this.isStaffOrAdmin(this.state.user) && !this.state.adminPreviewUser && this.state.currentView !== 'admin') {
+            this.navigate('admin');
           }
         }),
         this.loadBalances(),
@@ -4574,7 +4606,7 @@ const App = {
     }
 
     this.state.adminTab = tab;
-    if (this.state.user?.is_admin === true && !this.state.adminPreviewUser) {
+    if (this.isStaffOrAdmin(this.state.user) && !this.state.adminPreviewUser) {
       localStorage.setItem('alphavest_admin_last_tab', tab);
     }
     document.querySelectorAll('.adm-tab-btn').forEach(btn => {

@@ -432,7 +432,8 @@ if (!empty($_GET['cleared'])) {
         </div>
       </div>
       <div class="top-actions">
-        <a class="btn btn-primary" href="/logs?level=<?php echo urlencode($levelFilter); ?>&amp;q=<?php echo urlencode($searchQuery); ?>&amp;limit=<?php echo (int)$limit; ?>">Refresh</a>
+        <a class="btn btn-primary" href="/?view=admin">Open Admin Panel →</a>
+        <a class="btn" href="/logs?level=<?php echo urlencode($levelFilter); ?>&amp;q=<?php echo urlencode($searchQuery); ?>&amp;limit=<?php echo (int)$limit; ?>">Refresh</a>
         <a class="btn" href="/logs?format=json&amp;level=<?php echo urlencode($levelFilter); ?>&amp;q=<?php echo urlencode($searchQuery); ?>&amp;limit=<?php echo (int)$limit; ?>">Export JSON</a>
         <form method="POST" action="/logs" style="display:inline;margin:0;" onsubmit="return confirm('Clear the local server log file? Database audit records remain preserved.');">
           <input type="hidden" name="action" value="clear_file_logs">

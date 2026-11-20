@@ -223,6 +223,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'OPTIONS') {
     if (!defined('PRIMEX_LOGS_WEB_ENTRY') && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
         $csrfHeader = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
         if ($csrfHeader === '' || !hash_equals($csrfCookie, $csrfHeader)) {
+            primex_record_log('SECURITY', 'CSRF_FAILED', 'CSRF validation failed on API request', [
+                'uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+                'method' => (string)($_SERVER['REQUEST_METHOD'] ?? ''),
+                'has_cookie' => isset($_COOKIE['alphavest_csrf']),
+                'header_len' => strlen($csrfHeader),
+                'cookie_len' => strlen($csrfCookie)
+            ], 'WARNING');
             sendError('CSRF_FAILED', 'Security token missing or invalid. Refresh the page and try again.', 403);
         }
     }
@@ -678,34 +685,32 @@ function primex_create_session(array $userProfile, int $ttlSeconds = 315360000):
         }
     }
 
-    if (!$dbSaved) {
-        $snapshot = [
-            'id' => $userId,
-            'numeric_uid' => $userProfile['numeric_uid'] ?? null,
-            'email' => (string)($userProfile['email'] ?? ''),
-            'first_name' => (string)($userProfile['first_name'] ?? ''),
-            'last_name' => (string)($userProfile['last_name'] ?? ''),
-            'whatsapp_number' => (string)($userProfile['whatsapp_number'] ?? ($userProfile['phone'] ?? '')),
-            'phone' => (string)($userProfile['phone'] ?? ($userProfile['whatsapp_number'] ?? '')),
-            'role' => (string)($userProfile['role'] ?? 'USER'),
-            'is_active' => $userProfile['is_active'] ?? 1,
-            'kyc_status' => (string)($userProfile['kyc_status'] ?? 'NOT_SUBMITTED'),
-            'referral_code' => (string)($userProfile['referral_code'] ?? ''),
-            'referred_by' => $userProfile['referred_by'] ?? null,
-            'country' => (string)($userProfile['country'] ?? ''),
-            'timezone' => (string)($userProfile['timezone'] ?? 'Asia/Karachi'),
-            'two_factor_enabled' => !empty($userProfile['two_factor_enabled']),
-            'has_withdrawal_pin' => !empty($userProfile['has_withdrawal_pin']) || !empty($userProfile['withdrawal_pin']) || !empty($userProfile['withdrawal_pin_hash'])
-        ];
-        primex_file_session_write($tokenHash, [
-            'id' => $sessionId,
-            'user_id' => $userId,
-            'token' => $tokenHash,
-            'expires_at' => $expiresAt,
-            'created_at' => $now,
-            'profile_snapshot' => $snapshot
-        ]);
-    }
+    $snapshot = [
+        'id' => $userId,
+        'numeric_uid' => $userProfile['numeric_uid'] ?? null,
+        'email' => (string)($userProfile['email'] ?? ''),
+        'first_name' => (string)($userProfile['first_name'] ?? ''),
+        'last_name' => (string)($userProfile['last_name'] ?? ''),
+        'whatsapp_number' => (string)($userProfile['whatsapp_number'] ?? ($userProfile['phone'] ?? '')),
+        'phone' => (string)($userProfile['phone'] ?? ($userProfile['whatsapp_number'] ?? '')),
+        'role' => (string)($userProfile['role'] ?? 'USER'),
+        'is_active' => $userProfile['is_active'] ?? 1,
+        'kyc_status' => (string)($userProfile['kyc_status'] ?? 'NOT_SUBMITTED'),
+        'referral_code' => (string)($userProfile['referral_code'] ?? ''),
+        'referred_by' => $userProfile['referred_by'] ?? null,
+        'country' => (string)($userProfile['country'] ?? ''),
+        'timezone' => (string)($userProfile['timezone'] ?? 'Asia/Karachi'),
+        'two_factor_enabled' => !empty($userProfile['two_factor_enabled']),
+        'has_withdrawal_pin' => !empty($userProfile['has_withdrawal_pin']) || !empty($userProfile['withdrawal_pin']) || !empty($userProfile['withdrawal_pin_hash'])
+    ];
+    primex_file_session_write($tokenHash, [
+        'id' => $sessionId,
+        'user_id' => $userId,
+        'token' => $tokenHash,
+        'expires_at' => $expiresAt,
+        'created_at' => $now,
+        'profile_snapshot' => $snapshot
+    ]);
 
     $_COOKIE['alphavest_session'] = $token;
     if (!headers_sent()) {
