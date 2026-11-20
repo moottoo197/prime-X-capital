@@ -639,7 +639,7 @@ function primex_delete_sessions_by_user(string $userId): void {
     }
 }
 
-function primex_create_session(array $userProfile, int $ttlSeconds = 315360000): array {
+function primex_create_session(array $userProfile, int $ttlSeconds = 31536000): array {
     $supabase = getSupabaseClient();
     $token = bin2hex(random_bytes(32));
     $tokenHash = hash('sha256', $token);
@@ -703,7 +703,7 @@ function primex_create_session(array $userProfile, int $ttlSeconds = 315360000):
         'two_factor_enabled' => !empty($userProfile['two_factor_enabled']),
         'has_withdrawal_pin' => !empty($userProfile['has_withdrawal_pin']) || !empty($userProfile['withdrawal_pin']) || !empty($userProfile['withdrawal_pin_hash'])
     ];
-    primex_file_session_write($tokenHash, [
+    $fileSaved = primex_file_session_write($tokenHash, [
         'id' => $sessionId,
         'user_id' => $userId,
         'token' => $tokenHash,
@@ -711,6 +711,11 @@ function primex_create_session(array $userProfile, int $ttlSeconds = 315360000):
         'created_at' => $now,
         'profile_snapshot' => $snapshot
     ]);
+    if (!$fileSaved) {
+        primex_record_log('AUTH', 'SESSION_FILE_WRITE_FAILED', 'Unable to write server-side session fallback file', [
+            'db_saved' => $dbSaved
+        ], 'WARNING', $userId, (string)($userProfile['email'] ?? ''));
+    }
 
     $_COOKIE['alphavest_session'] = $token;
     if (!headers_sent()) {
@@ -726,7 +731,8 @@ function primex_create_session(array $userProfile, int $ttlSeconds = 315360000):
     return [
         'token' => $token,
         'session_id' => $sessionId,
-        'db_saved' => $dbSaved
+        'db_saved' => $dbSaved,
+        'file_saved' => $fileSaved
     ];
 }
 
@@ -792,7 +798,7 @@ function getCurrentUser(): ?array {
                 $sessionOwner = $fileSession['profile_snapshot'];
             }
             if ($sessionOwner !== null) {
-                $fileSession['expires_at'] = gmdate('Y-m-d H:i:s', time() + 315360000);
+                $fileSession['expires_at'] = gmdate('Y-m-d H:i:s', time() + 31536000);
                 primex_file_session_write($tokenHash, $fileSession);
             }
         }
@@ -801,14 +807,14 @@ function getCurrentUser(): ?array {
     if ($sessionOwner !== null) {
         $sessionOwner = primex_normalize_effective_user($sessionOwner);
         if ($fromDb && !empty($session['id']) && $supabase->isConfigured()) {
-            $newExpiry = gmdate('Y-m-d H:i:s', time() + 315360000);
+            $newExpiry = gmdate('Y-m-d H:i:s', time() + 31536000);
             $supabase->update('user_sessions', [
                 'expires_at' => $newExpiry
             ], ['id' => 'eq.' . $session['id']]);
         }
         if (!headers_sent()) {
             setcookie('alphavest_session', $token, [
-                'expires' => time() + 315360000,
+                'expires' => time() + 31536000,
                 'path' => '/',
                 'httponly' => true,
                 'samesite' => 'Lax',

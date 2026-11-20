@@ -6,6 +6,12 @@ require_once dirname(__DIR__) . '/bootstrap.php';
 
 $user = getCurrentUser();
 if (!$user) {
+    if (isset($_GET['optional']) && (string)$_GET['optional'] === '1') {
+        sendSuccess([
+            'authenticated' => false,
+            'user' => null
+        ], 'No active session');
+    }
     sendError('UNAUTHORIZED', 'Not authenticated', 401);
 }
 

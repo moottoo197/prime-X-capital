@@ -5,16 +5,18 @@
 require_once dirname(__DIR__) . '/bootstrap.php';
 
 sendSuccess([
-    'environment' => 'production',
-    'platform'    => 'PRIME X CAPITAL Institutional',
-    'version'     => '1.0.0',
-    'maintenance' => false,
-    'features'    => [
+    'environment'     => 'production',
+    'platform'        => 'PRIME X CAPITAL Institutional',
+    'version'         => '1.0.0',
+    'maintenance'     => false,
+    'real_money_mode' => true,
+    'database_engine' => 'Supabase REST',
+    'features'        => [
         'trading'     => false,
         'signals'     => true,
         'copytrading' => false,
         'custody'     => true,
-        'admin'       => false,
+        'admin'       => true,
         'referrals'   => true,
         'kyc'         => true,
         'marketing'   => true

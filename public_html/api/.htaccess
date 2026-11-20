@@ -6,9 +6,10 @@ RewriteEngine On
 <FilesMatch "\.(?:env|ini|log|sql|sqlite|sqlite3|db|bak|old|orig|save|swp)$">
     Require all denied
 </FilesMatch>
-<FilesMatch "^(?:config|bootstrap|SupabaseClient)\.php$">
+<FilesMatch "^(?:bootstrap|SupabaseClient)\.php$">
     Require all denied
 </FilesMatch>
+RewriteRule ^config\.php$ - [F,L,NC]
 
 RewriteCond %{HTTP:Authorization} ^(.*)
 RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]

@@ -809,7 +809,7 @@ const App = {
 
     // Authentication is server-side via an HttpOnly session cookie. Cached user data
     // is UI-only and is never trusted for authorization.
-    const res = await this.api('/auth/me.php');
+    const res = await this.api('/auth/me.php?optional=1');
     if (res.success && res.data && res.data.user) {
       this.state.user = res.data.user;
       if (this.state.user.country) {
@@ -818,11 +818,11 @@ const App = {
       const em = (res.data.user.email || '').toLowerCase().trim();
       localStorage.setItem('alphavest_local_user', JSON.stringify(this.state.user));
     } else {
-      // Only clear a remembered identity when the server definitively says the
-      // session is unauthorized/suspended. Temporary 429/5xx/network failures
-      // must not turn a valid logged-in session into a logged-out UI.
+      // Clear remembered identity when the server confirms there is no active
+      // session or returns 401/403. Temporary 429/5xx/network failures preserve UI.
       const status = Number(res?.status || 0);
-      if (status === 401 || status === 403) {
+      const unauthenticated = Boolean(res?.success && res?.data && res.data.authenticated === false);
+      if (status === 401 || status === 403 || unauthenticated) {
         this.state.user = null;
         localStorage.removeItem('alphavest_local_user');
       }
@@ -976,6 +976,7 @@ const App = {
       if (!isAdmin) {
         this.toast('Administrative access requires administrator sign-in. Opening login...', 'warning');
         this.openModal('modal-auth');
+        if (typeof this.switchAuthBox === 'function') this.switchAuthBox('login');
         return;
       } else if (!this.state.user && user) {
         this.state.user = user;

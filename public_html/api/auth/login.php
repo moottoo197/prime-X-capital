@@ -121,10 +121,14 @@ if (isset($userProfile['is_active']) && !$userProfile['is_active']) {
 clearLoginFailures($email);
 
 // Create an opaque server session with DB + server-side fallback persistence.
-primex_create_session($userProfile);
+$sessionMeta = primex_create_session($userProfile);
 
 $isAdmin = in_array(strtoupper((string)($userProfile['role'] ?? '')), $adminRoles, true);
-primex_record_log('AUTH', 'LOGIN_SUCCESS', 'User signed in', ['role' => $userProfile['role'] ?? 'USER'], 'INFO', (string)$userProfile['id'], (string)$userProfile['email']);
+primex_record_log('AUTH', 'LOGIN_SUCCESS', 'User signed in', [
+    'role' => $userProfile['role'] ?? 'USER',
+    'db_saved' => !empty($sessionMeta['db_saved']),
+    'file_saved' => !empty($sessionMeta['file_saved'])
+], 'INFO', (string)$userProfile['id'], (string)$userProfile['email']);
 
 sendSuccess([
     'user' => [
