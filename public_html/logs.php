@@ -122,8 +122,9 @@ if ($currentUser === null) {
                 $authError = 'Administrator email and password are required.';
             } elseif (!$supabase->isConfigured()) {
                 $authError = 'Authentication backend is unavailable.';
+            } elseif (($rateMsg = checkLoginRateLimit($email, true)) !== null) {
+                $authError = $rateMsg;
             } else {
-                checkLoginRateLimit($email);
                 $profRes = $supabase->select('profiles', ['email' => 'eq.' . $email, 'limit' => '1']);
                 $userProfile = ($profRes['success'] && !empty($profRes['data'][0])) ? $profRes['data'][0] : null;
                 $authenticated = false;

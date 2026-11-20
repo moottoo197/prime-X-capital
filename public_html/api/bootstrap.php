@@ -29,9 +29,11 @@ if (!defined('SUPABASE_URL') || !SUPABASE_URL || !defined('SUPABASE_SERVICE_ROLE
 require_once __DIR__ . '/SupabaseClient.php';
 
 // Load server-side log engine from outside webroot when deployed alongside /server.
-$serverLogsPath = dirname(__DIR__, 2) . '/server/logs.php';
-if (is_file($serverLogsPath)) {
-    require_once $serverLogsPath;
+foreach ([dirname(__DIR__, 2) . '/server/logs.php', dirname(__DIR__, 3) . '/server/logs.php'] as $serverLogsPath) {
+    if (is_file($serverLogsPath)) {
+        require_once $serverLogsPath;
+        break;
+    }
 }
 
 function primex_record_log(
@@ -208,6 +210,56 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'OPTIONS') {
 }
 
 /**
+ * Local file-backed fallback store for rate limits (stored outside public_html).
+ * Ensures brute-force lockouts remain enforced even if security_rate_limits
+ * has not been migrated in Supabase or experiences transient REST latency.
+ */
+function primex_rate_limit_file(string $key): ?string {
+    $safeKey = preg_replace('/[^a-f0-9]/i', '', $key);
+    if ($safeKey === '') return null;
+    $candidates = [
+        dirname(__DIR__, 2) . '/server/storage/rate_limits',
+        rtrim(sys_get_temp_dir(), '/\\') . '/primex_rate_limits'
+    ];
+    foreach ($candidates as $dir) {
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0750, true);
+        }
+        if (is_dir($dir) && is_writable($dir)) {
+            return $dir . '/' . $safeKey . '.json';
+        }
+    }
+    return null;
+}
+
+function primex_file_rate_read(string $key): ?array {
+    $file = primex_rate_limit_file($key);
+    if ($file === null || !is_file($file) || !is_readable($file)) {
+        return null;
+    }
+    $raw = @file_get_contents($file);
+    if ($raw === false || $raw === '') return null;
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+function primex_file_rate_write(string $key, array $row): void {
+    $file = primex_rate_limit_file($key);
+    if ($file === null) return;
+    $encoded = json_encode($row, JSON_UNESCAPED_SLASHES);
+    if ($encoded !== false) {
+        @file_put_contents($file, $encoded, LOCK_EX);
+    }
+}
+
+function primex_file_rate_delete(string $key): void {
+    $file = primex_rate_limit_file($key);
+    if ($file !== null && is_file($file)) {
+        @unlink($file);
+    }
+}
+
+/**
  * Database-backed rate limiter for withdrawal PIN validation.
  * Three failed attempts trigger a five-minute lock for the authenticated user.
  */
@@ -218,15 +270,19 @@ function withdrawalPinRateLimitKey(string $userId): string {
 function checkWithdrawalPinRateLimit(string $userId): void {
     $supabase = getSupabaseClient();
     $key = withdrawalPinRateLimitKey($userId);
-    $res = $supabase->select('security_rate_limits', [
-        'id' => 'eq.' . $key,
-        'limit' => '1'
-    ]);
-    if (!$res['success']) {
-        error_log('AlphaVest rate-limit lookup failed: ' . ($res['message'] ?? 'unknown'));
-        sendError('SECURITY_SERVICE_UNAVAILABLE', 'Security verification is temporarily unavailable. Please try again later.', 503);
+    $row = null;
+    $res = $supabase->isConfigured()
+        ? $supabase->select('security_rate_limits', ['id' => 'eq.' . $key, 'limit' => '1'])
+        : ['success' => false, 'message' => 'Supabase client not configured'];
+    if ($res['success']) {
+        $row = $res['data'][0] ?? null;
+    } else {
+        primex_record_log('SECURITY', 'PIN_RATE_LIMIT_FALLBACK', (string)($res['message'] ?? 'lookup failed'), [
+            'error' => $res['error'] ?? null,
+            'http_code' => $res['http_code'] ?? 0
+        ], 'WARNING', $userId);
+        $row = primex_file_rate_read($key);
     }
-    $row = $res['data'][0] ?? null;
     if ($row && !empty($row['locked_until'])) {
         $lockedUntil = strtotime((string)$row['locked_until']) ?: 0;
         if ($lockedUntil > time()) {
@@ -239,12 +295,10 @@ function recordWithdrawalPinFailure(string $userId): void {
     $supabase = getSupabaseClient();
     $key = withdrawalPinRateLimitKey($userId);
     $now = gmdate('Y-m-d H:i:s');
-    $res = $supabase->select('security_rate_limits', ['id' => 'eq.' . $key, 'limit' => '1']);
-    if (!$res['success']) {
-        error_log('AlphaVest rate-limit read failed: ' . ($res['message'] ?? 'unknown'));
-        return;
-    }
-    $row = $res['data'][0] ?? null;
+    $res = $supabase->isConfigured()
+        ? $supabase->select('security_rate_limits', ['id' => 'eq.' . $key, 'limit' => '1'])
+        : ['success' => false];
+    $row = $res['success'] ? ($res['data'][0] ?? null) : primex_file_rate_read($key);
     $attempts = (int)($row['failed_attempts'] ?? 0) + 1;
     $lockedUntil = $attempts >= 3 ? gmdate('Y-m-d H:i:s', time() + 300) : null;
     $payload = [
@@ -255,17 +309,23 @@ function recordWithdrawalPinFailure(string $userId): void {
         'locked_until' => $lockedUntil,
         'updated_at' => $now
     ];
-    if ($row) {
-        $supabase->update('security_rate_limits', $payload, ['id' => 'eq.' . $key]);
-    } else {
-        $supabase->insert('security_rate_limits', [$payload]);
+    primex_file_rate_write($key, $payload);
+    if ($res['success']) {
+        if (!empty($res['data'][0])) {
+            $supabase->update('security_rate_limits', $payload, ['id' => 'eq.' . $key]);
+        } else {
+            $supabase->insert('security_rate_limits', [$payload]);
+        }
     }
 }
 
 function clearWithdrawalPinFailures(string $userId): void {
     $supabase = getSupabaseClient();
     $key = withdrawalPinRateLimitKey($userId);
-    $supabase->delete('security_rate_limits', ['id' => 'eq.' . $key]);
+    primex_file_rate_delete($key);
+    if ($supabase->isConfigured()) {
+        $supabase->delete('security_rate_limits', ['id' => 'eq.' . $key]);
+    }
 }
 
 /**
@@ -338,26 +398,60 @@ function authRateKey(string $email): string {
     $ip = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
     return hash('sha256', 'login|' . strtolower(trim($email)) . '|' . $ip);
 }
-function checkLoginRateLimit(string $email): void {
+function checkLoginRateLimit(string $email, bool $returnMessage = false): ?string {
     $sb = getSupabaseClient();
-    if (!$sb->isConfigured()) sendError('SECURITY_SERVICE_UNAVAILABLE', 'Security verification is temporarily unavailable.', 503);
     $key = authRateKey($email);
-    $res = $sb->select('security_rate_limits', ['id'=>'eq.'.$key,'limit'=>'1']);
-    if (!$res['success']) { error_log('Login rate-limit lookup failed: '.($res['message']??'unknown')); sendError('SECURITY_SERVICE_UNAVAILABLE','Security verification is temporarily unavailable.',503); }
-    $row=$res['data'][0]??null;
-    if ($row && !empty($row['locked_until']) && (strtotime((string)$row['locked_until'])?:0)>time()) {
-        sendError('LOGIN_RATE_LIMITED','Too many failed login attempts. Please try again later.',429);
+    $row = null;
+    $res = $sb->isConfigured()
+        ? $sb->select('security_rate_limits', ['id' => 'eq.' . $key, 'limit' => '1'])
+        : ['success' => false, 'message' => 'Supabase client not configured'];
+    if ($res['success']) {
+        $row = $res['data'][0] ?? null;
+    } else {
+        error_log('Login rate-limit lookup fallback: ' . ($res['message'] ?? 'unknown'));
+        primex_record_log('SECURITY', 'RATE_LIMIT_DB_FALLBACK', (string)($res['message'] ?? 'Login rate-limit lookup failed'), [
+            'error' => $res['error'] ?? null,
+            'http_code' => $res['http_code'] ?? 0
+        ], 'WARNING', null, $email);
+        $row = primex_file_rate_read($key);
     }
+    if ($row && !empty($row['locked_until']) && (strtotime((string)$row['locked_until']) ?: 0) > time()) {
+        $msg = 'Too many failed login attempts. Please try again later.';
+        if ($returnMessage) {
+            return $msg;
+        }
+        sendError('LOGIN_RATE_LIMITED', $msg, 429);
+    }
+    return null;
 }
 function recordLoginFailure(string $email): void {
-    $sb=getSupabaseClient(); $key=authRateKey($email); $now=gmdate('Y-m-d H:i:s');
-    $res=$sb->select('security_rate_limits',['id'=>'eq.'.$key,'limit'=>'1']); if(!$res['success']) return;
-    $row=$res['data'][0]??null; $attempts=(int)($row['failed_attempts']??0)+1;
-    $locked=$attempts>=5?gmdate('Y-m-d H:i:s',time()+900):null;
-    $payload=['id'=>$key,'user_id'=>'ip-login','action'=>'login','failed_attempts'=>$attempts,'locked_until'=>$locked,'updated_at'=>$now];
-    if($row) $sb->update('security_rate_limits',$payload,['id'=>'eq.'.$key]); else $sb->insert('security_rate_limits',[$payload]);
+    $sb = getSupabaseClient();
+    $key = authRateKey($email);
+    $now = gmdate('Y-m-d H:i:s');
+    $res = $sb->isConfigured()
+        ? $sb->select('security_rate_limits', ['id' => 'eq.' . $key, 'limit' => '1'])
+        : ['success' => false];
+    $row = $res['success'] ? ($res['data'][0] ?? null) : primex_file_rate_read($key);
+    $attempts = (int)($row['failed_attempts'] ?? 0) + 1;
+    $locked = $attempts >= 5 ? gmdate('Y-m-d H:i:s', time() + 900) : null;
+    $payload = ['id' => $key, 'user_id' => 'ip-login', 'action' => 'login', 'failed_attempts' => $attempts, 'locked_until' => $locked, 'updated_at' => $now];
+    primex_file_rate_write($key, $payload);
+    if ($res['success']) {
+        if (!empty($res['data'][0])) {
+            $sb->update('security_rate_limits', $payload, ['id' => 'eq.' . $key]);
+        } else {
+            $sb->insert('security_rate_limits', [$payload]);
+        }
+    }
 }
-function clearLoginFailures(string $email): void { getSupabaseClient()->delete('security_rate_limits',['id'=>'eq.'.authRateKey($email)]); }
+function clearLoginFailures(string $email): void {
+    $key = authRateKey($email);
+    primex_file_rate_delete($key);
+    $sb = getSupabaseClient();
+    if ($sb->isConfigured()) {
+        $sb->delete('security_rate_limits', ['id' => 'eq.' . $key]);
+    }
+}
 
 /**
  * Resolve authenticated user from Supabase Auth or Profiles

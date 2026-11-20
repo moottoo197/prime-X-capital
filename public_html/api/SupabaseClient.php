@@ -125,6 +125,9 @@ class SupabaseClient {
                 CURLOPT_SSL_VERIFYHOST => 0,
                 CURLOPT_HEADER => true
             ]);
+            if (defined('CURL_IPRESOLVE_V4')) {
+                curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+            }
             curl_multi_add_handle($multi, $ch);
             $handles[(string)$key] = $ch;
             $meta[(string)$key] = ['table' => $table];
@@ -419,28 +422,47 @@ class SupabaseClient {
         }
         $finalHeaders = array_values($headerMap);
 
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_HTTPHEADER => $finalHeaders,
-            CURLOPT_TIMEOUT => $this->timeout,
-            CURLOPT_CONNECTTIMEOUT => 6,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_HEADER => true
-        ]);
+        $maxAttempts = ($method === 'GET') ? 2 : 1;
+        $response = false;
+        $curlError = '';
+        $curlErrno = 0;
+        $httpCode = 0;
+        $headerSize = 0;
 
-        if ($body !== null && in_array($method, ['POST', 'PATCH', 'PUT'])) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CUSTOMREQUEST => $method,
+                CURLOPT_HTTPHEADER => $finalHeaders,
+                CURLOPT_TIMEOUT => $this->timeout,
+                CURLOPT_CONNECTTIMEOUT => 6,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => 0,
+                CURLOPT_HEADER => true
+            ]);
+            if (defined('CURL_IPRESOLVE_V4')) {
+                curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+            }
+
+            if ($body !== null && in_array($method, ['POST', 'PATCH', 'PUT'])) {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            }
+
+            $response = curl_exec($ch);
+            $curlError = curl_error($ch);
+            $curlErrno = curl_errno($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            curl_close($ch);
+
+            $transient = ($curlErrno !== 0) || ($attempt < $maxAttempts && in_array($httpCode, [502, 503, 504], true));
+            if (!$transient || $attempt >= $maxAttempts) {
+                break;
+            }
+            usleep(150000);
         }
-
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $curlErrno = curl_errno($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        curl_close($ch);
 
         if ($curlErrno !== 0) {
             return [

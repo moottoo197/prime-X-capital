@@ -16,12 +16,12 @@ if (empty($email) || empty($password)) {
     sendError('VALIDATION_ERROR', 'Email and password are required');
 }
 
-checkLoginRateLimit($email);
-
 $supabase = getSupabaseClient();
 if (!$supabase->isConfigured()) {
     sendError('SUPABASE_CONFIG_MISSING', 'Supabase REST client is not configured.', 503);
 }
+
+checkLoginRateLimit($email);
 
 // 1. Check profile in Supabase profiles table
 $profRes = $supabase->select('profiles', ['email' => "eq.{$email}", 'limit' => '1']);

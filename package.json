@@ -1,0 +1,10 @@
+{
+  "name": "prime-x-capital",
+  "version": "1.0.6",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m http.server 3000 --bind 0.0.0.0 --directory public_html",
+    "build": "echo 'Static HTML/PHP deployment in public_html'",
+    "lint": "echo 'No Node/TypeScript build step'"
+  }
+}

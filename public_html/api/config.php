@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 $privateConfigCandidates = [
     dirname(__DIR__, 2) . '/server/config.php',
+    dirname(__DIR__, 3) . '/server/config.php',
     dirname(__DIR__, 2) . '/config.php',
 ];
 
