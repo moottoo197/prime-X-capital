@@ -379,15 +379,8 @@ const App = {
       }
     } catch (e) {}
 
-    // Authentication is validated by the HttpOnly session cookie. Cached user
-    // data is UI-only and is never used as an authorization credential.
-    this.checkAuth().then(() => Promise.allSettled([
-      this.loadSystemConfig(),
-      this.loadTickers(),
-      this.state.user ? this.loadBalances() : Promise.resolve(null),
-      this.state.user ? this.loadNotifications() : Promise.resolve(null),
-      this.state.user ? this.loadSignals() : Promise.resolve(null)
-    ])).catch(() => Promise.allSettled([this.loadSystemConfig(), this.loadTickers()])).then(() => {
+    // Stagger startup API requests so shared-hosting PHP workers are never saturated by 503s.
+    this.checkAuth().then(async () => {
       try {
         const params = new URLSearchParams(window.location.search || '');
         const requestedView = (params.get('view') || '').trim().toLowerCase();
@@ -406,12 +399,15 @@ const App = {
         }
       } catch (e) {}
 
-      if (typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(() => this.loadMarketingData(), { timeout: 1500 });
-      } else {
-        setTimeout(() => this.loadMarketingData(), 300);
+      await this.loadTickers().catch(() => {});
+      await this.loadSystemConfig().catch(() => {});
+      if (this.state.user) {
+        await this.loadBalances().catch(() => {});
+        await this.loadNotifications().catch(() => {});
+        await this.loadSignals().catch(() => {});
+        setTimeout(() => this.loadMarketingData(), 1200);
       }
-    });
+    }).catch(() => {});
 
     this.startPolling();
   },
@@ -607,32 +603,51 @@ const App = {
           if (csrf) headers['X-CSRF-Token'] = csrf;
         }
 
+        const isPriorityRequest = !isGet
+          || cleanEndpoint.startsWith('/auth/')
+          || cleanEndpoint.startsWith('/admin/');
+        const runWithSlot = async (fn) => {
+          if (isPriorityRequest) return fn();
+          this._apiBgQueue = this._apiBgQueue || { active: 0, waiters: [] };
+          if (this._apiBgQueue.active >= 2) {
+            await new Promise(resolve => this._apiBgQueue.waiters.push(resolve));
+          }
+          this._apiBgQueue.active++;
+          try {
+            return await fn();
+          } finally {
+            this._apiBgQueue.active = Math.max(0, this._apiBgQueue.active - 1);
+            const next = this._apiBgQueue.waiters.shift();
+            if (next) next();
+          }
+        };
+
         let lastError = null;
         let csrfRefreshed = false;
-        for (let attempt = 0; attempt <= retries; attempt++) {
+        const maxRetries = (isGet && !cleanEndpoint.startsWith('/auth/')) ? 0 : retries;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
           try {
-            const res = await fetch(url, {
+            const res = await runWithSlot(() => fetch(url, {
               method: normalizedMethod,
               headers,
               cache: 'no-store',
               credentials: 'include',
               body: body ? (body instanceof FormData ? body : JSON.stringify(body)) : null
-            });
+            }));
 
-            // NEVER automatically retry 429. Retrying a rate-limited request
-            // can amplify the outage. Respect Retry-After for polling GETs.
-            if (res.status === 429) {
+            // NEVER automatically retry 429 or 503. Retrying a rate-limited or
+            // Entry-Process-saturated request amplifies the outage across Hostinger.
+            if (res.status === 429 || res.status === 503) {
               const retryAfter = Number(res.headers.get('Retry-After') || 0);
-              if (isGet && retryAfter > 0 && retryAfter <= 120) {
+              if (isGet) {
                 this._apiRateLimitUntil = this._apiRateLimitUntil || new Map();
-                this._apiRateLimitUntil.set(url, Date.now() + (retryAfter > 0 ? retryAfter * 1000 : 30000));
+                this._apiRateLimitUntil.set(url, Date.now() + (retryAfter > 0 && retryAfter <= 120 ? retryAfter * 1000 : 15000));
               }
             }
 
-            // Retry only transient 502/503/504 responses, with exponential
-            // backoff + jitter. Never retry other 4xx responses.
-            if ([502, 503, 504].includes(res.status) && attempt < retries) {
-              const delay = Math.min(4000, 500 * (2 ** attempt)) + Math.floor(Math.random() * 250);
+            // Retry only transient 502/504 responses, with exponential backoff + jitter.
+            if ([502, 504].includes(res.status) && attempt < maxRetries) {
+              const delay = Math.min(4000, 600 * (2 ** attempt)) + Math.floor(Math.random() * 250);
               await new Promise(r => setTimeout(r, delay));
               continue;
             }
@@ -1032,7 +1047,7 @@ const App = {
     } else if (view === 'home') {
       this.updateHomeHeroBalance();
       this.renderMarketList();
-      this.loadSignals();
+      if (this.state.user) this.loadSignals();
     } else if (view === 'admin') {
       this.loadAdminData();
       this.setAdminTab(this.state.adminTab || 'overview');
@@ -4067,8 +4082,10 @@ const App = {
     }
 
     if (!res || !res.success) {
-      console.warn('[Login Failed]', { status: res?.status, error_code: res?.error_code, message: res?.message });
-      const msg = (res && (res.message || (res.error && res.error.message))) || 'Login failed. Please verify email and password.';
+      console.warn('[Login Failed]', JSON.stringify({ status: res?.status || 0, error_code: res?.error_code || '', message: res?.message || '' }));
+      const msg = res?.status === 503
+        ? (res?.message && !res.message.includes('<!doctype') ? res.message : 'Server is temporarily busy (503). Please wait a few seconds and click Log in again.')
+        : ((res && (res.message || (res.error && res.error.message))) || 'Login failed. Please verify email and password.');
       this.toast(msg, 'error');
       return;
     }
@@ -7150,22 +7167,19 @@ const App = {
 
   async loadMarketingData() {
     try {
-      const [assetsRes, promosRes, claimsRes, schedsRes] = await Promise.all([
-        this.api('/marketing/assets.php'),
-        this.api('/marketing/promotions.php'),
-        this.api('/marketing/claims.php'),
-        this.api('/marketing/schedules.php')
-      ]);
-
+      const assetsRes = await this.api('/marketing/assets.php');
       if (assetsRes?.success && assetsRes.data) {
         this.state.marketingAssets = assetsRes.data.assets || [];
       }
+      const promosRes = await this.api('/marketing/promotions.php');
       if (promosRes?.success && promosRes.data) {
         this.state.marketingPromotions = promosRes.data;
       }
+      const claimsRes = await this.api('/marketing/claims.php');
       if (claimsRes?.success && claimsRes.data) {
         this.state.marketingClaims = claimsRes.data.claims || [];
       }
+      const schedsRes = await this.api('/marketing/schedules.php');
       if (schedsRes?.success && schedsRes.data) {
         this.state.marketingSchedules = schedsRes.data;
       }
@@ -7685,11 +7699,11 @@ const App = {
       this.loadBalances();
     }, 15000);
 
-    // Market tickers: 10s while the app is visible.
+    // Market tickers: 30s while visible and outside admin desk.
     this._tickerPollInterval = setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || this.state.currentView === 'admin') return;
       this.loadTickers();
-    }, 10000);
+    }, 30000);
 
     // Notifications: 30s is sufficient for a notification bell and avoids
     // hammering the API on every dashboard session.

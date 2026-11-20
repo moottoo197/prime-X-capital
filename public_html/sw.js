@@ -1,5 +1,18 @@
-const CACHE_NAME = "primex-static-v109_admin_config_me_fix";
-const STATIC_ASSETS = ["/", "/assets/css/app.css?v=20261120_v109_admin_config_me_fix", "/assets/js/app.js?v=20261120_v109_admin_config_me_fix", "/assets/js/chart.js?v=20261120_v109_admin_config_me_fix", "/assets/js/3d-engine.js?v=20261120_v109_admin_config_me_fix"];
+const CACHE_NAME = "primex-static-v110_hostinger_503_sw_fix";
+const STATIC_ASSETS = ["/", "/offline.html", "/assets/css/app.css?v=20261120_v110_hostinger_503_sw_fix", "/assets/js/app.js?v=20261120_v110_hostinger_503_sw_fix", "/assets/js/chart.js?v=20261120_v110_hostinger_503_sw_fix", "/assets/js/3d-engine.js?v=20261120_v110_hostinger_503_sw_fix"];
+
+function fallbackResponse(req) {
+  return caches.match(req).then(cached => cached || caches.match("/offline.html")).then(res => {
+    return res || new Response("Service temporarily unavailable", {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8" }
+    });
+  }).catch(() => new Response("Service temporarily unavailable", {
+    status: 503,
+    headers: { "Content-Type": "text/plain; charset=utf-8" }
+  }));
+}
+
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(STATIC_ASSETS).catch(()=>{})).then(()=>self.skipWaiting()));
 });
@@ -10,7 +23,7 @@ self.addEventListener("fetch", event => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== location.origin || url.pathname.startsWith("/api/") || url.pathname === "/offline.html" || url.pathname === "/logs" || url.pathname.startsWith("/logs/") || url.pathname.startsWith("/logs.")) return;
+  if (url.origin !== location.origin || url.pathname.startsWith("/api/") || url.pathname === "/version.php" || url.pathname === "/offline.html" || url.pathname === "/logs" || url.pathname.startsWith("/logs/") || url.pathname.startsWith("/logs.")) return;
 
   // HTML/navigation is NETWORK-FIRST so a new deployment is visible immediately.
   // The cache is only a fallback when the network is unavailable.
@@ -18,7 +31,7 @@ self.addEventListener("fetch", event => {
     event.respondWith(fetch(req, { cache: "no-store" }).then(res => {
       if (res.ok) caches.open(CACHE_NAME).then(c => c.put(req, res.clone())).catch(()=>{});
       return res;
-    }).catch(() => caches.match(req).then(cached => cached || caches.match("/offline.html"))));
+    }).catch(() => fallbackResponse(req)));
     return;
   }
 
@@ -28,11 +41,11 @@ self.addEventListener("fetch", event => {
     event.respondWith(fetch(req, { cache: "no-store" }).then(res => {
       if (res.ok) caches.open(CACHE_NAME).then(c => c.put(req, res.clone())).catch(()=>{});
       return res;
-    }).catch(() => caches.match(req).then(cached => cached || caches.match("/offline.html"))));
+    }).catch(() => fallbackResponse(req)));
     return;
   }
 
-  event.respondWith(fetch(req).catch(() => caches.match(req).then(cached => cached || caches.match("/offline.html"))));
+  event.respondWith(fetch(req).catch(() => fallbackResponse(req)));
 });
 
 
