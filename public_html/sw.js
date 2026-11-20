@@ -1,5 +1,5 @@
-const CACHE_NAME = "primex-static-v103_responsive_no_scroll";
-const STATIC_ASSETS = ["/", "/assets/css/app.css?v=20261119_v103_responsive_no_scroll", "/assets/js/app.js?v=20261119_v103_responsive_no_scroll", "/assets/js/chart.js?v=20261119_v103_responsive_no_scroll", "/assets/js/3d-engine.js?v=20261119_v103_responsive_no_scroll"];
+const CACHE_NAME = "primex-static-v104_signup_phone";
+const STATIC_ASSETS = ["/", "/assets/css/app.css?v=20261120_v104_signup_phone", "/assets/js/app.js?v=20261120_v104_signup_phone", "/assets/js/chart.js?v=20261120_v104_signup_phone", "/assets/js/3d-engine.js?v=20261120_v104_signup_phone"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(STATIC_ASSETS).catch(()=>{})).then(()=>self.skipWaiting()));
 });

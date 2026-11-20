@@ -14,6 +14,8 @@ $body = getJsonBody();
 $firstName = trim((string)($body['first_name'] ?? $body['firstName'] ?? $body['user']['first_name'] ?? $body['user']['firstName'] ?? ''));
 $lastName = trim((string)($body['last_name'] ?? $body['lastName'] ?? $body['user']['last_name'] ?? $body['user']['lastName'] ?? ''));
 $email = strtolower(trim($body['email'] ?? ''));
+$phone = trim((string)($body['phone'] ?? $body['phone_number'] ?? $body['user']['phone'] ?? $body['user']['phone_number'] ?? ''));
+$normalizedPhoneDigits = preg_replace('/[\s\-().]/', '', $phone);
 $password = $body['password'] ?? '';
 $referralCode = strtoupper(trim((string)($body['referral_code'] ?? $body['ref'] ?? $body['invite_code'] ?? ($_COOKIE['alphavest_ref'] ?? ''))));
 $withdrawalPin = trim($body['withdrawal_pin'] ?? $body['fund_password'] ?? $body['pin'] ?? '');
@@ -33,6 +35,10 @@ if ($firstName === '' || $lastName === '') {
 
 if (empty($email) || empty($password) || strlen($password) < 8) {
     sendError('VALIDATION_ERROR', 'Valid email and password (minimum 8 characters) required');
+}
+
+if ($phone === '' || !preg_match('/^[0-9+\-\s().]{7,24}$/', $phone) || !preg_match('/^\+?\d{7,15}$/', (string)$normalizedPhoneDigits)) {
+    sendError('VALIDATION_ERROR', 'Please enter a valid phone number');
 }
 
 if (empty($withdrawalPin) || !preg_match('/^\d{6}$/', $withdrawalPin)) {
@@ -97,6 +103,7 @@ $authRes = $supabase->authAdminCreateUser($email, $password, [
     'kyc_status' => $kycStatus,
     'referral_code' => $myRefCode,
     'referred_by' => $validReferredBy,
+    'phone' => $phone,
     'country' => $country,
     'timezone' => $timezone
 ]);
@@ -111,6 +118,7 @@ $profilePayload = [
     'email' => $email,
     'first_name' => $firstName,
     'last_name' => $lastName,
+    'phone' => $phone,
     'password_hash' => $hash,
     'role' => $role,
     'is_active' => 1,
@@ -127,7 +135,7 @@ $profilePayload = [
 
 $profileRes = $supabase->upsert('profiles', [$profilePayload], 'id');
 
-// Legacy Supabase schemas may not expose optional PIN/timezone columns in PostgREST.
+// Legacy Supabase schemas may not expose optional PIN/timezone/phone columns in PostgREST.
 // Never allow an optional security/profile column to prevent the required country
 // and account profile from being created. Retry progressively with only columns
 // that are required by the application.
@@ -135,7 +143,7 @@ if (!$profileRes['success']) {
     $msg = strtolower((string)($profileRes['message'] ?? ''));
     $retry = $profilePayload;
     $changed = false;
-    foreach (['withdrawal_pin_hash', 'withdrawal_pin', 'timezone'] as $optionalColumn) {
+    foreach (['withdrawal_pin_hash', 'withdrawal_pin', 'timezone', 'phone'] as $optionalColumn) {
         if (strpos($msg, strtolower($optionalColumn)) !== false) {
             unset($retry[$optionalColumn]);
             $changed = true;
@@ -147,11 +155,11 @@ if (!$profileRes['success']) {
 }
 if (!$profileRes['success']) {
     // Final compatibility path: preserve the account and selected country using
-    // only columns required by all Alphavest profile schemas.
+    // only columns required by all PRIME X CAPITAL profile schemas.
     $msg = strtolower((string)($profileRes['message'] ?? ''));
-    if (preg_match('/(withdrawal_pin_hash|withdrawal_pin|timezone)/', $msg)) {
+    if (preg_match('/(withdrawal_pin_hash|withdrawal_pin|timezone|phone)/', $msg)) {
         $minimal = $profilePayload;
-        unset($minimal['withdrawal_pin_hash'], $minimal['withdrawal_pin'], $minimal['timezone']);
+        unset($minimal['withdrawal_pin_hash'], $minimal['withdrawal_pin'], $minimal['timezone'], $minimal['phone']);
         $profileRes = $supabase->upsert('profiles', [$minimal], 'id');
     }
 }
@@ -218,6 +226,7 @@ sendSuccess([
         'email' => $email,
         'first_name' => $firstName,
         'last_name' => $lastName,
+        'phone' => $phone,
         'role' => $role,
         'kyc_status' => $kycStatus,
         'referral_code' => $myRefCode,

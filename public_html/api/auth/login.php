@@ -133,6 +133,7 @@ sendSuccess([
         'email' => $userProfile['email'],
         'first_name' => $userProfile['first_name'] ?? '',
         'last_name' => $userProfile['last_name'] ?? '',
+        'phone' => $userProfile['phone'] ?? '',
         'role' => $userProfile['role'] ?? 'USER',
         'kyc_status' => $userProfile['kyc_status'] ?? 'NOT_SUBMITTED',
         'referral_code' => $userProfile['referral_code'] ?? '',

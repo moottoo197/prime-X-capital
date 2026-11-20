@@ -20,6 +20,7 @@ sendSuccess([
         'email' => $user['email'],
         'first_name' => $user['first_name'] ?? '',
         'last_name' => $user['last_name'] ?? '',
+        'phone' => $user['phone'] ?? '',
         'role' => $user['role'] ?? 'USER',
         'kyc_status' => $user['kyc_status'] ?? 'NOT_SUBMITTED',
         'referral_code' => $user['referral_code'] ?? '',

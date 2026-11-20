@@ -4059,6 +4059,7 @@ const App = {
     const firstNameInput = document.getElementById('reg-first-name');
     const lastNameInput = document.getElementById('reg-last-name');
     const emailInput = document.getElementById('reg-email');
+    const phoneInput = document.getElementById('reg-phone');
     const passInput = document.getElementById('reg-pass');
     const confirmInput = document.getElementById('reg-confirm');
     const pinInput = document.getElementById('reg-withdrawal-pin');
@@ -4069,6 +4070,8 @@ const App = {
     const firstName = firstNameInput ? String(firstNameInput.value || '').trim() : '';
     const lastName = lastNameInput ? String(lastNameInput.value || '').trim() : '';
     const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+    const phone = phoneInput ? String(phoneInput.value || '').trim() : '';
+    const normalizedPhoneDigits = phone.replace(/[\s\-().]/g, '');
     const password = passInput ? passInput.value : '';
     const confirm = confirmInput ? confirmInput.value : '';
     const withdrawalPin = pinInput ? pinInput.value.trim() : '';
@@ -4113,6 +4116,16 @@ const App = {
       if (emailInput) emailInput.focus();
       return;
     }
+    if (!phone) {
+      this.toast('Please enter your phone number', 'error');
+      if (phoneInput) phoneInput.focus();
+      return;
+    }
+    if (!/^[0-9+\-\s().]{7,24}$/.test(phone) || !/^\+?\d{7,15}$/.test(normalizedPhoneDigits)) {
+      this.toast('Please enter a valid phone number', 'error');
+      if (phoneInput) phoneInput.focus();
+      return;
+    }
     if (!password || password.length < 8) {
       this.toast('Password must be at least 8 characters long', 'error');
       if (passInput) passInput.focus();
@@ -4149,6 +4162,8 @@ const App = {
         firstName: firstName,
         lastName: lastName,
         email,
+        phone,
+        phone_number: phone,
         password,
         confirm_password: confirm,
         withdrawal_pin: withdrawalPin,
