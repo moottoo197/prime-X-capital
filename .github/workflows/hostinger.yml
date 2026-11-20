@@ -56,7 +56,7 @@ jobs:
           print("set xfer:clobber yes")
           print(f"open --env-password -u {user} {host}")
           print('mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --exclude "^\\.git" --exclude "^uploads/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./public_html /public_html')
-          print('mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --exclude "^\\.git" --exclude "^\\.env$" --exclude "^\\.env\\.(?!example$).*" --exclude "^storage/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./server /server')
+          print('mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --exclude "^\\.git" --exclude "^\\.env" --exclude "^storage/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./server /server')
           print("quit")
           PY
 
