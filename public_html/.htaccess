@@ -1,0 +1,75 @@
+# Alphavest - Apache / InfinityFree production configuration
+Options -Indexes +FollowSymLinks
+RewriteEngine On
+
+# Never expose hidden files, source/config files, database dumps, logs or documentation.
+<FilesMatch "(^|/)(\.|.*\.(?:env|ini|log|sql|sqlite|sqlite3|db|bak|old|orig|save|swp|dist))$">
+    Require all denied
+</FilesMatch>
+
+# Explicitly deny server-only/deployment artifacts if accidentally copied under htdocs.
+RewriteRule ^(?:server|database|hostinger|vendor|node_modules)(?:/|$) - [F,L,NC]
+RewriteRule ^(?:README|DEPLOYMENT_STRUCTURE|HOSTINGER_DEPLOYMENT_GUIDE|SUPABASE_SETUP_GUIDE|ADMIN_PANEL_DOCUMENTATION|FIXED_DEPLOYMENT)\.md$ - [F,L,NC]
+
+# Pass Authorization headers to PHP / FastCGI / FPM.
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+SetEnvIf X-Authorization "(.*)" HTTP_X_AUTHORIZATION=$1
+
+# Handle CORS preflight in the application; do not redirect OPTIONS.
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^ - [R=200,L]
+
+# Route /api/health to /api/health.php directly.
+RewriteRule ^api/health/?$ api/health.php [L,QSA]
+
+# Auto-append .php for /api/ routes if the physical PHP file exists.
+RewriteCond %{DOCUMENT_ROOT}/api/$1.php -f
+RewriteRule ^api/(.+)/?$ api/$1.php [L,QSA]
+
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.*)$ $1.php [L,QSA]
+
+# Route remaining /api/ requests to api/index.php.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+
+
+# Never expose application data/config stores accidentally left under public_html.
+<FilesMatch "(?:^|/)(?:deposit_config_store|bound_addresses)\.json$">
+    Require all denied
+</FilesMatch>
+RewriteRule ^api/(?:admin/deposit_config_store|bound_addresses)\.json$ - [F,L,NC]
+
+# Security headers.
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+    Header always set X-Frame-Options "DENY"
+    Header always set Cross-Origin-Opener-Policy "same-origin"
+    Header always set Cross-Origin-Resource-Policy "same-origin"
+    <FilesMatch "^(index\.html|sw\.js|.*\.php)$">
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+</IfModule>
+
+# Professional user-facing error pages.
+ErrorDocument 403 /403.html
+ErrorDocument 404 /404.html
+ErrorDocument 500 /500.html
+ErrorDocument 502 /500.html
+ErrorDocument 503 /503.html
+ErrorDocument 504 /503.html
+
+# Defense in depth for any legacy/public upload directory accidentally deployed.
+RewriteRule ^uploads/kyc(?:/|$) - [F,L,NC]
+
+<IfModule mod_headers.c>
+    # HSTS is only meaningful when the site is already served over HTTPS.
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+</IfModule>

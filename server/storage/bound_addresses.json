@@ -1,0 +1,185 @@
+{
+    "2584e399-bfe2-4990-ba89-243b1ede7468": [
+        {
+            "id": "waddr_dc5880e4eca8d7c1",
+            "user_id": "2584e399-bfe2-4990-ba89-243b1ede7468",
+            "asset": "USDT",
+            "network": "TRC20",
+            "address": "TGQkDTKrMsnuXGKhw5tZ1BMYNRhhd2kCbn",
+            "label": "My Primary Wallet",
+            "is_verified": 1,
+            "created_at": "2026-10-10 11:28:09"
+        }
+    ],
+    "385bf5bd-c74d-4f4b-9931-681f60213713": [
+        {
+            "id": "waddr_93988f8ba951089b",
+            "user_id": "385bf5bd-c74d-4f4b-9931-681f60213713",
+            "asset": "USDT",
+            "network": "BEP20",
+            "address": "0x6664114e3096fF5c59c86Db237e20730BB4A4D77",
+            "label": "My Primary Wallet0x6664114e3096fF5c59c86Db237e20730BB4A4D77",
+            "is_verified": 1,
+            "created_at": "2026-10-11 12:41:58",
+            "updated_at": "2026-10-11 12:43:04"
+        }
+    ],
+    "499e9e3c-1508-4be9-8bb5-2039209ba763": [
+        {
+            "id": "waddr_1466e512c8ac9bb8",
+            "user_id": "499e9e3c-1508-4be9-8bb5-2039209ba763",
+            "asset": "USDT",
+            "network": "TRC20",
+            "address": "0x513a32e6a9379286d9e5cb8561f3cc07281ee7a7",
+            "label": "Bybit",
+            "is_verified": 1,
+            "created_at": "2026-10-11 15:10:04"
+        }
+    ],
+    "5d00fe60-e934-454c-ad3c-47fac4c22e97": [
+        {
+            "id": "waddr_f7bef1718d802a33",
+            "user_id": "5d00fe60-e934-454c-ad3c-47fac4c22e97",
+            "asset": "USDT",
+            "network": "BEP20",
+            "address": "0x69b8008d00e23a5f14f67ec4c618d2e24db0b838",
+            "label": "USDT Address",
+            "is_verified": 1,
+            "created_at": "2026-10-13 07:19:23"
+        }
+    ],
+    "64824d86-22f3-48e9-99c9-5d5a2e6c44da": [
+        {
+            "id": "waddr_bf9ce0422bca17f2",
+            "user_id": "64824d86-22f3-48e9-99c9-5d5a2e6c44da",
+            "asset": "USDT",
+            "network": "TRC20",
+            "address": "TSHS9fmnSCLAXubXuyAFMN5RFptKjLz5R6",
+            "label": "My Primary Wallet",
+            "is_verified": 1,
+            "created_at": "2026-10-16 21:50:29"
+        }
+    ],
+    "38362b66-5f11-4e36-b530-32a385937c2e": [
+        {
+            "id": "waddr_827751c7b93efdc0",
+            "user_id": "38362b66-5f11-4e36-b530-32a385937c2e",
+            "asset": "SOL",
+            "network": "SOL",
+            "address": "BXWAVEgZgF3VEDJDHE3z3dfJe46QtQQb3N2HznLLFMAH",
+            "label": "QA",
+            "is_verified": 1,
+            "created_at": "2026-10-17 14:18:16"
+        }
+    ],
+    "4983be95-e17a-437a-a4df-4bfb8f389c31": [
+        {
+            "id": "waddr_7fc555de5974ccd6",
+            "user_id": "4983be95-e17a-437a-a4df-4bfb8f389c31",
+            "asset": "SOL",
+            "network": "SOL",
+            "address": "BXWAVEgZgF3VEDJDHE3z3dfJe46QtQQb3N2HznLLFMAH",
+            "label": "bola",
+            "is_verified": 1,
+            "created_at": "2026-10-17 14:24:32"
+        }
+    ],
+    "a21d62e1-fef7-46b7-aa91-238b63e7b044": [
+        {
+            "id": "waddr_676f931ad9fc4667",
+            "user_id": "a21d62e1-fef7-46b7-aa91-238b63e7b044",
+            "asset": "USDT",
+            "network": "TRC20",
+            "address": "sunnydar43@gmail.com",
+            "label": "My Primary Wallet",
+            "is_verified": 1,
+            "created_at": "2026-10-17 15:18:55"
+        }
+    ],
+    "529fa704-45a4-488d-b911-36b573751ee8": [
+        {
+            "id": "waddr_9eb2e8fdd55f3f46",
+            "user_id": "529fa704-45a4-488d-b911-36b573751ee8",
+            "asset": "USDT",
+            "network": "BEP20",
+            "address": "0xe3a784ea2619b3b5a755d390b913be16241bae0c",
+            "label": "My Primary Wallet",
+            "is_verified": 1,
+            "created_at": "2026-10-17 16:45:48"
+        }
+    ],
+    "c8e3839c-f94b-48b9-8d34-7c5242865a33": [
+        {
+            "id": "waddr_693fb013774770c8",
+            "user_id": "c8e3839c-f94b-48b9-8d34-7c5242865a33",
+            "asset": "USDT",
+            "network": "BEP20",
+            "address": "0xF36150A0968883c03e88932db8251197ce97B699",
+            "label": "My Primary Wallet",
+            "is_verified": 1,
+            "created_at": "2026-10-18 11:42:46"
+        }
+    ],
+    "a390ea49-589b-4a22-8bcc-29416a557415": [
+        {
+            "id": "waddr_bf311e2469461f59",
+            "user_id": "a390ea49-589b-4a22-8bcc-29416a557415",
+            "asset": "USDT",
+            "network": "BEP20",
+            "address": "0xf9d80f7b21334b2c4740391fc0f4400e45e6a71f",
+            "label": "My Primary Wallet",
+            "is_verified": 1,
+            "created_at": "2026-10-26 16:11:53"
+        }
+    ],
+    "f9f901ee-31c1-4a2d-9a6b-525856c57340": [
+        {
+            "id": "waddr_c1a12a41e9f02786",
+            "user_id": "f9f901ee-31c1-4a2d-9a6b-525856c57340",
+            "asset": "USDT",
+            "network": "TRC20",
+            "address": "TA2DC71RP1emoowCgvMUYT38nfi3s9HJvD",
+            "label": "My Wallet",
+            "is_verified": 1,
+            "created_at": "2026-10-29 06:50:59",
+            "updated_at": "2026-10-29 06:53:00"
+        }
+    ],
+    "a2dae186-56c3-4829-bd5b-7a208700a0b9": [
+        {
+            "id": "waddr_04d72a64c6c58d65",
+            "user_id": "a2dae186-56c3-4829-bd5b-7a208700a0b9",
+            "asset": "USDT",
+            "network": "TRC20",
+            "address": "TCCWeLaxWe2ypeWZo9w7hDo75NUYaZMWbE",
+            "label": "My Primary Wallet",
+            "is_verified": 1,
+            "created_at": "2026-10-29 11:28:20",
+            "updated_at": "2026-11-13 11:03:53"
+        }
+    ],
+    "f2bd9803-2c7c-4e4a-a84f-d907f3bf2f61": [
+        {
+            "id": "waddr_d3fd6961d8e2e4b5",
+            "user_id": "f2bd9803-2c7c-4e4a-a84f-d907f3bf2f61",
+            "asset": "USDT",
+            "network": "BEP20",
+            "address": "0xb8bc8b81f58b2e54df328f746b7f8a3242bbfe56",
+            "label": "My Primary Wallet",
+            "is_verified": 1,
+            "created_at": "2026-10-29 19:17:23"
+        }
+    ],
+    "2719b8ab-9603-4f9e-a751-6baae6b1dd5e": [
+        {
+            "id": "waddr_453db09aedfdf53e",
+            "user_id": "2719b8ab-9603-4f9e-a751-6baae6b1dd5e",
+            "asset": "USDT",
+            "network": "TRC20",
+            "address": "0xc5e26100c1fff4ac62b590aedee41a576be786a0",
+            "label": "My Primary Wallet",
+            "is_verified": 1,
+            "created_at": "2026-11-07 14:05:42"
+        }
+    ]
+}

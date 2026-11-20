@@ -1,0 +1,11 @@
+ALPHAVEST V39 - SAFE SPEED RECOVERY
+
+Fixes the V38 server-side 500 regression caused by the concurrent Supabase selectMany optimization on hosting environments with incomplete curl_multi support.
+
+The optimization remains enabled when the full curl_multi API is available. If any required curl_multi function is missing or fails at runtime, the client safely falls back to the original sequential Supabase REST requests instead of returning HTTP 500.
+
+No database data is deleted or reset by this fix.
+No new SQL migration is required. Do not rerun the V38 performance migration as part of this recovery.
+
+Cache-busted app.js version:
+20260929_v39_safe_speed_recovery

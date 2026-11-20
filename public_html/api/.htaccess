@@ -1,0 +1,22 @@
+# Alphavest API security and routing
+Options -Indexes +FollowSymLinks
+RewriteEngine On
+
+# Never expose source/config/database files from the API directory.
+<FilesMatch "\.(?:env|ini|log|sql|sqlite|sqlite3|db|bak|old|orig|save|swp)$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^(?:config|bootstrap|SupabaseClient)\.php$">
+    Require all denied
+</FilesMatch>
+
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+SetEnvIf X-Authorization "(.*)" HTTP_X_AUTHORIZATION=$1
+
+# Handle extensionless API requests.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.*)$ $1.php [L,QSA]

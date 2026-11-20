@@ -1,0 +1,18 @@
+<?php
+/**
+ * Compatibility loader only.
+ * Real production secrets MUST live outside the public web root in server/config.php.
+ */
+declare(strict_types=1);
+
+$privateConfigCandidates = [
+    dirname(__DIR__, 2) . '/server/config.php',
+    dirname(__DIR__, 2) . '/config.php',
+];
+
+foreach ($privateConfigCandidates as $configFile) {
+    if (is_file($configFile) && is_readable($configFile)) {
+        require_once $configFile;
+        break;
+    }
+}
