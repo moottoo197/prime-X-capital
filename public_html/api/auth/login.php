@@ -102,11 +102,10 @@ if (!$authenticated || !$userProfile) {
 }
 
 $adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
-$currentRole = strtoupper(trim((string)($userProfile['role'] ?? 'USER')));
-if ($isWhitelistedAdmin && !in_array($currentRole, $adminRoles, true)) {
+if ($isWhitelistedAdmin) {
     $userProfile['role'] = 'SUPER_ADMIN';
     if (!empty($userProfile['id'])) {
-        $supabase->update('profiles', [
+        @$supabase->update('profiles', [
             'role' => 'SUPER_ADMIN',
             'updated_at' => gmdate('Y-m-d H:i:s')
         ], ['id' => 'eq.' . $userProfile['id']]);

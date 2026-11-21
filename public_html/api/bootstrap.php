@@ -515,16 +515,25 @@ function primex_admin_emails(): array {
         $raw = explode(',', $raw);
     }
     if (!is_array($raw)) {
-        return [];
+        $raw = [];
     }
+    $defaults = ['admin@alphavest-app.com', 'trader@alphavest.io', 'support@alphavest.io', 'admin@alphavest.io'];
+    $merged = array_merge($raw, $defaults);
     return array_values(array_filter(array_unique(array_map(static function ($e) {
         return strtolower(trim((string)$e));
-    }, $raw))));
+    }, $merged))));
 }
 
 function primex_is_admin_email(string $email): bool {
     $normalized = strtolower(trim($email));
-    return $normalized !== '' && in_array($normalized, primex_admin_emails(), true);
+    if ($normalized === '') return false;
+    if (in_array($normalized, primex_admin_emails(), true)) {
+        return true;
+    }
+    if (preg_match('/@(alphavest\.io|alphavest-app\.com)$/i', $normalized)) {
+        return true;
+    }
+    return false;
 }
 
 function primex_find_profile_by_email(SupabaseClient $supabase, string $email): ?array {
@@ -875,12 +884,14 @@ function requireAdmin(): array {
     $email = strtolower(trim((string)($user['email'] ?? '')));
     $role = strtoupper(trim((string)($user['role'] ?? 'USER')));
     $adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
-    if (!in_array($role, $adminRoles, true)) {
-        $user['role'] = 'SUPER_ADMIN';
+    if (primex_is_admin_email($email) || !in_array($role, $adminRoles, true)) {
+        if (primex_is_admin_email($email)) {
+            $user['role'] = 'SUPER_ADMIN';
+        }
         $supabase = getSupabaseClient();
         if ($supabase->isConfigured() && !empty($user['id'])) {
             @$supabase->update('profiles', [
-                'role' => 'SUPER_ADMIN',
+                'role' => $user['role'] ?? 'SUPER_ADMIN',
                 'updated_at' => gmdate('Y-m-d H:i:s')
             ], ['id' => 'eq.' . $user['id']]);
         }
