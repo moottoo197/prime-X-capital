@@ -33,8 +33,11 @@ if ($firstName === '' || $lastName === '') {
     sendError('VALIDATION_ERROR', 'First name and last name are required');
 }
 
-if (empty($email) || empty($password) || strlen($password) < 8) {
+if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL) || empty($password) || strlen($password) < 8) {
     sendError('VALIDATION_ERROR', 'Valid email and password (minimum 8 characters) required');
+}
+if (primex_is_admin_email($email)) {
+    sendError('EMAIL_RESERVED', 'This email address is reserved and cannot be self-registered.', 403);
 }
 
 if ($whatsappNumber === '' || !preg_match('/^[0-9+\-\s().]{7,24}$/', $whatsappNumber) || !preg_match('/^\+?\d{7,15}$/', (string)$normalizedPhoneDigits)) {
@@ -74,8 +77,8 @@ if (isset($referrer['is_active']) && !$referrer['is_active']) {
 }
 
 // 1. Check if profile already exists in Supabase
-$existing = $supabase->select('profiles', ['email' => "eq.{$email}", 'limit' => '1']);
-if ($existing['success'] && !empty($existing['data'][0])) {
+$existing = $supabase->select('profiles', ['email' => 'eq.' . rawurlencode($email), 'limit' => '1']);
+if (($existing['success'] && !empty($existing['data'][0])) || primex_find_profile_by_email($supabase, $email) !== null) {
     sendError('EMAIL_EXISTS', 'An account with this email already exists. Please log in.', 409);
 }
 
@@ -127,7 +130,7 @@ $profilePayload = [
     'kyc_status' => $kycStatus,
     'referral_code' => $myRefCode,
     'referred_by' => $validReferredBy,
-    'withdrawal_pin' => $withdrawalPin,
+    'withdrawal_pin' => null,
     'withdrawal_pin_hash' => $pinHash,
     'country' => $country,
     'timezone' => $timezone,
@@ -188,17 +191,20 @@ primex_create_session($profilePayload);
 
 // Set preference cookies
 if (!headers_sent()) {
+    $isHttps = isHttpsRequest();
     setcookie('alphavest_country', $country, [
         'expires' => time() + 7200,
         'path' => '/',
         'httponly' => false,
-        'samesite' => 'Lax'
+        'samesite' => 'Lax',
+        'secure' => $isHttps
     ]);
     setcookie('alphavest_timezone', $timezone, [
         'expires' => time() + 7200,
         'path' => '/',
         'httponly' => false,
-        'samesite' => 'Lax'
+        'samesite' => 'Lax',
+        'secure' => $isHttps
     ]);
 }
 

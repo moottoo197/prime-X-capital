@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $txHash = trim((string)($input['tx_hash'] ?? ''));
     if ($txHash === '') $txHash = '0x' . bin2hex(random_bytes(32));
 
-    if ($withId === '') sendError('VALIDATION_ERROR', 'withdrawal_id is required');
+    if ($withId === '' || !preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $withId)) sendError('VALIDATION_ERROR', 'Valid withdrawal_id is required');
     if (!in_array($decision, ['APPROVE', 'REJECT'], true)) sendError('INVALID_DECISION', 'Decision must be APPROVE or REJECT');
 
     $operatorId = $adminId;

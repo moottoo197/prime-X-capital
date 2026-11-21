@@ -4,13 +4,13 @@
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 
-$user = getCurrentUser();
-if (!$user) sendError('UNAUTHORIZED', 'Authentication required', 401);
+$user = requireAuth();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);
 
 $input = getJsonBody();
 $signalId = trim((string)($input['signal_id'] ?? $input['signalId'] ?? ''));
 if ($signalId === '') sendError('MISSING_SIGNAL_ID', 'Signal ID is required');
+if (!preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $signalId)) sendError('INVALID_SIGNAL_ID', 'Signal ID format is invalid');
 
 $supabase = getSupabaseClient();
 if (!$supabase->isConfigured()) sendError('SUPABASE_CONFIG_MISSING', 'Supabase REST client is not configured.', 503);

@@ -90,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $decision = strtoupper(trim((string)($input['decision'] ?? $input['action'] ?? 'APPROVE')));
     $reason = trim((string)($input['reason'] ?? $input['rejection_reason'] ?? ''));
 
-    if ($depId === '') sendError('VALIDATION_ERROR', 'deposit_id is required');
+    if ($depId === '' || !preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $depId)) sendError('VALIDATION_ERROR', 'Valid deposit_id is required');
     if (!in_array($decision, ['APPROVE', 'REJECT'], true)) sendError('INVALID_DECISION', 'Decision must be APPROVE or REJECT');
 
     $operatorId = $adminId;

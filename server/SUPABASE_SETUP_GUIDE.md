@@ -73,9 +73,8 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 2. Ensure **Email provider** is **Enabled**.
 3. Under **Confirm email**:
    - For automatic signup and instant login: Disable "Confirm email" (or let the backend admin API create auto-confirmed accounts).
-4. Default Super Admin accounts already pre-configured:
-   - `trader@alphavest.io` (Password: `Password123!`)
-   - `shahzadadeel197@gmail.com` (Password: `Password123!`)
+4. Configure initial Super Admin accounts securely via Supabase Dashboard or `server/.env`:
+   - Set strong unique passwords (`<CONFIGURE_STRONG_PASSWORD>`) outside version control.
 
 ---
 

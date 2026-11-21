@@ -18,6 +18,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // change signal creation, scheduling, execution, expiry, or deletion logic.
     $requestedSignalId = trim((string)($_GET['signal_id'] ?? ''));
     if ($requestedSignalId !== '') {
+        if (!preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $requestedSignalId)) {
+            sendError('VALIDATION_ERROR', 'Invalid signal_id format.');
+        }
         $signalRes = $supabase->select('trading_signals', [
             'id' => 'eq.' . $requestedSignalId,
             'limit' => '1'
@@ -431,28 +434,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = strtoupper(trim($input['action'] ?? ''));
 
     if ($action === 'EXPIRE' || $action === 'CANCEL') {
-        $sigId = trim($input['signal_id'] ?? '');
-        if (empty($sigId)) {
-            sendError('VALIDATION_ERROR', 'signal_id is required');
+        $sigId = trim((string)($input['signal_id'] ?? ''));
+        if (empty($sigId) || !preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $sigId)) {
+            sendError('VALIDATION_ERROR', 'Valid signal_id is required');
         }
-        $supabase->update('trading_signals', [
+        $expRes = $supabase->update('trading_signals', [
             'status' => 'EXPIRED'
         ], ['id' => "eq.{$sigId}"]);
+        if (empty($expRes['success'])) {
+            sendError('SUPABASE_UPDATE_FAILED', 'Failed to expire signal.', 502);
+        }
         sendSuccess(['signal_id' => $sigId, 'status' => 'EXPIRED'], 'Signal marked as EXPIRED');
     }
 
     if ($action === 'DELETE') {
-        $sigId = trim($input['signal_id'] ?? '');
-        if (empty($sigId)) {
-            sendError('VALIDATION_ERROR', 'signal_id is required');
+        $sigId = trim((string)($input['signal_id'] ?? ''));
+        if (empty($sigId) || !preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $sigId)) {
+            sendError('VALIDATION_ERROR', 'Valid signal_id is required');
         }
-        $supabase->delete('trading_signals', ['id' => "eq.{$sigId}"]);
+        $delRes = $supabase->delete('trading_signals', ['id' => "eq.{$sigId}"]);
+        if (empty($delRes['success'])) {
+            sendError('SUPABASE_DELETE_FAILED', 'Failed to delete signal.', 502);
+        }
         sendSuccess(['signal_id' => $sigId], 'Signal deleted successfully from Supabase');
     }
 
     if ($action === 'EDIT') {
         $sigId = trim((string)($input['signal_id'] ?? ''));
-        if ($sigId === '') sendError('VALIDATION_ERROR', 'signal_id is required');
+        if ($sigId === '' || !preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $sigId)) sendError('VALIDATION_ERROR', 'Valid signal_id is required');
         $symbol = strtoupper(trim((string)($input['symbol'] ?? 'BTC/USDT')));
         $direction = strtoupper(trim((string)($input['direction'] ?? 'BUY')));
         $dailySlot = max(0, min(2, (int)($input['daily_slot'] ?? 0)));
@@ -665,3 +674,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     sendError('INVALID_ACTION', 'Unrecognized signal action');
 }
+
+sendError('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

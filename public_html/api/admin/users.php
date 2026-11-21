@@ -19,6 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // reads the same source-of-truth tables used by the financial/admin desks.
     $requestedUserId = trim((string)($_GET['user_id'] ?? ''));
     if ($requestedUserId !== '') {
+        if (!preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $requestedUserId)) {
+            sendError('VALIDATION_ERROR', 'Invalid user ID format.');
+        }
         $profileRes = $supabase->select('profiles', ['id' => 'eq.' . $requestedUserId, 'limit' => '1']);
         if (!$profileRes['success'] || empty($profileRes['data'][0])) {
             sendError('USER_NOT_FOUND', 'User account was not found.', 404);
@@ -456,7 +459,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 2. PERMANENTLY DELETE USER
     if ($action === 'DELETE') {
         $userId = trim((string)($input['user_id'] ?? $input['id'] ?? ''));
-        if ($userId === '') sendError('VALIDATION_ERROR', 'User ID is required');
+        if ($userId === '' || !preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $userId)) sendError('VALIDATION_ERROR', 'Valid user ID is required');
         if ($userId === (string)($admin['id'] ?? '')) sendError('FORBIDDEN', 'You cannot delete the currently logged-in admin account.', 403);
 
         $targetRes = $supabase->select('profiles', ['id' => 'eq.' . $userId, 'limit' => '1']);
@@ -506,6 +509,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        primex_delete_sessions_by_user($userId);
+
         sendSuccess([
             'user_id' => $userId,
             'email' => $target['email'] ?? '',
@@ -517,8 +522,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 3. UPDATE ROLE / STATUS / KYC
     if ($action === 'UPDATE' || $action === 'UPDATE_ROLE' || $action === 'UPDATE_STATUS' || $action === 'UPDATE_KYC') {
         $userId = trim($input['user_id'] ?? $input['id'] ?? '');
-        if (empty($userId)) {
-            sendError('VALIDATION_ERROR', 'User ID is required');
+        if (empty($userId) || !preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $userId)) {
+            sendError('VALIDATION_ERROR', 'Valid user ID is required');
         }
 
         $updateData = ['updated_at' => gmdate('Y-m-d H:i:s')];
@@ -530,13 +535,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!in_array($requestedRole, ['USER','TRADER','VIP','ADMIN','SUPER_ADMIN','FINANCE_MANAGER','KYC_MANAGER'], true)) sendError('VALIDATION_ERROR', 'Invalid role.');
             $updateData['role'] = $requestedRole;
         }
-        if (isset($input['is_active'])) $updateData['is_active'] = (int)$input['is_active'];
+        if (isset($input['is_active'])) {
+            $newActive = (int)$input['is_active'];
+            if ($newActive === 0 && $userId === (string)($admin['id'] ?? '')) {
+                sendError('FORBIDDEN', 'You cannot suspend your own administrator account.', 403);
+            }
+            $updateData['is_active'] = $newActive;
+        }
         if (isset($input['kyc_status'])) $updateData['kyc_status'] = strtoupper(trim($input['kyc_status']));
 
         $res = $supabase->update('profiles', $updateData, ['id' => "eq.{$userId}"]);
         if (!$res['success']) {
             sendError('SUPABASE_UPDATE_FAILED', 'Failed to update user profile: ' . ($res['message'] ?? 'Database error'), 502);
         }
+
+        if ((isset($updateData['is_active']) && (int)$updateData['is_active'] === 0) || isset($updateData['role'])) {
+            primex_delete_sessions_by_user($userId);
+        }
+        primex_record_log('ADMIN', 'ADMIN_USER_UPDATED', 'Admin updated user account status or permissions', [
+            'target_user_id' => $userId,
+            'updated_fields' => array_keys($updateData)
+        ], 'INFO', (string)($admin['id'] ?? ''), (string)($admin['email'] ?? ''));
 
         sendSuccess(['user_id' => $userId, 'updated' => $updateData], 'User updated successfully in Supabase');
     }
@@ -549,8 +568,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $amount = (float)($input['amount'] ?? 0);
         $description = trim($input['reason'] ?? $input['description'] ?? 'Administrative Balance Adjustment');
 
-        if (empty($userId) || $amount == 0) {
-            sendError('VALIDATION_ERROR', 'User ID and non-zero amount are required');
+        if (empty($userId) || !preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $userId) || $amount == 0) {
+            sendError('VALIDATION_ERROR', 'Valid user ID and non-zero amount are required');
         }
 
         // Fetch current wallet balance

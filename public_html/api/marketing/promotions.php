@@ -19,6 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $admin = requireAdmin();
+    if (!$supabase->isConfigured()) {
+        sendError('SUPABASE_CONFIG_MISSING', 'Supabase REST client is not configured.', 503);
+    }
     $input = getJsonBody();
     $id = 'promo_' . bin2hex(random_bytes(6));
     $payload = [
@@ -28,8 +31,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'status' => 'ACTIVE',
         'created_at' => gmdate('Y-m-d H:i:s')
     ];
-    if ($supabase->isConfigured()) {
-        $supabase->insert('marketing_promotions', [$payload]);
+    $insRes = $supabase->insert('marketing_promotions', [$payload]);
+    if (empty($insRes['success'])) {
+        sendError('SUPABASE_INSERT_FAILED', 'Unable to save promotion right now.', 502);
     }
     sendSuccess($payload, 'Promotion saved');
 }
+
+sendError('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

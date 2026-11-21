@@ -4,10 +4,7 @@
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 
-$user = getCurrentUser();
-if (!$user) {
-    sendError('UNAUTHORIZED', 'Authentication required', 401);
-}
+$user = requireAuth();
 
 $userId = $user['id'];
 $supabase = getSupabaseClient();

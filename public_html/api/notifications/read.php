@@ -5,6 +5,9 @@
 require_once dirname(__DIR__) . '/bootstrap.php';
 
 $user = requireAuth();
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);
+}
 $input = getJsonBody();
 $notifId = trim((string)($input['id'] ?? $input['notification_id'] ?? ''));
 $markAll = !empty($input['mark_all']) || $notifId === 'all' || $notifId === '';
@@ -29,7 +32,8 @@ $cookieOpts = [
     'expires' => time() + (30 * 86400),
     'path' => '/',
     'httponly' => false,
-    'samesite' => 'Lax'
+    'samesite' => 'Lax',
+    'secure' => isHttpsRequest()
 ];
 
 setcookie('read_notifications', implode(',', $existing), $cookieOpts);

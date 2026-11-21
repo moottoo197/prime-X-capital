@@ -109,8 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $user = getCurrentUser();
-    if (!$user) sendError('UNAUTHORIZED', 'Authentication required to submit deposit', 401);
+    $user = requireAuth();
 
     if (!getDepositsEnabled($supabase, $configFilePath)) {
         sendError('DEPOSITS_DISABLED', 'Deposits are temporarily disabled by the administrator. Please try again later.', 403);

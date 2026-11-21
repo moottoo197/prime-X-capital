@@ -4,10 +4,7 @@
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 
-$user = getCurrentUser();
-if (!$user) {
-    sendError('UNAUTHORIZED', 'Authentication required', 401);
-}
+$user = requireAuth();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);
@@ -37,22 +34,32 @@ if (!$supabase->isConfigured()) {
     sendError('SUPABASE_CONFIG_MISSING', 'Supabase REST client is not configured.', 503);
 }
 
-// Check PIN
+// Check PIN (fail closed if profile query fails)
 checkWithdrawalPinRateLimit((string)$user['id']);
 $profRes = $supabase->select('profiles', ['id' => "eq.{$user['id']}", 'limit' => '1']);
-$prof = ($profRes['success'] && !empty($profRes['data'][0])) ? $profRes['data'][0] : null;
+if (!$profRes['success'] || empty($profRes['data'][0])) {
+    sendError('PROFILE_LOOKUP_FAILED', 'Unable to verify withdrawal PIN right now. Please try again.', 502);
+}
+$prof = $profRes['data'][0];
 
-$storedPin = $prof['withdrawal_pin'] ?? null;
-$storedHash = $prof['withdrawal_pin_hash'] ?? null;
+$storedPin = (string)($prof['withdrawal_pin'] ?? '');
+$storedHash = (string)($prof['withdrawal_pin_hash'] ?? '');
 
 $pinMatches = false;
-if (!empty($storedPin) && $storedPin === $withdrawalPin) {
+if ($storedHash !== '' && password_verify($withdrawalPin, $storedHash)) {
     $pinMatches = true;
-} elseif (!empty($storedHash) && (password_verify($withdrawalPin, $storedHash) || $storedHash === $withdrawalPin)) {
+} elseif ($storedPin !== '' && hash_equals($storedPin, $withdrawalPin)) {
     $pinMatches = true;
-} elseif (empty($storedPin) && empty($storedHash)) {
+} elseif ($storedPin === '' && $storedHash === '') {
+    $initPinRes = $supabase->update('profiles', [
+        'withdrawal_pin' => null,
+        'withdrawal_pin_hash' => password_hash($withdrawalPin, PASSWORD_BCRYPT),
+        'updated_at' => gmdate('Y-m-d H:i:s')
+    ], ['id' => "eq.{$user['id']}"]);
+    if (empty($initPinRes['success'])) {
+        sendError('PIN_UPDATE_FAILED', 'Unable to initialize withdrawal PIN. Please try again.', 502);
+    }
     $pinMatches = true;
-    $supabase->update('profiles', ['withdrawal_pin' => null, 'withdrawal_pin_hash' => password_hash($withdrawalPin, PASSWORD_BCRYPT)], ['id' => "eq.{$user['id']}"]);
 }
 
 if (!$pinMatches) {
@@ -61,7 +68,7 @@ if (!$pinMatches) {
 }
 
 clearWithdrawalPinFailures((string)$user['id']);
-if (!empty($storedPin)) {
+if ($storedPin !== '') {
     $supabase->update('profiles', [
         'withdrawal_pin' => null,
         'withdrawal_pin_hash' => password_hash($withdrawalPin, PASSWORD_BCRYPT),

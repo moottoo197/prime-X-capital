@@ -4362,7 +4362,7 @@ const App = {
         this.toast('6-Digit Fund Withdrawal PIN updated successfully!', 'success');
         if (this.state.user) {
           this.state.user.has_withdrawal_pin = true;
-          this.state.user.withdrawal_pin = newPin;
+          delete this.state.user.withdrawal_pin;
           localStorage.setItem('alphavest_local_user', JSON.stringify(this.state.user));
         }
         this.closeModal('modal-change-pin');
@@ -8653,15 +8653,21 @@ STORAGE_BUCKET_MARKETING=marketing-assets
         this.state.boundWithdrawAddresses = res.data;
         if (listContainer && listEl) {
           listContainer.style.display = 'block';
-          listEl.innerHTML = res.data.map(a => `
+          listEl.innerHTML = res.data.map(a => {
+            const safeAsset = this.escapeHtml(a.asset || 'USDT');
+            const safeNetwork = this.escapeHtml(a.network || 'TRC20');
+            const rawAddr = String(a.address || '');
+            const safeMaskedAddr = this.escapeHtml(`${rawAddr.substring(0, 8)}...${rawAddr.slice(-6)}`);
+            return `
             <div style="display:flex; justify-content:space-between; align-items:center; background:#F8FAFC; border:1px solid #EEF1F6; padding:8px 10px; border-radius:8px; font-size:11px;">
               <div>
-                <span style="font-weight:700; color:#0052FF;">${a.asset} (${a.network})</span>
-                <span style="color:#6B7280; margin-left:6px; font-family:var(--font-mono);">${(a.address || '').substring(0, 8)}...${(a.address || '').slice(-6)}</span>
+                <span style="font-weight:700; color:#0052FF;">${safeAsset} (${safeNetwork})</span>
+                <span style="color:#6B7280; margin-left:6px; font-family:var(--font-mono);">${safeMaskedAddr}</span>
               </div>
               <span style="color:#00B87C; font-weight:700;">✓ Bound</span>
             </div>
-          `).join('');
+          `;
+          }).join('');
         }
       } else {
         this.state.boundWithdrawAddresses = [];
@@ -9820,10 +9826,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     if (!u) return false;
     if (u.is_admin === true) return true;
     const role = String(u.role || '').toUpperCase().trim();
-    if (['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'].includes(role)) return true;
-    const email = String(u.email || '').toLowerCase().trim();
-    const adminEmails = ['trader@alphavest.io', 'shahzadadeel@gmail.com', 'moottoo197@gmail.com'];
-    return email !== '' && adminEmails.includes(email);
+    return ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'].includes(role);
   },
 
   syncSideDrawer() {

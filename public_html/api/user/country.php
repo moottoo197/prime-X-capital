@@ -4,9 +4,10 @@
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 
-$user = getCurrentUser();
-if (!$user) {
-    sendError('UNAUTHORIZED', 'Authentication required', 401);
+$user = requireAuth();
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);
 }
 
 $input = getJsonBody();
@@ -47,7 +48,7 @@ if ($supabase->isConfigured()) {
         if (!$updateRes['success'] || empty($updateRes['data'][0])) {
             $email = trim((string)($user['email'] ?? ''));
             if ($email !== '') {
-                $updateRes = $supabase->update('profiles', $payload, ['email' => "eq.{$email}"]);
+                $updateRes = $supabase->update('profiles', $payload, ['email' => 'eq.' . rawurlencode($email)]);
             }
         }
         if (!$updateRes['success'] || empty($updateRes['data'][0])) {
@@ -60,17 +61,20 @@ if ($supabase->isConfigured()) {
 
 // 2. Set persistent cookie (30 days)
 if (!headers_sent()) {
+    $isHttps = isHttpsRequest();
     setcookie('alphavest_country', $country, [
         'expires' => time() + (30 * 86400),
         'path' => '/',
         'httponly' => false,
-        'samesite' => 'Lax'
+        'samesite' => 'Lax',
+        'secure' => $isHttps
     ]);
     setcookie('alphavest_timezone', $timezone, [
         'expires' => time() + (30 * 86400),
         'path' => '/',
         'httponly' => false,
-        'samesite' => 'Lax'
+        'samesite' => 'Lax',
+        'secure' => $isHttps
     ]);
 }
 

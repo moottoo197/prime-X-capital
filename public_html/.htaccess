@@ -3,7 +3,7 @@ Options -Indexes +FollowSymLinks
 RewriteEngine On
 
 # Never expose hidden files, source/config files, database dumps, logs or documentation.
-<FilesMatch "(^|/)(\.|.*\.(?:env|ini|log|sql|sqlite|sqlite3|db|bak|old|orig|save|swp|dist))$">
+<FilesMatch "(^|/)(\.|.*\.(?:env|ini|log|jsonl|md|sql|sqlite|sqlite3|db|bak|old|orig|save|swp|dist))$">
     Require all denied
 </FilesMatch>
 

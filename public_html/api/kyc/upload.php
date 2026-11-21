@@ -8,10 +8,7 @@
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 
-$user = getCurrentUser();
-if (!$user) {
-    sendError('UNAUTHORIZED', 'Please log in to upload KYC documents', 401);
-}
+$user = requireAuth();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);

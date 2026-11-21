@@ -4,10 +4,7 @@
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 
-$user = getCurrentUser();
-if (!$user) {
-    sendError('UNAUTHORIZED', 'Please log in to submit KYC documents', 401);
-}
+$user = requireAuth();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);
@@ -52,7 +49,9 @@ $existingId = is_array($existing) ? ($existing['id'] ?? null) : null;
 if ($dob === '' && is_array($existing)) $dob = trim((string)($existing['date_of_birth'] ?? ''));
 if ($address === '' && is_array($existing)) $address = trim((string)($existing['address'] ?? ''));
 
-$submissionId = $existingId ?: ('kyc_' . bin2hex(random_bytes(8)));
+$submissionId = ($existingId && preg_match('/^[A-Za-z0-9._:-]{1,128}$/', (string)$existingId))
+    ? (string)$existingId
+    : ('kyc_' . bin2hex(random_bytes(8)));
 
 $payload = [
     'id' => $submissionId,
@@ -75,7 +74,10 @@ if (!$existingId) {
     $payload['created_at'] = gmdate('Y-m-d H:i:s');
 }
 
-$supabase->upsert('kyc_submissions', [$payload], 'id');
+$upsertRes = $supabase->upsert('kyc_submissions', [$payload], 'id');
+if (empty($upsertRes['success'])) {
+    sendError('KYC_SUBMIT_FAILED', 'Unable to submit KYC documents right now. Please try again.', 502);
+}
 
 // Update profile
 $supabase->update('profiles', [

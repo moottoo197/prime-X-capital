@@ -18,36 +18,50 @@ if ($configured) {
         $errorMessage = $res['message'] ?? 'Unable to query Supabase REST API.';
     }
 }
-$supabaseHost = $configured ? (parse_url($supabase->getUrl(), PHP_URL_HOST) ?: '') : '';
+$viewer = getCurrentUser();
+$viewerRole = strtoupper(trim((string)($viewer['role'] ?? 'USER')));
+$isAdminViewer = $viewer !== null && (
+    in_array($viewerRole, ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'], true)
+    || primex_is_admin_email((string)($viewer['email'] ?? ''))
+);
+$supabaseHost = ($isAdminViewer && $configured) ? (parse_url($supabase->getUrl(), PHP_URL_HOST) ?: '') : null;
+
 if (!$configured || !$reachable) {
     http_response_code(503);
+    $degradedData = [
+        'status' => 'degraded',
+        'database_engine' => 'supabase-rest',
+        'persistent_store' => 'supabase',
+        'supabase_configured' => $configured,
+        'supabase_reachable' => false,
+        'timestamp' => gmdate('Y-m-d\TH:i:s\Z')
+    ];
+    if ($isAdminViewer) {
+        $degradedData['supabase_host'] = $supabaseHost;
+        $degradedData['supabase_http_code'] = $httpCode;
+        $degradedData['supabase_error'] = $errorCode;
+    }
     echo json_encode([
         'success' => false,
         'error_code' => !$configured ? 'SUPABASE_CONFIG_MISSING' : 'SERVICE_UNAVAILABLE',
-        'message' => !$configured
-            ? 'Supabase configuration is missing in server/.env.'
-            : ('Supabase REST check failed: ' . $errorMessage),
-        'data' => [
-            'status' => 'degraded',
-            'database_engine' => 'supabase-rest',
-            'persistent_store' => 'supabase',
-            'supabase_configured' => $configured,
-            'supabase_reachable' => false,
-            'supabase_host' => $supabaseHost,
-            'supabase_http_code' => $httpCode,
-            'supabase_error' => $errorCode,
-            'timestamp' => gmdate('Y-m-d\TH:i:s\Z')
-        ]
+        'message' => $isAdminViewer
+            ? (!$configured ? 'Supabase configuration is missing in server/.env.' : ('Supabase REST check failed: ' . $errorMessage))
+            : 'Service temporarily unavailable.',
+        'data' => $degradedData
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit();
 }
 
-sendSuccess([
+$healthyData = [
     'status' => 'healthy',
     'database_engine' => 'supabase-rest',
     'persistent_store' => 'supabase',
     'supabase_configured' => true,
     'supabase_reachable' => true,
-    'supabase_host' => $supabaseHost,
     'timestamp' => gmdate('Y-m-d\TH:i:s\Z')
-], 'Service healthy');
+];
+if ($isAdminViewer) {
+    $healthyData['supabase_host'] = $supabaseHost;
+}
+
+sendSuccess($healthyData, 'Service healthy');

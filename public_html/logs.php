@@ -52,12 +52,57 @@ $supabase = getSupabaseClient();
 $currentUser = getCurrentUser();
 $adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
 
-// Allow authorized platform administrators or logged-in users to view server logs.
+// Strictly enforce administrator privileges for any authenticated visitor.
 if ($currentUser !== null) {
-    $email = strtolower(trim((string)($currentUser['email'] ?? '')));
-    $role = strtoupper(trim((string)($currentUser['role'] ?? 'USER')));
-    if ($email !== '' && primex_is_admin_email($email) && !in_array($role, ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'], true)) {
-        $currentUser['role'] = 'SUPER_ADMIN';
+    $currentUser = primex_normalize_effective_user($currentUser);
+    $userRole = strtoupper(trim((string)($currentUser['role'] ?? 'USER')));
+    $userActive = !isset($currentUser['is_active']) || (bool)$currentUser['is_active'];
+    if (!$userActive || !in_array($userRole, $adminRoles, true)) {
+        if (function_exists('primex_write_log')) {
+            primex_write_log(
+                'SECURITY',
+                'LOGS_UNAUTHORIZED_USER_ATTEMPT',
+                'Blocked non-admin user access to /logs console',
+                ['role' => $userRole, 'is_active' => $userActive],
+                'SECURITY',
+                (string)($currentUser['id'] ?? ''),
+                (string)($currentUser['email'] ?? '')
+            );
+        }
+        http_response_code(403);
+        if ($isJsonFormat) {
+            echo json_encode([
+                'success' => false,
+                'error_code' => 'FORBIDDEN',
+                'message' => 'Access denied. Administrator privileges are required to view server logs.'
+            ], JSON_UNESCAPED_SLASHES);
+            exit();
+        }
+        ?><!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>403 Forbidden · PRIME X CAPITAL</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:#F4F6FA;color:#111827;font-family:Inter,system-ui,-apple-system,sans-serif}
+    .panel{width:min(100%,420px);background:#FFFFFF;border:1px solid #E5E7EB;border-radius:20px;padding:28px 24px;box-shadow:0 18px 44px rgba(15,23,42,.08);text-align:center}
+    h1{margin:0 0 8px;font-size:20px;font-weight:800;color:#B91C1C}
+    p{margin:0 0 20px;font-size:13px;color:#6B7280;line-height:1.5}
+    .btn{display:inline-flex;align-items:center;justify-content:center;height:42px;padding:0 18px;border-radius:12px;background:#0052FF;color:#FFFFFF;font-size:13px;font-weight:700;text-decoration:none}
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>403 · Restricted Access</h1>
+    <p>This console is restricted to authorized platform administrators only.</p>
+    <a class="btn" href="/">Return to Platform</a>
+  </main>
+</body>
+</html><?php
+        exit();
     }
 }
 
@@ -100,7 +145,7 @@ if ($currentUser === null) {
                 $masterPassword = defined('ADMIN_MASTER_PASSWORD') ? (string)ADMIN_MASTER_PASSWORD : '';
                 if (
                     !$authenticated &&
-                    $masterPassword !== '' &&
+                    strlen($masterPassword) >= 12 &&
                     strpos($masterPassword, 'REPLACE_WITH_') !== 0 &&
                     $isWhitelistedAdmin &&
                     hash_equals($masterPassword, $password)

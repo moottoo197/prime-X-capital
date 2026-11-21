@@ -12,8 +12,8 @@ $body = getJsonBody();
 $email = strtolower(trim($body['email'] ?? ''));
 $password = $body['password'] ?? '';
 
-if (empty($email) || empty($password)) {
-    sendError('VALIDATION_ERROR', 'Email and password are required');
+if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL) || empty($password)) {
+    sendError('VALIDATION_ERROR', 'A valid email address and password are required');
 }
 
 $supabase = getSupabaseClient();
@@ -66,7 +66,13 @@ if (!$authenticated) {
 
 // Optional master administrator authentication. Credentials stay outside htdocs.
 $masterPassword = defined('ADMIN_MASTER_PASSWORD') ? (string)ADMIN_MASTER_PASSWORD : '';
-if (!$authenticated && $masterPassword !== '' && strpos($masterPassword, 'REPLACE_WITH_') !== 0 && $isWhitelistedAdmin && hash_equals($masterPassword, $password)) {
+if (
+    !$authenticated
+    && strlen($masterPassword) >= 12
+    && strpos($masterPassword, 'REPLACE_WITH_') !== 0
+    && $isWhitelistedAdmin
+    && hash_equals($masterPassword, $password)
+) {
     $authenticated = true;
     $adminId = !empty($userProfile['id']) ? (string)$userProfile['id'] : primex_deterministic_uuid('admin:' . $email);
     $masterProfile = [

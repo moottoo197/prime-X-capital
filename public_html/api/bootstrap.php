@@ -63,14 +63,15 @@ if (!headers_sent() && !defined('PRIMEX_LOGS_WEB_ENTRY')) {
     // slash do not cause a false CORS rejection on shared hosting/proxies.
     $origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
     $allowedOrigins = defined('ALLOWED_ORIGINS') ? ALLOWED_ORIGINS : [];
-    $allowedHosts = ['dunlin-150353.hostingersite.com', 'alphavestapp.com', 'www.alphavestapp.com', 'alphavest-app.com', 'www.alphavest-app.com'];
-    $currentHostHeader = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? '')));
-    if ($currentHostHeader !== '') {
-        $currentHostOnly = strtolower((string)(parse_url('http://' . $currentHostHeader, PHP_URL_HOST) ?? ''));
-        if ($currentHostOnly !== '') {
-            $allowedHosts[] = $currentHostOnly;
-        }
-    }
+    $allowedHosts = [
+        'dunlin-150353.hostingersite.com',
+        'alphavestapp.com',
+        'www.alphavestapp.com',
+        'alphavest-app.com',
+        'www.alphavest-app.com',
+        'localhost',
+        '127.0.0.1'
+    ];
 
     foreach ($allowedOrigins as $configuredOrigin) {
         $parts = parse_url(trim($configuredOrigin));
@@ -517,37 +518,38 @@ function primex_admin_emails(): array {
     if (!is_array($raw)) {
         $raw = [];
     }
-    $defaults = ['admin@alphavest-app.com', 'trader@alphavest.io', 'support@alphavest.io', 'admin@alphavest.io'];
-    $merged = array_merge($raw, $defaults);
     return array_values(array_filter(array_unique(array_map(static function ($e) {
         return strtolower(trim((string)$e));
-    }, $merged))));
+    }, $raw))));
 }
 
 function primex_is_admin_email(string $email): bool {
     $normalized = strtolower(trim($email));
-    if ($normalized === '') return false;
-    if (in_array($normalized, primex_admin_emails(), true)) {
-        return true;
+    if ($normalized === '' || !filter_var($normalized, FILTER_VALIDATE_EMAIL)) {
+        return false;
     }
-    if (preg_match('/@(alphavest\.io|alphavest-app\.com)$/i', $normalized)) {
-        return true;
-    }
-    return false;
+    return in_array($normalized, primex_admin_emails(), true);
 }
 
 function primex_find_profile_by_email(SupabaseClient $supabase, string $email): ?array {
     $normalized = strtolower(trim($email));
-    if ($normalized === '' || !$supabase->isConfigured()) {
+    if ($normalized === '' || !filter_var($normalized, FILTER_VALIDATE_EMAIL) || !$supabase->isConfigured()) {
         return null;
     }
     $profRes = $supabase->select('profiles', ['email' => 'eq.' . $normalized, 'limit' => '1']);
     if ($profRes['success'] && !empty($profRes['data'][0])) {
-        return $profRes['data'][0];
+        $row = $profRes['data'][0];
+        if (strtolower(trim((string)($row['email'] ?? ''))) === $normalized) {
+            return $row;
+        }
     }
-    $ilikeRes = $supabase->select('profiles', ['email' => 'ilike.' . $normalized, 'limit' => '1']);
+    $escapedLike = str_replace(['\\', '%', '_', '*'], ['\\\\', '\\%', '\\_', '\\*'], $normalized);
+    $ilikeRes = $supabase->select('profiles', ['email' => 'ilike.' . $escapedLike, 'limit' => '1']);
     if ($ilikeRes['success'] && !empty($ilikeRes['data'][0])) {
-        return $ilikeRes['data'][0];
+        $row = $ilikeRes['data'][0];
+        if (strtolower(trim((string)($row['email'] ?? ''))) === $normalized) {
+            return $row;
+        }
     }
     return null;
 }
@@ -841,7 +843,7 @@ function getCurrentUser(): ?array {
             && (strpos($requestPath, '/api/auth/me.php') === false)
             && (strpos($requestPath, '/api/auth/logout.php') === false)
             && (strpos($requestPath, '/logs') === false);
-        if ($requestMethod === 'GET' && $previewId !== '' && $previewAllowedPath
+        if ($requestMethod === 'GET' && $previewId !== '' && preg_match('/^[A-Za-z0-9_-]{8,64}$/', $previewId) && $previewAllowedPath
             && in_array(strtoupper((string)($sessionOwner['role'] ?? '')), $adminRoles, true)
             && $previewId !== (string)$sessionOwner['id'] && $supabase->isConfigured()) {
             $previewRes = $supabase->select('profiles', ['id' => 'eq.' . $previewId, 'limit' => '1']);

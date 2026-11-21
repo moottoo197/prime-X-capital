@@ -121,8 +121,8 @@ class SupabaseClient {
                 CURLOPT_HTTPHEADER => $headers,
                 CURLOPT_TIMEOUT => $this->timeout,
                 CURLOPT_CONNECTTIMEOUT => 4,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_SSL_VERIFYHOST => 0,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
                 CURLOPT_HEADER => true
             ]);
             if (defined('CURL_IPRESOLVE_V4')) {
@@ -440,8 +440,8 @@ class SupabaseClient {
                 CURLOPT_HTTPHEADER => $finalHeaders,
                 CURLOPT_TIMEOUT => $this->timeout,
                 CURLOPT_CONNECTTIMEOUT => 6,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_SSL_VERIFYHOST => 0,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
                 CURLOPT_HEADER => true
             ]);
             if (defined('CURL_IPRESOLVE_V4')) {
@@ -535,8 +535,8 @@ class SupabaseClient {
                 'ignore_errors' => true
             ],
             'ssl' => [
-                'verify_peer' => false,
-                'verify_peer_name' => false
+                'verify_peer' => true,
+                'verify_peer_name' => true
             ]
         ];
 
