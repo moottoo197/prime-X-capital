@@ -872,9 +872,26 @@ function requireAuth(): array {
  */
 function requireAdmin(): array {
     $user = requireAuth();
-    $role = strtoupper($user['role'] ?? '');
+    $email = strtolower(trim((string)($user['email'] ?? '')));
+    $role = strtoupper(trim((string)($user['role'] ?? 'USER')));
     $adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
-    if (!in_array($role, $adminRoles)) {
+    if ($email !== '' && primex_is_admin_email($email) && !in_array($role, $adminRoles, true)) {
+        $user['role'] = 'SUPER_ADMIN';
+        $role = 'SUPER_ADMIN';
+        $supabase = getSupabaseClient();
+        if ($supabase->isConfigured() && !empty($user['id'])) {
+            $supabase->update('profiles', [
+                'role' => 'SUPER_ADMIN',
+                'updated_at' => gmdate('Y-m-d H:i:s')
+            ], ['id' => 'eq.' . $user['id']]);
+        }
+    }
+    if (!in_array($role, $adminRoles, true)) {
+        primex_record_log('SECURITY', 'ADMIN_ACCESS_DENIED', 'Non-admin user attempted admin API action', [
+            'email' => $email,
+            'role' => $role,
+            'uri' => (string)($_SERVER['REQUEST_URI'] ?? '')
+        ], 'WARNING', (string)($user['id'] ?? ''), $email);
         sendError('FORBIDDEN', 'Access denied. Administrator privileges required.', 403);
     }
     return $user;
