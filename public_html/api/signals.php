@@ -6,6 +6,7 @@
  */
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/lib/signal_lifecycle.php';
+require_once __DIR__ . '/lib/wallet_breakdown.php';
 
 $supabase = getSupabaseClient();
 if (!$supabase->isConfigured()) {
@@ -20,60 +21,22 @@ try { $supabase->rpc('alphavest_cleanup_signals'); } catch (Throwable $e) {}
 $user = getCurrentUser();
 $userId = $user ? $user['id'] : null;
 
-$totalDeposited = 0.0;
-$totalBalance = 0.0;
-if ($userId) {
-    $contextBatch = $supabase->selectMany([
-        'deposits' => [
-            'table' => 'deposits',
-            'params' => ['user_id' => "eq.{$userId}", 'select' => 'amount,status']
-        ],
-        'wallets' => [
-            'table' => 'wallet_balances',
-            'params' => ['user_id' => "eq.{$userId}", 'select' => 'balance']
-        ],
-        'ledger_adjustments' => [
-            'table' => 'ledger_entries',
-            'params' => ['user_id' => "eq.{$userId}", 'asset' => 'eq.USDT', 'select' => 'entry_type,amount,description,reason,reference_id,created_at', 'limit' => '5000']
-        ]
-    ]);
-    $depRes = $contextBatch['deposits'] ?? ['success'=>false];
-    if ($depRes['success'] && is_array($depRes['data'])) {
-        foreach ($depRes['data'] as $d) {
-            $status = strtoupper(trim((string)($d['status'] ?? '')));
-            if (in_array($status, ['COMPLETED','APPROVED','CONFIRMED'], true)) {
-                $totalDeposited += max(0.0, (float)($d['amount'] ?? 0));
-            }
-        }
-    }
-    $balRes = $contextBatch['wallets'] ?? ['success'=>false];
-    if ($balRes['success'] && is_array($balRes['data'])) {
-        foreach ($balRes['data'] as $b) $totalBalance += (float)($b['balance'] ?? 0);
-    }
-}
+$walletBreakdown = $userId ? primex_compute_wallet_breakdown($supabase, (string)$userId) : [];
+$totalBalance = (float)($walletBreakdown['total_assets_usdt'] ?? 0.0);
+$spotBalance = (float)($walletBreakdown['spot_total_usdt'] ?? 0.0);
+$futureBalance = (float)($walletBreakdown['future_total_usdt'] ?? 0.0);
+$transferableSpot = (float)($walletBreakdown['transferable_spot_usdt'] ?? 0.0);
+$referralBonus = (float)($walletBreakdown['referral_bonus_usdt'] ?? 0.0);
+$depositBalance = (float)($walletBreakdown['deposit_balance_usdt'] ?? 0.0);
+$depositBonus = (float)($walletBreakdown['deposit_bonus_usdt'] ?? 0.0);
+$totalDeposited = (float)($walletBreakdown['funded_deposit_principal_usdt'] ?? 0.0);
 
 $minReq = 20.0;
-$fundedCapital = $totalDeposited;
-foreach (($contextBatch['ledger_adjustments']['data'] ?? []) as $adj) {
-    $desc = strtoupper(trim((string)($adj['description'] ?? '')));
-    $reason = strtoupper(trim((string)($adj['reason'] ?? '')));
-    $reference = strtoupper(trim((string)($adj['reference_id'] ?? '')));
-    $sourceText = trim($desc . ' ' . $reason . ' ' . $reference);
-    $isTypedDeposit = strpos($desc, '[DEPOSIT]') === 0 || strpos($reason, '[DEPOSIT]') === 0 || strpos($reference, '[DEPOSIT]') === 0;
-    $isLegacyDeposit = !$isTypedDeposit
-        && strpos($desc, '[REFERRAL_BONUS]') !== 0
-        && strpos($desc, '[PROFIT]') !== 0
-        && strpos($desc, '[OTHER]') !== 0
-        && preg_match('/\bDEPOSIT\b/i', $sourceText);
-    if ($isTypedDeposit || $isLegacyDeposit) {
-        $fundedCapital += (float)($adj['amount'] ?? 0);
-    }
-}
-// Eligibility must reflect funded principal, not the user's current balance.
-// A prior bonus/profit can increase the wallet balance but never qualifies as principal.
-$fundedCapital = max(0.0, $fundedCapital);
+// Future balance is used for Trade & Signals. Referral bonus cannot be transferred to Future.
+$eligibleCapital = round(max($totalDeposited, $depositBalance + $depositBonus), 2);
 $isAdminOrVip = $user && in_array(strtoupper($user['role'] ?? ''), ['ADMIN', 'SUPER_ADMIN', 'VIP', 'FINANCE_MANAGER', 'KYC_MANAGER'], true);
-$isEligible = ($fundedCapital >= $minReq) || $isAdminOrVip;
+$isEligible = ($futureBalance >= $minReq && $eligibleCapital >= $minReq) || $isAdminOrVip;
+$requiresFutureTransfer = (!$isAdminOrVip && $futureBalance < $minReq && $transferableSpot >= $minReq);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     sendError('METHOD_NOT_ALLOWED', 'GET method required', 405);
@@ -377,8 +340,14 @@ foreach ($allSignals as $s) {
 sendSuccess([
     'signals' => $liveSignals,
     'eligible' => $isEligible,
+    'is_eligible' => $isEligible,
+    'requires_future_transfer' => $requiresFutureTransfer,
     'min_deposit_required' => $minReq,
     'user_balance' => $totalBalance,
+    'future_balance_usdt' => $futureBalance,
+    'spot_balance_usdt' => $spotBalance,
+    'transferable_spot_usdt' => $transferableSpot,
+    'referral_bonus_usdt' => $referralBonus,
     'user_deposited' => $totalDeposited,
     'today_signals_count' => count($liveSignals),
     'daily_limit' => 2,

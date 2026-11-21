@@ -3,6 +3,7 @@
  * User Signal Execution - atomic Supabase RPC
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/wallet_breakdown.php';
 
 $user = requireAuth();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);
@@ -149,14 +150,30 @@ foreach (($capitalBatch['ledger']['data'] ?? []) as $row) {
     if (!$isTypedDeposit && !$isLegacyDeposit) continue;
     $sourceFundedCapital += (float)($row['amount'] ?? 0);
 }
+$walletBreakdown = primex_compute_wallet_breakdown($supabase, (string)$user['id']);
+$futureWalletBalance = (float)($walletBreakdown['future_total_usdt'] ?? 0.0);
+$transferableSpotBalance = (float)($walletBreakdown['transferable_spot_usdt'] ?? 0.0);
+$depositPlusBonus = round((float)($walletBreakdown['deposit_balance_usdt'] ?? 0.0) + (float)($walletBreakdown['deposit_bonus_usdt'] ?? 0.0), 2);
+
 $sourceFundedCapital = max(0.0, round($sourceFundedCapital, 2));
 if ($sourceFundedCapital > 0.0) {
     $capitalBasis = $sourceFundedCapital;
+} elseif ($depositPlusBonus > 0.0) {
+    $capitalBasis = $depositPlusBonus;
 }
 
 $privilegedUser = in_array(strtoupper((string)($user['role'] ?? '')), ['ADMIN','SUPER_ADMIN','VIP','FINANCE_MANAGER','KYC_MANAGER'], true);
+if (!$privilegedUser && $futureWalletBalance < 20.0) {
+    if ($transferableSpotBalance >= 20.0) {
+        sendError('TRANSFER_TO_FUTURE_REQUIRED', 'Please transfer at least 20 USDT (Deposit Balance / Deposit Bonus) from your Spot Wallet to your Future Balance before confirming a signal.', 400);
+    }
+    sendError('MINIMUM_BALANCE_REQUIRED', 'A minimum Future Balance of 20 USDT (from Deposit Balance or Deposit Bonus) is required to confirm a signal. Referral Bonus cannot be transferred to Future.', 400);
+}
 if (!$privilegedUser && $capitalBasis < 20.0) {
-    sendError('MINIMUM_BALANCE_REQUIRED', 'A minimum funded capital of 20 USDT from deposits or Admin balance adjustments is required to confirm a signal.', 400);
+    sendError('MINIMUM_BALANCE_REQUIRED', 'A minimum funded capital of 20 USDT from Deposit Balance or Deposit Bonus is required to confirm a signal.', 400);
+}
+if ($futureWalletBalance > 0.0 && $capitalBasis > $futureWalletBalance && !$privilegedUser) {
+    $capitalBasis = round($futureWalletBalance, 2);
 }
 $isDailySignal = in_array($slot, [1, 2], true);
 

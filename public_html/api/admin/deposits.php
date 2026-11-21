@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ],
         'profiles' => [
             'table' => 'profiles',
-            'params' => ['select' => 'id,email,kyc_status']
+            'params' => ['select' => 'id,email,kyc_status,numeric_uid,first_name,last_name']
         ]
     ]);
     $depRes = $batch['deposits'] ?? ['success'=>false];
@@ -59,29 +59,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
     }
 
-    $formattedDeposits = array_map(function($d) use ($userMap) {
-        $uid = $d['user_id'] ?? '';
+    $totalApprovedUsdt = 0.0;
+    $pendingCount = 0;
+    $pendingAmountUsdt = 0.0;
+    $networksSet = [];
+
+    $formattedDeposits = array_map(function($d) use ($userMap, &$totalApprovedUsdt, &$pendingCount, &$pendingAmountUsdt, &$networksSet) {
+        $uid = (string)($d['user_id'] ?? '');
         $user = $userMap[$uid] ?? [];
+        $fullName = trim((string)($user['first_name'] ?? '') . ' ' . (string)($user['last_name'] ?? ''));
+        $status = strtoupper(trim((string)($d['status'] ?? 'PENDING')));
+        $network = strtoupper(trim((string)($d['network'] ?? 'TRC20')));
+        $amount = (float)($d['amount'] ?? 0);
+        if ($network !== '') $networksSet[$network] = true;
+        if (in_array($status, ['COMPLETED', 'APPROVED', 'CONFIRMED'], true)) {
+            $totalApprovedUsdt += $amount;
+        } elseif (in_array($status, ['PENDING', 'REQUESTED', 'PENDING_REVIEW'], true)) {
+            $pendingCount++;
+            $pendingAmountUsdt += $amount;
+        }
+        $rawId = (string)($d['id'] ?? '');
+        $shortDigits = preg_replace('/[^A-Za-z0-9]/', '', $rawId);
+        $shortId = 'DEP-' . strtoupper(substr($shortDigits !== '' ? $shortDigits : '0000', -4));
+        $txHash = (string)($d['tx_hash'] ?? '');
+        $proofLabel = !empty($d['proof_filename']) ? (string)$d['proof_filename'] : ($txHash !== '' ? 'receipt_tx_' . substr(preg_replace('/[^A-Za-z0-9]/', '', $txHash), 0, 6) . '.png' : 'vault_receipt.png');
+
         return [
-            'id' => $d['id'] ?? '',
+            'id' => $rawId,
+            'short_id' => $shortId,
             'user_id' => $uid,
+            'numeric_uid' => $user['numeric_uid'] ?? null,
+            'full_name' => $fullName !== '' ? $fullName : ($user['email'] ?? $uid),
             'email' => $user['email'] ?? $uid,
             'kyc_status' => $user['kyc_status'] ?? 'UNKNOWN',
             'asset' => $d['asset'] ?? 'USDT',
-            'network' => $d['network'] ?? 'TRC20',
-            'amount' => (float)($d['amount'] ?? 0),
+            'network' => $network,
+            'amount' => $amount,
             'fee' => (float)($d['fee'] ?? 0),
-            'net_amount' => (float)($d['net_amount'] ?? $d['amount'] ?? 0),
+            'net_amount' => (float)($d['net_amount'] ?? $amount),
             'deposit_address' => $d['deposit_address'] ?? '',
-            'tx_hash' => $d['tx_hash'] ?? '',
-            'status' => $d['status'] ?? 'PENDING',
+            'tx_hash' => $txHash,
+            'proof_url' => $d['proof_url'] ?? $d['receipt_url'] ?? '',
+            'proof_label' => $proofLabel,
+            'status' => $status,
             'rejection_reason' => $d['rejection_reason'] ?? null,
             'created_at' => $d['created_at'] ?? gmdate('Y-m-d H:i:s'),
             'updated_at' => $d['updated_at'] ?? gmdate('Y-m-d H:i:s')
         ];
     }, $deposits);
 
-    sendSuccess(['deposits' => $formattedDeposits], 'Deposits retrieved successfully from Supabase');
+    sendSuccess([
+        'deposits' => $formattedDeposits,
+        'summary' => [
+            'total_deposits_usdt' => round($totalApprovedUsdt, 2),
+            'pending_count' => $pendingCount,
+            'pending_amount_usdt' => round($pendingAmountUsdt, 2),
+            'active_networks' => array_keys($networksSet) ?: ['TRC20', 'BEP20', 'ERC20']
+        ]
+    ], 'Deposits retrieved successfully from Supabase');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

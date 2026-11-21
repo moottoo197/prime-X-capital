@@ -32,6 +32,7 @@ $routes = [
     'referrals/claim-stipend' => 'referrals/claim-stipend.php', 'referrals/stipend' => 'referrals/stipend.php',
     'referrals/admin_tree' => 'referrals/admin_tree.php',
     'system/config' => 'system/config.php', 'health' => 'health.php',
+    'app/download' => 'app/download.php',
     'marketing/assets' => 'marketing/assets.php', 'marketing/claims' => 'marketing/claims.php',
     'marketing/promotions' => 'marketing/promotions.php', 'marketing/schedules' => 'marketing/schedules.php',
     'admin/overview' => 'admin/overview.php', 'admin/settings' => 'admin/settings.php',

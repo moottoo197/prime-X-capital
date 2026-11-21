@@ -1,5 +1,5 @@
-const CACHE_NAME = "primex-static-v117_security_hardening";
-const STATIC_ASSETS = ["/", "/offline.html", "/assets/css/app.css?v=20261121_v117_security_hardening", "/assets/js/app.js?v=20261121_v117_security_hardening", "/assets/js/chart.js?v=20261121_v117_security_hardening", "/assets/js/3d-engine.js?v=20261121_v117_security_hardening"];
+const CACHE_NAME = "primex-static-v119_wallet_transfer_anim";
+const STATIC_ASSETS = ["/", "/offline.html", "/assets/css/app.css?v=20261121_v119_wallet_transfer_anim", "/assets/js/app.js?v=20261121_v119_wallet_transfer_anim", "/assets/js/chart.js?v=20261121_v119_wallet_transfer_anim", "/assets/js/3d-engine.js?v=20261121_v119_wallet_transfer_anim"];
 
 function fallbackResponse(req) {
   return caches.match(req).then(cached => cached || caches.match("/offline.html")).then(res => {

@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ],
         'profiles' => [
             'table' => 'profiles',
-            'params' => ['select' => 'id,email,kyc_status']
+            'params' => ['select' => 'id,email,kyc_status,numeric_uid,first_name,last_name']
         ]
     ]);
     $withRes = $batch['withdrawals'] ?? ['success'=>false];
@@ -39,23 +39,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
     }
 
-    $formattedWithdrawals = array_map(function($w) use ($userMap) {
-        $uid = $w['user_id'] ?? '';
+    // Load bound withdrawal addresses for address validation column & batch verification preview
+    $boundAddressesFile = dirname(__DIR__, 3) . '/server/storage/bound_addresses.json';
+    $boundMap = [];
+    if (is_file($boundAddressesFile)) {
+        $decodedBound = json_decode((string)@file_get_contents($boundAddressesFile), true);
+        if (is_array($decodedBound)) $boundMap = $decodedBound;
+    }
+
+    $todayPrefix = gmdate('Y-m-d');
+    $pendingCount = 0;
+    $pendingAmountUsdt = 0.0;
+    $batchReadyCount = 0;
+    $batchReadyAmountUsdt = 0.0;
+    $processedTodayCount = 0;
+    $processedTodayUsdt = 0.0;
+
+    $formattedWithdrawals = array_map(function($w) use ($userMap, $boundMap, $todayPrefix, &$pendingCount, &$pendingAmountUsdt, &$batchReadyCount, &$batchReadyAmountUsdt, &$processedTodayCount, &$processedTodayUsdt) {
+        $uid = (string)($w['user_id'] ?? '');
         $user = $userMap[$uid] ?? [];
+        $fullName = trim((string)($user['first_name'] ?? '') . ' ' . (string)($user['last_name'] ?? ''));
+        $status = strtoupper(trim((string)($w['status'] ?? 'REQUESTED')));
+        $network = strtoupper(trim((string)($w['network'] ?? 'TRC20')));
+        $destAddr = trim((string)($w['destination_address'] ?? ''));
+        $amount = (float)($w['amount'] ?? 0);
+        $kycStatus = strtoupper(trim((string)($user['kyc_status'] ?? 'UNKNOWN')));
+
+        // Validate against user's bound addresses
+        $userBoundList = is_array($boundMap[$uid] ?? null) ? $boundMap[$uid] : [];
+        $exactBoundMatch = false;
+        $hasAnyBound = count($userBoundList) > 0;
+        foreach ($userBoundList as $bRow) {
+            if (!is_array($bRow)) continue;
+            $bAddr = trim((string)($bRow['address'] ?? ''));
+            $bNet = strtoupper(trim((string)($bRow['network'] ?? '')));
+            if ($bAddr !== '' && strcasecmp($bAddr, $destAddr) === 0 && ($bNet === '' || $bNet === $network)) {
+                $exactBoundMatch = true;
+                break;
+            }
+        }
+        if ($exactBoundMatch && $kycStatus === 'APPROVED') {
+            $boundStatus = 'ADDRESS_BOUND_VERIFIED';
+            $boundLabel = 'Address Bound & Verified';
+        } elseif ($exactBoundMatch || $hasAnyBound) {
+            $boundStatus = $exactBoundMatch ? 'BOUND' : 'UNBOUND';
+            $boundLabel = $exactBoundMatch ? 'Bound' : 'Unbound';
+        } else {
+            $boundStatus = 'UNBOUND';
+            $boundLabel = 'Unbound';
+        }
+
+        if (in_array($status, ['PENDING', 'REQUESTED', 'PENDING_REVIEW'], true)) {
+            $pendingCount++;
+            $pendingAmountUsdt += $amount;
+            if ($exactBoundMatch || $boundStatus === 'ADDRESS_BOUND_VERIFIED' || $kycStatus === 'APPROVED') {
+                $batchReadyCount++;
+                $batchReadyAmountUsdt += $amount;
+            }
+        } elseif (in_array($status, ['COMPLETED', 'APPROVED'], true)) {
+            $updatedStr = (string)($w['updated_at'] ?? $w['created_at'] ?? '');
+            if (strpos($updatedStr, $todayPrefix) === 0) {
+                $processedTodayCount++;
+                $processedTodayUsdt += $amount;
+            }
+        }
+
+        $rawId = (string)($w['id'] ?? '');
+        $shortDigits = preg_replace('/[^A-Za-z0-9]/', '', $rawId);
+        $shortId = 'WIT-' . strtoupper(substr($shortDigits !== '' ? $shortDigits : '0000', -4));
+
         return [
-            'id' => $w['id'] ?? '',
+            'id' => $rawId,
+            'short_id' => $shortId,
             'user_id' => $uid,
+            'numeric_uid' => $user['numeric_uid'] ?? null,
+            'full_name' => $fullName !== '' ? $fullName : ($user['email'] ?? $uid),
             'email' => $user['email'] ?? $uid,
-            'kyc_status' => $user['kyc_status'] ?? 'UNKNOWN',
+            'kyc_status' => $kycStatus,
             'asset' => $w['asset'] ?? 'USDT',
-            'network' => $w['network'] ?? 'TRC20',
-            'destination_address' => $w['destination_address'] ?? '',
-            'amount' => (float)($w['amount'] ?? 0),
+            'network' => $network,
+            'destination_address' => $destAddr,
+            'bound_status' => $boundStatus,
+            'bound_label' => $boundLabel,
+            'amount' => $amount,
             'fee' => (float)($w['fee'] ?? 1.0),
-            'net_amount' => (float)($w['net_amount'] ?? $w['amount'] ?? 0),
+            'net_amount' => (float)($w['net_amount'] ?? $amount),
             'early_deduction' => (float)($w['early_deduction'] ?? 0),
             'is_early_withdrawal' => !empty($w['is_early_withdrawal']) ? 1 : 0,
-            'status' => $w['status'] ?? 'REQUESTED',
+            'status' => $status,
             'rejection_reason' => $w['rejection_reason'] ?? null,
             'tx_hash' => $w['tx_hash'] ?? null,
             'created_at' => $w['created_at'] ?? gmdate('Y-m-d H:i:s'),
@@ -63,7 +134,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ];
     }, $withdrawals);
 
-    sendSuccess(['withdrawals' => $formattedWithdrawals], 'Withdrawals retrieved successfully from Supabase');
+    sendSuccess([
+        'withdrawals' => $formattedWithdrawals,
+        'summary' => [
+            'pending_count' => $pendingCount,
+            'pending_amount_usdt' => round($pendingAmountUsdt, 2),
+            'batch_ready_count' => $batchReadyCount,
+            'batch_ready_amount_usdt' => round($batchReadyAmountUsdt, 2),
+            'processed_today_count' => $processedTodayCount,
+            'processed_today_usdt' => round($processedTodayUsdt, 2)
+        ]
+    ], 'Withdrawals retrieved successfully from Supabase');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

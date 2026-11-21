@@ -863,9 +863,32 @@ const App = {
 
 
   escapeHtml(value) {
-    const div = document.createElement('div');
-    div.textContent = String(value ?? '');
-    return div.innerHTML;
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  },
+
+  escapeJsStr(value) {
+    return String(value ?? '')
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '\\"')
+      .replace(/\r/g, '\\r')
+      .replace(/\n/g, '\\n')
+      .replace(/</g, '\\x3C')
+      .replace(/>/g, '\\x3E');
+  },
+
+  safeMediaUrl(url) {
+    const raw = String(url ?? '').trim();
+    if (!raw) return '';
+    if (/^(https?:\/\/|\/(?!\/)|data:image\/(?:png|jpeg|jpg|webp|gif);base64,)/i.test(raw)) {
+      return raw;
+    }
+    return '';
   },
 
   updateHeaderAuth() {
@@ -1036,6 +1059,9 @@ const App = {
     } else if (view === 'market') {
       setTimeout(() => this.initMarketView(), 50);
     } else if (view === 'wallet') {
+      if (this.state.pendingWalletTransferFx && this.state.balances) {
+        this.renderWalletView();
+      }
       this.loadBalances();
       this.loadWalletHistoryPreview();
     } else if (view === 'copytrading') {
@@ -1053,6 +1079,8 @@ const App = {
       this.setAdminTab(this.state.adminTab || 'overview');
     } else if (view === 'convert') {
       this.loadConvertView();
+    } else if (view === 'transfer') {
+      this.loadTransferView();
     } else if (view === 'settings') {
       this.loadSettingsView();
     } else if (view === 'kyc') {
@@ -2025,6 +2053,18 @@ const App = {
       return;
     }
 
+    const futureAvail = Number(this.state.balances?.future_total_usdt ?? this.state.balances?.breakdown?.trading_total_usdt ?? 0);
+    const transferableSpot = Number(this.state.balances?.transferable_spot_usdt ?? this.state.balances?.breakdown?.transferable_spot_usdt ?? 0);
+    if (futureAvail <= 0) {
+      if (transferableSpot > 0) {
+        this.toast('Your Future Balance is $0.00. Transfer Deposit or Deposit Bonus from Spot to Future to trade.', 'warning');
+        this.navigate('transfer');
+      } else {
+        this.toast('Insufficient Future Balance. Deposit funds and transfer to Future Wallet to trade.', 'error');
+      }
+      return;
+    }
+
     const res = await this.api('/trading/order.php', 'POST', {
       symbol: this.state.selectedMarket,
       side,
@@ -2143,7 +2183,13 @@ const App = {
     const totalBtc = Number(data.total_assets_btc || (totalUsdt > 0 ? (totalUsdt / 64280) : 0));
     const fundingUsdt = Number(data.breakdown?.funding_total_usdt || 0);
     const exchangeUsdt = Number(data.breakdown?.exchange_total_usdt || 0);
-    const tradingUsdt = Number(data.breakdown?.trading_total_usdt || 0);
+    const tradingUsdt = Number(data.future_total_usdt ?? data.breakdown?.trading_total_usdt ?? 0);
+    const spotUsdt = Number(data.spot_total_usdt ?? data.breakdown?.spot_total_usdt ?? (fundingUsdt + exchangeUsdt));
+    const depositBalUsdt = Number(data.deposit_balance_usdt ?? data.breakdown?.deposit_balance_usdt ?? 0);
+    const depositBonusUsdt = Number(data.deposit_bonus_usdt ?? data.breakdown?.deposit_bonus_usdt ?? 0);
+    const referralBonusUsdt = Number(data.referral_bonus_usdt ?? data.breakdown?.referral_bonus_usdt ?? 0);
+    const transferableSpotUsdt = Number(data.transferable_spot_usdt ?? data.breakdown?.transferable_spot_usdt ?? Math.max(0, spotUsdt - referralBonusUsdt));
+    const fmtMoney = v => '$' + Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const isHidden = this.state.hideBalance;
 
@@ -2164,13 +2210,65 @@ const App = {
       walletUidEl.textContent = 'UID: ' + this.getUserUID();
     }
 
-    // Breakdown sub-accounts
+    // Breakdown sub-accounts & balance types
+    const spotTotalEl = document.getElementById('wallet-spot-total');
     const fundingEl = document.getElementById('bal-funding');
     const exchangeEl = document.getElementById('bal-exchange');
     const tradingEl = document.getElementById('bal-trading');
-    if (fundingEl) fundingEl.textContent = isHidden ? '******' : `$${fundingUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (exchangeEl) exchangeEl.textContent = isHidden ? '******' : `$${exchangeUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (tradingEl) tradingEl.textContent = isHidden ? '******' : `$${tradingUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const depPrincipalEl = document.getElementById('bal-deposit-principal');
+    const depBonusEl = document.getElementById('bal-deposit-bonus');
+    const refBonusEl = document.getElementById('bal-referral-bonus');
+    const transferableEl = document.getElementById('bal-transferable-spot');
+
+    const fx = this.state.pendingWalletTransferFx;
+    const hasPendingFx = Boolean(fx && (Date.now() - (fx.ts || 0) < 18000) && !isHidden);
+    const walletViewEl = document.getElementById('view-wallet');
+    const walletVisible = Boolean(walletViewEl && walletViewEl.style.display !== 'none');
+
+    if (spotTotalEl) {
+      if (hasPendingFx && walletVisible) {
+        this.animateNumericText(spotTotalEl, fx.prevSpot, spotUsdt, fmtMoney, 700);
+      } else {
+        spotTotalEl.textContent = isHidden ? '******' : fmtMoney(spotUsdt);
+      }
+    }
+    if (fundingEl) fundingEl.textContent = isHidden ? '******' : fmtMoney(spotUsdt);
+    if (exchangeEl) exchangeEl.textContent = isHidden ? '******' : fmtMoney(exchangeUsdt);
+    if (tradingEl) {
+      if (hasPendingFx && walletVisible) {
+        this.animateNumericText(tradingEl, fx.prevFuture, tradingUsdt, fmtMoney, 700);
+      } else {
+        tradingEl.textContent = isHidden ? '******' : fmtMoney(tradingUsdt);
+      }
+    }
+    if (depPrincipalEl) depPrincipalEl.textContent = isHidden ? '******' : fmtMoney(depositBalUsdt);
+    if (depBonusEl) depBonusEl.textContent = isHidden ? '******' : fmtMoney(depositBonusUsdt);
+    if (refBonusEl) refBonusEl.textContent = isHidden ? '******' : fmtMoney(referralBonusUsdt);
+    if (transferableEl) {
+      if (hasPendingFx && walletVisible && Number.isFinite(fx.prevTransferable)) {
+        this.animateNumericText(transferableEl, fx.prevTransferable, transferableSpotUsdt, fmtMoney, 700);
+      } else {
+        transferableEl.textContent = isHidden ? '******' : fmtMoney(transferableSpotUsdt);
+      }
+    }
+
+    if (hasPendingFx && walletVisible) {
+      const sBar = document.getElementById('wallet-flow-spot-bar');
+      const fBar = document.getElementById('wallet-flow-future-bar');
+      if (sBar && fBar) {
+        sBar.style.transition = 'none';
+        fBar.style.transition = 'none';
+        this.updateWalletAllocationBar(fx.prevSpot, fx.prevFuture, isHidden);
+        void sBar.offsetWidth;
+        sBar.style.transition = '';
+        fBar.style.transition = '';
+      }
+      this.updateWalletAllocationBar(spotUsdt, tradingUsdt, isHidden);
+      this.state.pendingWalletTransferFx = null;
+      this.triggerWalletTransferAnimation(fx.direction, fx.amount);
+    } else {
+      this.updateWalletAllocationBar(spotUsdt, tradingUsdt, isHidden);
+    }
 
     // Crypto asset rows
     const btcAmtEl = document.getElementById('wallet-btc-amount');
@@ -2188,19 +2286,35 @@ const App = {
       usdtAmtEl.textContent = isHidden ? '******' : totalUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    if (this.state.currentView === 'transfer') {
+      this.loadTransferView();
+    }
+
     this.updateHomeHeroBalance();
   },
 
   updateHomeHeroBalance() {
     const homeValEl = document.getElementById('home-balance-val');
+    const homeSpotEl = document.getElementById('home-spot-bal');
+    const homeFutureEl = document.getElementById('home-future-bal');
     const uidEl = document.getElementById('home-user-uid');
+    const balData = this.state.balances || {};
+    const fmt = v => '$' + Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (homeValEl) {
       if (this.state.hideBalance) {
         homeValEl.textContent = '******';
       } else {
-        const total = this.state.balances?.total_assets_usdt != null ? this.state.balances.total_assets_usdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
+        const total = balData.total_assets_usdt != null ? Number(balData.total_assets_usdt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
         homeValEl.textContent = total;
       }
+    }
+    if (homeSpotEl) {
+      const spotVal = balData.spot_total_usdt ?? balData.breakdown?.spot_total_usdt ?? (Number(balData.breakdown?.funding_total_usdt || 0) + Number(balData.breakdown?.exchange_total_usdt || 0));
+      homeSpotEl.textContent = this.state.hideBalance ? '******' : fmt(spotVal);
+    }
+    if (homeFutureEl) {
+      const futureVal = balData.future_total_usdt ?? balData.breakdown?.trading_total_usdt ?? 0;
+      homeFutureEl.textContent = this.state.hideBalance ? '******' : fmt(futureVal);
     }
     if (uidEl && this.state.user) {
       uidEl.textContent = this.getUserUID();
@@ -2767,39 +2881,438 @@ const App = {
     }
   },
 
-  /* Transfer */
+  /* Transfer (Modal + Dedicated Transfer Page + Mobile App Download) */
   openTransferModal() {
+    const maxSpotEl = document.getElementById('trf-modal-max-spot');
+    const transferable = Number(this.state.balances?.transferable_spot_usdt ?? this.state.balances?.breakdown?.transferable_spot_usdt ?? 0);
+    if (maxSpotEl) maxSpotEl.textContent = `$${transferable.toFixed(2)}`;
     this.openModal('modal-transfer');
   },
 
   async submitTransfer() {
-    const from = document.getElementById('trf-from').value;
-    const to = document.getElementById('trf-to').value;
-    const amount = parseFloat(document.getElementById('trf-amount').value) || 0;
+    const from = document.getElementById('trf-from')?.value || 'spot';
+    const to = document.getElementById('trf-to')?.value || 'trading';
+    const amount = parseFloat(document.getElementById('trf-amount')?.value) || 0;
 
     if (from === to) {
       this.toast('Source and destination wallets must be different', 'error');
       return;
     }
-
     if (amount <= 0) {
       this.toast('Enter a valid transfer amount', 'error');
       return;
     }
 
-    const res = await this.api('/wallet/transfer.php', 'POST', {
-      from_wallet: from,
-      to_wallet: to,
-      asset: 'USDT',
-      amount
-    });
+    const actionScope = 'wallet-transfer-modal';
+    const actionKey = this.beginAction(actionScope);
+    if (actionKey === null) {
+      this.toast('Transfer is already processing. Please wait.', 'warning');
+      return;
+    }
 
-    if (res.success) {
-      this.toast('Transfer completed successfully via Ledger', 'success');
-      this.closeModal('modal-transfer');
-      this.loadBalances();
+    const prevBalances = this.state.balances || {};
+    const prevSpot = Number(prevBalances.spot_total_usdt ?? prevBalances.breakdown?.spot_total_usdt ?? 0);
+    const prevFuture = Number(prevBalances.future_total_usdt ?? prevBalances.breakdown?.trading_total_usdt ?? 0);
+    const prevTransferable = Number(prevBalances.transferable_spot_usdt ?? prevBalances.breakdown?.transferable_spot_usdt ?? 0);
+
+    try {
+      const res = await this.api('/wallet/transfer.php', 'POST', {
+        from_wallet: from,
+        to_wallet: to,
+        asset: 'USDT',
+        amount,
+        idempotency_key: actionKey
+      });
+
+      if (res.success) {
+        this.state.pendingWalletTransferFx = {
+          direction: to === 'trading' ? 'spot-to-future' : 'future-to-spot',
+          amount,
+          prevSpot,
+          prevFuture,
+          prevTransferable,
+          ts: Date.now()
+        };
+        this.toast('Transfer completed successfully via Ledger', 'success');
+        this.closeModal('modal-transfer');
+        if (res.data?.balances) {
+          this.state.balances = res.data.balances;
+          this.writeFastCache('balances', res.data.balances);
+          this.renderWalletView();
+        } else {
+          await this.loadBalances(true);
+        }
+        this.endAction(actionScope, true);
+      } else {
+        this.toast(res.message || 'Transfer failed', 'error');
+        this.endAction(actionScope, false);
+      }
+    } catch (e) {
+      this.toast('Transfer failed: ' + (e.message || e), 'error');
+      this.endAction(actionScope, false);
+    } finally {
+      if (this.state.actionLocks.has(actionScope)) this.endAction(actionScope, false);
+    }
+  },
+
+  animateNumericText(el, fromVal, toVal, formatter, duration = 680) {
+    if (!el) return;
+    if (el._animRafId) {
+      cancelAnimationFrame(el._animRafId);
+      el._animRafId = null;
+    }
+    const startVal = Number(fromVal || 0);
+    const endVal = Number(toVal || 0);
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion || Math.abs(endVal - startVal) < 0.005 || this.state.hideBalance) {
+      el.textContent = formatter(endVal);
+      return;
+    }
+    const startTs = performance.now();
+    const tick = (now) => {
+      const elapsed = now - startTs;
+      const t = Math.min(1, elapsed / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const current = startVal + (endVal - startVal) * eased;
+      el.textContent = formatter(current);
+      if (t < 1) {
+        el._animRafId = requestAnimationFrame(tick);
+      } else {
+        el.textContent = formatter(endVal);
+        el._animRafId = null;
+      }
+    };
+    el.textContent = formatter(startVal);
+    el._animRafId = requestAnimationFrame(tick);
+  },
+
+  updateWalletAllocationBar(spotUsdt, futureUsdt, isHidden = false) {
+    const spotBar = document.getElementById('wallet-flow-spot-bar');
+    const futureBar = document.getElementById('wallet-flow-future-bar');
+    const spotPctEl = document.getElementById('wallet-flow-spot-pct');
+    const futurePctEl = document.getElementById('wallet-flow-future-pct');
+    if (!spotBar || !futureBar) return;
+
+    if (isHidden) {
+      if (spotPctEl) spotPctEl.textContent = '••%';
+      if (futurePctEl) futurePctEl.textContent = '••%';
+      return;
+    }
+    const total = Math.max(0, Number(spotUsdt || 0)) + Math.max(0, Number(futureUsdt || 0));
+    const spotPct = total > 0 ? Math.round((Math.max(0, spotUsdt) / total) * 100) : 50;
+    const futurePct = total > 0 ? (100 - spotPct) : 50;
+    spotBar.style.width = `${spotPct}%`;
+    futureBar.style.width = `${futurePct}%`;
+    if (spotPctEl) spotPctEl.textContent = `${spotPct}%`;
+    if (futurePctEl) futurePctEl.textContent = `${futurePct}%`;
+  },
+
+  triggerWalletTransferAnimation(direction = 'spot-to-future', amount = 0) {
+    const isForward = direction === 'spot-to-future';
+    const spotCell = document.getElementById('wallet-cell-spot');
+    const futureCell = document.getElementById('wallet-cell-future');
+    const flowWrap = document.getElementById('wallet-flow-wrap');
+    const flowStatus = document.getElementById('wallet-flow-status');
+    const transferableBox = document.getElementById('bal-transferable-spot')?.closest('.av-wallet-stat-box');
+
+    const spawnDeltaPill = (cell, text, cls) => {
+      if (!cell || !(amount > 0)) return;
+      cell.querySelectorAll('.av-delta-pill').forEach(p => p.remove());
+      const pill = document.createElement('span');
+      pill.className = `av-delta-pill ${cls}`;
+      pill.textContent = text;
+      cell.appendChild(pill);
+      setTimeout(() => { if (pill.parentNode) pill.remove(); }, 1400);
+    };
+
+    const pulseClass = (el, cls, ms = 950) => {
+      if (!el) return;
+      el.classList.remove(cls);
+      void el.offsetWidth;
+      el.classList.add(cls);
+      setTimeout(() => el.classList.remove(cls), ms);
+    };
+
+    if (isForward) {
+      pulseClass(spotCell, 'is-debiting', 900);
+      pulseClass(futureCell, 'is-crediting', 950);
+      spawnDeltaPill(spotCell, `-$${Number(amount).toFixed(2)}`, 'out');
+      spawnDeltaPill(futureCell, `+$${Number(amount).toFixed(2)}`, 'in');
     } else {
-      this.toast(res.message || 'Transfer failed', 'error');
+      pulseClass(futureCell, 'is-debiting', 900);
+      pulseClass(spotCell, 'is-crediting', 950);
+      spawnDeltaPill(futureCell, `-$${Number(amount).toFixed(2)}`, 'out');
+      spawnDeltaPill(spotCell, `+$${Number(amount).toFixed(2)}`, 'in');
+    }
+
+    if (transferableBox) pulseClass(transferableBox, 'is-updating', 900);
+
+    if (flowWrap) {
+      flowWrap.classList.remove('flow-forward', 'flow-reverse', 'is-animating');
+      void flowWrap.offsetWidth;
+      flowWrap.classList.add('is-animating', isForward ? 'flow-forward' : 'flow-reverse');
+      if (flowStatus && amount > 0) {
+        flowStatus.textContent = isForward
+          ? `Moved $${Number(amount).toFixed(2)} → Future`
+          : `Moved $${Number(amount).toFixed(2)} → Spot`;
+      }
+      setTimeout(() => {
+        flowWrap.classList.remove('flow-forward', 'flow-reverse', 'is-animating');
+        if (flowStatus) flowStatus.textContent = 'Spot ⇄ Future Allocation';
+      }, 1500);
+    }
+  },
+
+  loadTransferView(animateValues = null) {
+    const data = this.state.balances || {};
+    const spotTotal = Number(data.spot_total_usdt ?? data.breakdown?.spot_total_usdt ?? (Number(data.breakdown?.funding_total_usdt || 0) + Number(data.breakdown?.exchange_total_usdt || 0)));
+    const futureTotal = Number(data.future_total_usdt ?? data.breakdown?.trading_total_usdt ?? 0);
+    const referralLocked = Number(data.referral_bonus_usdt ?? data.breakdown?.referral_bonus_usdt ?? 0);
+    const transferableSpot = Number(data.transferable_spot_usdt ?? data.breakdown?.transferable_spot_usdt ?? Math.max(0, spotTotal - referralLocked));
+
+    const fromSel = document.getElementById('trf-view-from');
+    const fromVal = fromSel?.value || 'spot';
+    const isSpotToFuture = fromVal === 'spot';
+
+    const bridgeFromEl = document.getElementById('trf-bridge-from-label');
+    const bridgeToEl = document.getElementById('trf-bridge-to-label');
+    if (bridgeFromEl) bridgeFromEl.textContent = isSpotToFuture ? 'Spot Wallet' : 'Future Wallet';
+    if (bridgeToEl) bridgeToEl.textContent = isSpotToFuture ? 'Future Wallet' : 'Spot Wallet';
+
+    const availFromEl = document.getElementById('trf-view-avail-from');
+    const availToEl = document.getElementById('trf-view-avail-to');
+    const spotEl = document.getElementById('trf-view-spot-total');
+    const trfEl = document.getElementById('trf-view-transferable');
+    const refEl = document.getElementById('trf-view-referral-locked');
+
+    const nextAvailFrom = isSpotToFuture ? transferableSpot : futureTotal;
+    const nextAvailTo = isSpotToFuture ? futureTotal : spotTotal;
+    const fmtUsdt = v => `${Number(v || 0).toFixed(2)} USDT`;
+    const fmtDollar = v => `$${Number(v || 0).toFixed(2)}`;
+
+    if (animateValues) {
+      const prevFrom = isSpotToFuture ? animateValues.prevTransferable : animateValues.prevFuture;
+      const prevTo = isSpotToFuture ? animateValues.prevFuture : animateValues.prevSpot;
+      this.animateNumericText(availFromEl, prevFrom, nextAvailFrom, fmtUsdt, 680);
+      this.animateNumericText(availToEl, prevTo, nextAvailTo, fmtUsdt, 680);
+      this.animateNumericText(spotEl, animateValues.prevSpot, spotTotal, fmtDollar, 680);
+      this.animateNumericText(trfEl, animateValues.prevTransferable, transferableSpot, fmtDollar, 680);
+    } else {
+      if (availFromEl) availFromEl.textContent = fmtUsdt(nextAvailFrom);
+      if (availToEl) availToEl.textContent = fmtUsdt(nextAvailTo);
+      if (spotEl) spotEl.textContent = fmtDollar(spotTotal);
+      if (trfEl) trfEl.textContent = fmtDollar(transferableSpot);
+    }
+    if (refEl) refEl.textContent = fmtDollar(referralLocked);
+    this.calcTransferPagePreview();
+  },
+
+  triggerTransferSwapAnimation() {
+    const fromCard = document.getElementById('trf-card-from');
+    const toCard = document.getElementById('trf-card-to');
+    const swapBtn = document.getElementById('trf-swap-btn');
+    if (fromCard) {
+      fromCard.classList.remove('is-swapping-down');
+      void fromCard.offsetWidth;
+      fromCard.classList.add('is-swapping-down');
+      setTimeout(() => fromCard.classList.remove('is-swapping-down'), 440);
+    }
+    if (toCard) {
+      toCard.classList.remove('is-swapping-up');
+      void toCard.offsetWidth;
+      toCard.classList.add('is-swapping-up');
+      setTimeout(() => toCard.classList.remove('is-swapping-up'), 440);
+    }
+    if (swapBtn) {
+      swapBtn.classList.add('is-spinning');
+      setTimeout(() => swapBtn.classList.remove('is-spinning'), 460);
+    }
+  },
+
+  onTransferDirectionChange(changed = 'from') {
+    const fromSel = document.getElementById('trf-view-from');
+    const toSel = document.getElementById('trf-view-to');
+    if (!fromSel || !toSel) return;
+    if (changed === 'from') {
+      toSel.value = fromSel.value === 'spot' ? 'trading' : 'spot';
+    } else {
+      fromSel.value = toSel.value === 'trading' ? 'spot' : 'trading';
+    }
+    this.triggerTransferSwapAnimation();
+    this.loadTransferView();
+  },
+
+  swapTransferPageDirection() {
+    const fromSel = document.getElementById('trf-view-from');
+    const toSel = document.getElementById('trf-view-to');
+    if (!fromSel || !toSel) return;
+    const prevFrom = fromSel.value;
+    fromSel.value = toSel.value;
+    toSel.value = prevFrom;
+    this.triggerTransferSwapAnimation();
+    this.loadTransferView();
+  },
+
+  setTransferPagePercent(pct = 100) {
+    const data = this.state.balances || {};
+    const spotTotal = Number(data.spot_total_usdt ?? data.breakdown?.spot_total_usdt ?? 0);
+    const futureTotal = Number(data.future_total_usdt ?? data.breakdown?.trading_total_usdt ?? 0);
+    const referralLocked = Number(data.referral_bonus_usdt ?? data.breakdown?.referral_bonus_usdt ?? 0);
+    const transferableSpot = Number(data.transferable_spot_usdt ?? data.breakdown?.transferable_spot_usdt ?? Math.max(0, spotTotal - referralLocked));
+    const fromVal = document.getElementById('trf-view-from')?.value || 'spot';
+    const max = fromVal === 'spot' ? transferableSpot : futureTotal;
+    const inp = document.getElementById('trf-view-amount');
+    if (inp) {
+      const val = Math.floor((max * (pct / 100)) * 100) / 100;
+      inp.value = val > 0 ? val.toFixed(2) : '0.00';
+      this.calcTransferPagePreview();
+    }
+  },
+
+  calcTransferPagePreview() {
+    const data = this.state.balances || {};
+    const futureTotal = Number(data.future_total_usdt ?? data.breakdown?.trading_total_usdt ?? 0);
+    const fromVal = document.getElementById('trf-view-from')?.value || 'spot';
+    const amt = Math.max(0, parseFloat(document.getElementById('trf-view-amount')?.value) || 0);
+    const recEl = document.getElementById('trf-view-receive');
+    const afterEl = document.getElementById('trf-view-future-after');
+    if (recEl) recEl.value = amt > 0 ? amt.toFixed(2) : '';
+    const futureAfter = fromVal === 'spot' ? (futureTotal + amt) : Math.max(0, futureTotal - amt);
+    if (afterEl) afterEl.textContent = `$${futureAfter.toFixed(2)}`;
+  },
+
+  async submitTransferPage() {
+    const from = document.getElementById('trf-view-from')?.value || 'spot';
+    const to = document.getElementById('trf-view-to')?.value || 'trading';
+    const amountInput = document.getElementById('trf-view-amount');
+    const amount = parseFloat(amountInput?.value) || 0;
+
+    if (from === to) {
+      this.toast('Source and destination wallets must be different', 'error');
+      return;
+    }
+    if (amount <= 0) {
+      this.toast('Enter a valid amount to transfer', 'error');
+      return;
+    }
+
+    const data = this.state.balances || {};
+    const referralLocked = Number(data.referral_bonus_usdt ?? data.breakdown?.referral_bonus_usdt ?? 0);
+    const transferableSpot = Number(data.transferable_spot_usdt ?? data.breakdown?.transferable_spot_usdt ?? 0);
+    if (from === 'spot' && amount > transferableSpot + 0.0001) {
+      this.toast(
+        referralLocked > 0
+          ? `Only Deposit Balance & Deposit Bonus ($${transferableSpot.toFixed(2)}) can transfer to Future. Referral Bonus ($${referralLocked.toFixed(2)}) cannot be transferred.`
+          : `Maximum transferable Spot balance is $${transferableSpot.toFixed(2)} USDT.`,
+        'error'
+      );
+      return;
+    }
+
+    const actionScope = 'wallet-transfer-page';
+    const actionKey = this.beginAction(actionScope);
+    if (actionKey === null) {
+      this.toast('Transfer is already processing. Please wait.', 'warning');
+      return;
+    }
+    const btn = document.getElementById('btn-confirm-transfer-page');
+    const bridgeEl = document.getElementById('trf-bridge-visual');
+    const fromCard = document.getElementById('trf-card-from');
+    const toCard = document.getElementById('trf-card-to');
+    const prevSpot = Number(data.spot_total_usdt ?? data.breakdown?.spot_total_usdt ?? 0);
+    const prevFuture = Number(data.future_total_usdt ?? data.breakdown?.trading_total_usdt ?? 0);
+    const prevTransferable = Number(data.transferable_spot_usdt ?? data.breakdown?.transferable_spot_usdt ?? 0);
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Transferring...';
+    }
+    if (bridgeEl) bridgeEl.classList.add('is-sending');
+    if (fromCard) fromCard.classList.add('is-sending');
+    if (toCard) toCard.classList.add('is-sending');
+
+    try {
+      const res = await this.api('/wallet/transfer.php', 'POST', {
+        from_wallet: from,
+        to_wallet: to,
+        asset: 'USDT',
+        amount,
+        idempotency_key: actionKey
+      });
+      if (res.success) {
+        if (bridgeEl) {
+          bridgeEl.classList.remove('is-sending');
+          bridgeEl.classList.add('is-success');
+        }
+        if (fromCard) {
+          fromCard.classList.remove('is-sending');
+          fromCard.classList.add('is-success');
+        }
+        if (toCard) {
+          toCard.classList.remove('is-sending');
+          toCard.classList.add('is-success');
+        }
+        this.state.pendingWalletTransferFx = {
+          direction: to === 'trading' ? 'spot-to-future' : 'future-to-spot',
+          amount,
+          prevSpot,
+          prevFuture,
+          prevTransferable,
+          ts: Date.now()
+        };
+        if (res.data?.balances) {
+          this.state.balances = res.data.balances;
+          this.writeFastCache('balances', res.data.balances);
+          this.renderWalletView();
+        } else {
+          await this.loadBalances(true);
+        }
+        if (amountInput) amountInput.value = '';
+        this.loadTransferView({ prevSpot, prevFuture, prevTransferable });
+        this.toast(res.message || 'Transfer completed successfully', 'success');
+        setTimeout(() => {
+          if (bridgeEl) bridgeEl.classList.remove('is-success');
+          if (fromCard) fromCard.classList.remove('is-success');
+          if (toCard) toCard.classList.remove('is-success');
+        }, 1400);
+        this.endAction(actionScope, true);
+      } else {
+        if (bridgeEl) bridgeEl.classList.remove('is-sending');
+        if (fromCard) fromCard.classList.remove('is-sending');
+        if (toCard) toCard.classList.remove('is-sending');
+        this.toast(res.message || 'Transfer failed', 'error');
+        this.endAction(actionScope, false);
+      }
+    } catch (e) {
+      if (bridgeEl) bridgeEl.classList.remove('is-sending');
+      if (fromCard) fromCard.classList.remove('is-sending');
+      if (toCard) toCard.classList.remove('is-sending');
+      this.toast('Transfer failed: ' + (e.message || e), 'error');
+      this.endAction(actionScope, false);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Confirm Transfer';
+      }
+      if (this.state.actionLocks.has(actionScope)) this.endAction(actionScope, false);
+    }
+  },
+
+  downloadMobileApp(platform = 'android') {
+    const isIos = String(platform || '').toLowerCase() === 'ios';
+    const filename = isIos ? 'PRIME-X-CAPITAL-iOS.ipa' : 'PRIME-X-CAPITAL-Android.apk';
+    const url = `/api/app/download.php?platform=${isIos ? 'ios' : 'android'}`;
+    try {
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      this.toast(`Downloading ${filename}...`, 'success');
+    } catch (e) {
+      window.location.href = url;
     }
   },
 
@@ -3372,25 +3885,26 @@ const App = {
     signalProfitEls.forEach(el => { el.textContent = `+$${signalProfitTotal.toFixed(2)} USDT`; });
     this.writeFastCache('signals', data);
 
-    // Calculate user balance across all wallets to ensure accounts with >= 20 USDT balance are unlocked
-    const totalAssetsUsdt = Number(this.state.balances?.total_assets_usdt || this.state.balances?.total_usd || 0);
-    const tradingUsdt = Number(this.state.balances?.breakdown?.trading_total_usdt || this.state.balances?.balances?.trading?.USDT?.available || this.state.balances?.balances?.trading?.USDT?.balance || 0);
-    const fundingUsdt = Number(this.state.balances?.breakdown?.funding_total_usdt || this.state.balances?.balances?.funding?.USDT?.available || this.state.balances?.balances?.funding?.USDT?.balance || 0);
-    const exchangeUsdt = Number(this.state.balances?.breakdown?.exchange_total_usdt || this.state.balances?.balances?.exchange?.USDT?.available || 0);
-    const userWalletBal = Math.max(totalAssetsUsdt, tradingUsdt + fundingUsdt + exchangeUsdt, Number(data.user_balance || 0));
-    const effectiveDeposit = userWalletBal;
-    
+    // Future Balance (trading wallet) is used for Trades & Signals.
+    // Referral Bonus remains in Spot and cannot be transferred to Future.
+    const tradingUsdt = Number(data.future_balance_usdt ?? this.state.balances?.future_total_usdt ?? this.state.balances?.breakdown?.trading_total_usdt ?? 0);
+    const transferableSpotUsdt = Number(data.transferable_spot_usdt ?? this.state.balances?.transferable_spot_usdt ?? 0);
+    const referralBonusUsdt = Number(data.referral_bonus_usdt ?? this.state.balances?.referral_bonus_usdt ?? 0);
     const minReq = Number(data.min_deposit_required || 20.0);
-    const isUserEligible = Boolean(
-      data.is_eligible || 
-      effectiveDeposit >= minReq || 
-      userWalletBal >= minReq || 
-      this.state.user?.is_admin || 
+    const isPrivileged = Boolean(
+      this.state.user?.is_admin ||
       ['ADMIN', 'SUPER_ADMIN', 'VIP', 'FINANCE_MANAGER', 'KYC_MANAGER'].includes(this.state.user?.role)
     );
+    const isUserEligible = Boolean(
+      data.is_eligible ||
+      data.eligible ||
+      isPrivileged
+    );
+    const needsTransferToFuture = !isUserEligible && (transferableSpotUsdt >= minReq);
 
     data.is_eligible = isUserEligible;
-    data.user_total_deposited = effectiveDeposit;
+    data.needs_future_transfer = needsTransferToFuture;
+    data.user_total_deposited = tradingUsdt;
 
     // Quota badge
     if (quotaBadge) {
@@ -3399,21 +3913,40 @@ const App = {
 
     // Eligibility banner
     if (eligBanner) {
-      const userDep = effectiveDeposit;
       if (!data.is_eligible) {
-        eligBanner.innerHTML = `
+        eligBanner.innerHTML = needsTransferToFuture ? `
+          <div class="card" style="background: #EFF4FF; border: 1px solid #BFDBFE; padding: 14px; border-radius: 12px;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                  <span class="badge" style="background:#0052FF;color:#FFFFFF;">TRANSFER TO FUTURE REQUIRED</span>
+                  <span style="font-size: 11px; color: #1E3A8A;">Future Balance: $${tradingUsdt.toFixed(2)} &bull; Transferable Spot: $${transferableSpotUsdt.toFixed(2)}</span>
+                </div>
+                <div style="font-size: 13px; color: #111827; font-weight: 700;">
+                  Move your Deposit or Deposit Bonus from Spot to Future Balance to unlock Signals.
+                </div>
+                <div style="font-size: 12px; color: #4B5563; margin-top: 2px;">
+                  Future Balance is used for Trades and Signals. Referral Bonus stays locked in Spot.
+                </div>
+              </div>
+              <button class="btn-primary" style="padding: 8px 16px; font-size: 12px; font-weight: 700; white-space: nowrap; border-radius: 999px;" onclick="App.navigate('transfer')">
+                ⇄ Transfer Spot → Future
+              </button>
+            </div>
+          </div>
+        ` : `
           <div class="card" style="background: #FFFBEB; border: 1px solid #FDE68A; padding: 14px; border-radius: 12px;">
             <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
               <div>
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                  <span class="badge badge-warning">${minReq} USDT CURRENT BALANCE REQUIRED</span>
-                  <span style="font-size: 11px; color: #6B7280;">Current Balance: $${userDep.toFixed(2)} USDT</span>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                  <span class="badge badge-warning">${minReq} USDT FUTURE BALANCE REQUIRED</span>
+                  <span style="font-size: 11px; color: #6B7280;">Future Balance: $${tradingUsdt.toFixed(2)} USDT</span>
                 </div>
                 <div style="font-size: 13px; color: #111827; font-weight: 700;">
-                  Institutional Signals &amp; Guaranteed Profit Execution are locked.
+                  Institutional Signals &amp; Guaranteed Profit Execution require ${minReq} USDT in Future Balance.
                 </div>
                 <div style="font-size: 12px; color: #4B5563; margin-top: 2px;">
-                  Deposit or maintain at least ${minReq} USDT to unlock daily high-conviction quantitative signals and automated trade profit payouts.
+                  Deposit USDT and transfer Deposit / Deposit Bonus to Future Balance.${referralBonusUsdt > 0 ? ` Referral Bonus ($${referralBonusUsdt.toFixed(2)}) cannot be transferred to Future.` : ''}
                 </div>
               </div>
               <button class="btn-primary" style="padding: 8px 16px; font-size: 12px; font-weight: 700; white-space: nowrap; border-radius: 999px;" onclick="App.openDepositModal()">
@@ -3427,9 +3960,9 @@ const App = {
           <div class="card" style="background: #ECFDF5; border: 1px solid #A7F3D0; padding: 12px 14px; border-radius: 12px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="badge badge-positive">VIP QUALIFIED ACCOUNT</span>
+                <span class="badge badge-positive">FUTURE ACCOUNT QUALIFIED</span>
                 <span style="font-size: 12px; color: #111827; font-weight: 600;">
-                  Account Qualified ($${userDep.toFixed(2)} USDT) &bull; Signal Access Unlocked
+                  Future Balance ($${tradingUsdt.toFixed(2)} USDT) &bull; Signal Access Unlocked
                 </span>
               </div>
               <span style="font-size: 11px; color: #059669; font-weight: 700;">1-Time Execution Guaranteed Profit Active</span>
@@ -3512,9 +4045,13 @@ const App = {
             actionButtonHtml = '';
             timingNoticeHtml = '';
           } else if (!data.is_eligible) {
-            actionButtonHtml = `
+            actionButtonHtml = data.needs_future_transfer ? `
+              <button class="btn-primary" style="width: 100%; padding: 11px 16px; font-size: 12px; font-weight: 700; border-radius: 10px;" onclick="App.navigate('transfer')">
+                ⇄ Transfer ${minReq} USDT from Spot to Future to Confirm
+              </button>
+            ` : `
               <button class="btn-secondary" style="width: 100%; padding: 11px 16px; font-size: 12px; font-weight: 700; border-radius: 10px;" onclick="App.openDepositModal()">
-                🔒 Deposit 20 USDT to Unlock Signal Confirmation
+                🔒 Deposit 20 USDT &amp; Transfer to Future to Unlock
               </button>
             `;
             timingNoticeHtml = `
@@ -6705,7 +7242,174 @@ const App = {
     const res = await this.api('/admin/withdrawals.php');
     const withdrawals = (res.success && (res.data?.withdrawals || (Array.isArray(res.data) ? res.data : []))) || [];
     this.state.adminWithdrawals = withdrawals;
+    this.state.adminWithdrawSummary = res.data?.summary || null;
+    if (!Array.isArray(this.state.selectedWithdrawalIds)) this.state.selectedWithdrawalIds = [];
+    if (!this.state.selectedWithdrawalId && withdrawals.length) {
+      this.state.selectedWithdrawalId = withdrawals[0].id;
+    }
+    this.renderWithdrawKpis();
     this.filterAdminWithdrawals();
+    this.renderWithdrawInspector();
+  },
+
+  renderWithdrawKpis() {
+    const summary = this.state.adminWithdrawSummary;
+    const all = Array.isArray(this.state.adminWithdrawals) ? this.state.adminWithdrawals : [];
+    const pendingList = all.filter(w => ['PENDING', 'REQUESTED', 'PENDING_REVIEW'].includes(String(w.status || '').toUpperCase()));
+    const pendingCount = summary?.pending_count ?? pendingList.length;
+    const pendingAmt = summary?.pending_amount_usdt ?? pendingList.reduce((acc, x) => acc + Number(x.amount || 0), 0);
+    const batchReadyList = pendingList.filter(w => ['ADDRESS_BOUND_VERIFIED', 'BOUND'].includes(String(w.bound_status || '').toUpperCase()) || String(w.kyc_status || '').toUpperCase() === 'APPROVED');
+    const batchCount = summary?.batch_ready_count ?? batchReadyList.length;
+    const batchAmt = summary?.batch_ready_amount_usdt ?? batchReadyList.reduce((acc, x) => acc + Number(x.amount || 0), 0);
+    const todayAmt = summary?.processed_today_usdt ?? 0;
+    const todayCnt = summary?.processed_today_count ?? 0;
+
+    const elPendCnt = document.getElementById('adm-with-kpi-pending-count');
+    const elPendAmt = document.getElementById('adm-with-kpi-pending-amt');
+    const elBatchCnt = document.getElementById('adm-with-kpi-batch-count');
+    const elBatchAmt = document.getElementById('adm-with-kpi-batch-amt');
+    const elTodayAmt = document.getElementById('adm-with-kpi-today-amt');
+    const elTodayCnt = document.getElementById('adm-with-kpi-today-cnt');
+
+    if (elPendCnt) elPendCnt.textContent = String(pendingCount);
+    if (elPendAmt) elPendAmt.textContent = `$${Number(pendingAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD equivalent`;
+    if (elBatchCnt) elBatchCnt.textContent = `${batchCount} to Process`;
+    if (elBatchAmt) elBatchAmt.textContent = `$${Number(batchAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (elTodayAmt) elTodayAmt.textContent = `$${Number(todayAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+    if (elTodayCnt) elTodayCnt.textContent = `${todayCnt} approved today`;
+  },
+
+  toggleWithdrawBatchMode(enabled) {
+    this.state.withdrawBatchMode = Boolean(enabled);
+    if (enabled && Array.isArray(this.state.adminWithdrawals)) {
+      const pendingReady = this.state.adminWithdrawals
+        .filter(w => ['PENDING', 'REQUESTED', 'PENDING_REVIEW'].includes(String(w.status || '').toUpperCase()))
+        .map(w => String(w.id));
+      this.state.selectedWithdrawalIds = pendingReady;
+    } else if (!enabled) {
+      this.state.selectedWithdrawalIds = [];
+    }
+    this.filterAdminWithdrawals();
+    this.renderWithdrawInspector();
+  },
+
+  toggleAdminWithdrawalSelection(id, checked) {
+    const set = new Set(Array.isArray(this.state.selectedWithdrawalIds) ? this.state.selectedWithdrawalIds : []);
+    if (checked) set.add(String(id));
+    else set.delete(String(id));
+    this.state.selectedWithdrawalIds = Array.from(set);
+    this.state.selectedWithdrawalId = String(id);
+    this.renderWithdrawInspector();
+  },
+
+  toggleAllWithdrawals(checked) {
+    const all = Array.isArray(this.state.adminWithdrawals) ? this.state.adminWithdrawals : [];
+    if (checked) {
+      this.state.selectedWithdrawalIds = all
+        .filter(w => ['PENDING', 'REQUESTED', 'PENDING_REVIEW'].includes(String(w.status || '').toUpperCase()))
+        .map(w => String(w.id));
+    } else {
+      this.state.selectedWithdrawalIds = [];
+    }
+    this.filterAdminWithdrawals();
+    this.renderWithdrawInspector();
+  },
+
+  selectAdminWithdrawal(id) {
+    this.state.selectedWithdrawalId = String(id);
+    this.filterAdminWithdrawals();
+    this.renderWithdrawInspector();
+  },
+
+  renderWithdrawInspector() {
+    const box = document.getElementById('adm-with-preview-details');
+    if (!box) return;
+    const all = Array.isArray(this.state.adminWithdrawals) ? this.state.adminWithdrawals : [];
+    const selectedIds = Array.isArray(this.state.selectedWithdrawalIds) ? this.state.selectedWithdrawalIds : [];
+    const checkedRows = all.filter(w => selectedIds.includes(String(w.id)));
+
+    if (checkedRows.length > 1 || (this.state.withdrawBatchMode && checkedRows.length >= 1)) {
+      const totalAmount = checkedRows.reduce((acc, w) => acc + Number(w.amount || 0), 0);
+      const totalFee = checkedRows.reduce((acc, w) => acc + Number(w.fee || 1), 0);
+      const netOut = Math.max(0, totalAmount - totalFee);
+      box.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div class="av-adm-kv-row"><span>Selected Requests</span><strong>${checkedRows.length} payouts</strong></div>
+          <div class="av-adm-kv-row"><span>Batch Gross Amount</span><strong class="mono">$${totalAmount.toFixed(2)} USDT</strong></div>
+          <div class="av-adm-kv-row"><span>Network Fees</span><span class="mono">$${totalFee.toFixed(2)} USDT</span></div>
+          <div class="av-adm-kv-row"><span>Net Disbursement</span><strong class="mono" style="color:#0052FF;">$${netOut.toFixed(2)} USDT</strong></div>
+          <button type="button" class="btn-primary" style="width:100%; margin-top:8px; padding:10px; border-radius:10px; font-weight:700;" onclick="App.approveSelectedWithdrawalsBatch()">
+            Approve Selected Batch (${checkedRows.length})
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    const row = all.find(w => String(w.id) === String(this.state.selectedWithdrawalId)) || all[0];
+    if (!row) {
+      box.innerHTML = `<div style="font-size:12px; color:#6B7280;">No withdrawal records loaded.</div>`;
+      return;
+    }
+
+    const shortId = this.escapeHtml(row.short_id || row.id || 'WIT-0000');
+    const addr = String(row.destination_address || '');
+    const boundStatus = String(row.bound_status || 'UNBOUND').toUpperCase();
+    const boundBadge = boundStatus === 'ADDRESS_BOUND_VERIFIED'
+      ? `<span class="av-adm-val-badge verified">Address Bound &amp; Verified</span>`
+      : (boundStatus === 'BOUND'
+        ? `<span class="av-adm-val-badge bound">Bound</span>`
+        : `<span class="av-adm-val-badge unbound">Unbound</span>`);
+
+    const isPending = ['PENDING', 'REQUESTED', 'PENDING_REVIEW'].includes(String(row.status || '').toUpperCase());
+    box.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <div class="av-adm-kv-row"><span>Withdrawal ID</span><strong class="mono">${shortId}</strong></div>
+        <div class="av-adm-kv-row"><span>User</span><strong>${this.escapeHtml(row.full_name || row.email || 'User')}</strong></div>
+        <div class="av-adm-kv-row"><span>Asset / Network</span><strong>${Number(row.amount || 0).toFixed(2)} ${this.escapeHtml(row.asset || 'USDT')} (${this.escapeHtml(row.network || 'TRC20')})</strong></div>
+        <div class="av-adm-kv-row"><span>Fee / Net</span><span class="mono">$${Number(row.fee || 1).toFixed(2)} / $${Number(row.net_amount || row.amount || 0).toFixed(2)}</span></div>
+        <div class="av-adm-kv-row"><span>Validation</span>${boundBadge}</div>
+        <div style="margin-top:8px; background:#F8FAFC; border:1px solid #E5E7EB; border-radius:9px; padding:8px 10px;">
+          <div style="font-size:11px; font-weight:700; color:#6B7280; margin-bottom:3px;">Destination Address</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+            <code style="font-size:11px; word-break:break-all; color:#111827;">${this.escapeHtml(addr || '—')}</code>
+            ${addr ? `<button type="button" class="av-adm-btn-chip soft-blue" style="min-height:24px; padding:2px 8px; font-size:10.5px;" onclick="App.copyText('${this.escapeJsStr(addr)}', 'Destination copied!')">Copy</button>` : ''}
+          </div>
+        </div>
+        ${isPending ? `
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+            <button type="button" class="av-adm-btn-chip green" style="padding:9px; font-weight:800;" onclick="App.reviewWithdrawal('${this.escapeJsStr(row.id)}', 'APPROVE')">Approve Payout</button>
+            <button type="button" class="av-adm-btn-chip danger" style="padding:9px; font-weight:800;" onclick="App.reviewWithdrawal('${this.escapeJsStr(row.id)}', 'REJECT')">Reject</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  },
+
+  async approveSelectedWithdrawalsBatch() {
+    const selectedIds = Array.isArray(this.state.selectedWithdrawalIds) ? [...this.state.selectedWithdrawalIds] : [];
+    const all = Array.isArray(this.state.adminWithdrawals) ? this.state.adminWithdrawals : [];
+    const targets = all.filter(w => selectedIds.includes(String(w.id)) && ['PENDING', 'REQUESTED', 'PENDING_REVIEW'].includes(String(w.status || '').toUpperCase()));
+    if (!targets.length) {
+      this.toast('Select at least one pending payout to approve in batch.', 'warning');
+      return;
+    }
+    if (!confirm(`Approve ${targets.length} selected withdrawal payouts now?`)) return;
+    let okCount = 0;
+    for (const item of targets) {
+      const actionKey = `batch_w_${item.id}_${Date.now()}`;
+      const res = await this.api('/admin/withdrawals.php', 'POST', {
+        withdrawal_id: item.id,
+        action: 'APPROVE',
+        reason: 'Batch Payout Mode approval',
+        idempotency_key: actionKey
+      });
+      if (res.success) okCount++;
+    }
+    this.state.selectedWithdrawalIds = [];
+    this.toast(`Batch payout finished: ${okCount} of ${targets.length} withdrawals approved.`, okCount > 0 ? 'success' : 'error');
+    await this.loadAdminWithdrawals();
+    this.loadAdminData();
   },
 
   filterAdminWithdrawals() {
@@ -6713,49 +7417,82 @@ const App = {
     if (!container) return;
     const all = Array.isArray(this.state.adminWithdrawals) ? this.state.adminWithdrawals : [];
     const q = (document.getElementById('adm-with-search')?.value || '').trim().toLowerCase();
-    const list = q ? all.filter(w =>
-      String(w.email || '').toLowerCase().includes(q) ||
-      String(w.destination_address || '').toLowerCase().includes(q) ||
-      String(w.network || '').toLowerCase().includes(q)
-    ) : all;
+    const netFilter = (document.getElementById('adm-with-network-filter')?.value || 'ALL').toUpperCase();
+    const valFilter = (document.getElementById('adm-with-validation-filter')?.value || 'ALL').toUpperCase();
+    const selectedIds = new Set(Array.isArray(this.state.selectedWithdrawalIds) ? this.state.selectedWithdrawalIds : []);
+
+    const list = all.filter(w => {
+      const matchQuery = !q ||
+        String(w.email || '').toLowerCase().includes(q) ||
+        String(w.full_name || '').toLowerCase().includes(q) ||
+        String(w.short_id || w.id || '').toLowerCase().includes(q) ||
+        String(w.destination_address || '').toLowerCase().includes(q) ||
+        String(w.network || '').toLowerCase().includes(q);
+      const matchNet = netFilter === 'ALL' || String(w.network || '').toUpperCase() === netFilter;
+      const matchVal = valFilter === 'ALL' || String(w.bound_status || 'UNBOUND').toUpperCase() === valFilter;
+      return matchQuery && matchNet && matchVal;
+    });
 
     if (!list.length) {
-      container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#6B7280;">No withdrawals pending review.</td></tr>`;
+      container.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:#6B7280;">No matching withdrawal requests found.</td></tr>`;
       return;
     }
 
     container.innerHTML = list.map(w => {
       const status = (w.status || 'PENDING').toUpperCase();
-      const isPending = status === 'PENDING' || status === 'REQUESTED';
+      const isPending = status === 'PENDING' || status === 'REQUESTED' || status === 'PENDING_REVIEW';
       const isApproved = status === 'COMPLETED' || status === 'APPROVED';
-      const isRejected = status === 'REJECTED' || status === 'DECLINED';
-      const badgeClass = isApproved ? 'badge-positive' : (isRejected ? 'badge-danger' : 'badge-warning');
-      const badgeText = isApproved ? 'Approved' : (isRejected ? 'Rejected' : 'Pending Review');
       const destAddr = w.destination_address || '';
       const shortAddr = destAddr.length > 14 ? `${destAddr.substring(0, 6)}...${destAddr.substring(destAddr.length - 6)}` : (destAddr || '—');
+      const shortId = w.short_id || ('WIT-' + String(w.id || '').slice(-4).toUpperCase());
+      const reqDate = w.created_at ? new Date(String(w.created_at).replace(' ', 'T') + (String(w.created_at).includes('Z') ? '' : 'Z')).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent';
+      const boundStatus = String(w.bound_status || 'UNBOUND').toUpperCase();
+      const valBadge = boundStatus === 'ADDRESS_BOUND_VERIFIED'
+        ? `<span class="av-adm-val-badge verified">Address Bound &amp; Verified</span>`
+        : (boundStatus === 'BOUND'
+          ? `<span class="av-adm-val-badge bound">Bound</span>`
+          : `<span class="av-adm-val-badge unbound">Unbound</span>`);
+      const isSelected = String(w.id) === String(this.state.selectedWithdrawalId);
+      const isChecked = selectedIds.has(String(w.id));
+      const initials = String(w.full_name || w.email || 'U').slice(0, 2).toUpperCase();
 
       return `
-        <tr>
-          <td data-label="User"><strong>${this.escapeHtml(w.email || 'User')}</strong></td>
-          <td data-label="Amount"><strong style="color:#111827; font-family:var(--font-mono);">${Number(w.amount || 0).toFixed(2)} ${this.escapeHtml(w.asset || 'USDT')}</strong></td>
-          <td data-label="Network"><span class="badge" style="background:#EFF4FF; color:#0052FF; border:1px solid #DBEAFE;">${this.escapeHtml(w.network || 'TRC20')}</span></td>
-          <td data-label="Destination">
-            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              <code style="font-family:var(--font-mono); font-size:11px; color:#111827; background:#F3F4F6; padding:2px 6px; border-radius:6px;" title="${this.escapeHtml(destAddr)}">${this.escapeHtml(shortAddr)}</code>
-              ${destAddr ? `<button type="button" class="av-adm-btn-chip soft-blue" style="min-height:26px; padding:2px 8px; font-size:10.5px;" onclick="App.copyText('${destAddr}', 'Crypto address copied!')">Copy</button>` : ''}
+        <tr class="${isSelected ? 'av-adm-row-selected' : ''}" style="cursor:pointer;" onclick="App.selectAdminWithdrawal('${this.escapeJsStr(w.id)}')">
+          <td data-label="Select" onclick="event.stopPropagation()">
+            <input type="checkbox" ${isChecked ? 'checked' : ''} ${!isPending ? 'disabled' : ''} onchange="App.toggleAdminWithdrawalSelection('${this.escapeJsStr(w.id)}', this.checked)">
+          </td>
+          <td data-label="Withdrawal ID"><strong class="mono" style="color:#111827;">${this.escapeHtml(shortId)}</strong></td>
+          <td data-label="User">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="width:28px; height:28px; border-radius:50%; background:#EFF4FF; color:#0052FF; font-size:11px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">${this.escapeHtml(initials)}</span>
+              <div style="min-width:0;">
+                <strong style="display:block; font-size:12.5px; color:#111827;">${this.escapeHtml(w.full_name || w.email || 'User')}</strong>
+                <span style="font-size:11px; color:#6B7280;">${this.escapeHtml(w.email || '')}</span>
+              </div>
             </div>
           </td>
-          <td data-label="Status"><span class="badge ${badgeClass}">${badgeText}</span></td>
-          <td data-label="Action">
+          <td data-label="Requested" style="font-size:12px; color:#4B5563;">${this.escapeHtml(reqDate)}</td>
+          <td data-label="Asset / Network">
+            <strong class="mono" style="display:block; color:#111827;">${Number(w.amount || 0).toFixed(2)} ${this.escapeHtml(w.asset || 'USDT')}</strong>
+            <span style="font-size:11px; color:#6B7280;">${this.escapeHtml(w.network || 'TRC20')}</span>
+          </td>
+          <td data-label="Destination" onclick="event.stopPropagation()">
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              <code style="font-family:var(--font-mono); font-size:11px; color:#111827; background:#F3F4F6; padding:2px 6px; border-radius:6px;" title="${this.escapeHtml(destAddr)}">${this.escapeHtml(shortAddr)}</code>
+              ${destAddr ? `<button type="button" class="av-adm-btn-chip soft-blue" style="min-height:24px; padding:2px 8px; font-size:10.5px;" onclick="App.copyText('${this.escapeJsStr(destAddr)}', 'Crypto address copied!')">Copy</button>` : ''}
+            </div>
+          </td>
+          <td data-label="Validation">${valBadge}</td>
+          <td data-label="Action" onclick="event.stopPropagation()">
             ${isPending ? `
               <div class="av-adm-act-row">
-                <button class="av-adm-btn-chip green" data-alpha-action="admin-withdrawal:${w.id}:APPROVE" onclick="App.reviewWithdrawal('${w.id}', 'APPROVE')">Approve</button>
-                <button class="av-adm-btn-chip danger" data-alpha-action="admin-withdrawal:${w.id}:REJECT" onclick="App.reviewWithdrawal('${w.id}', 'REJECT')">Reject</button>
+                <button class="av-adm-btn-chip green" data-alpha-action="admin-withdrawal:${this.escapeHtml(w.id)}:APPROVE" onclick="App.reviewWithdrawal('${this.escapeJsStr(w.id)}', 'APPROVE')">Approve Payout</button>
+                <button class="av-adm-btn-chip danger" data-alpha-action="admin-withdrawal:${this.escapeHtml(w.id)}:REJECT" onclick="App.reviewWithdrawal('${this.escapeJsStr(w.id)}', 'REJECT')">Reject</button>
               </div>
             ` : (isApproved ? `
               <div class="av-adm-act-row" style="align-items:center;">
                 <span style="color:#059669; font-weight:700; font-size:12px;">Processed</span>
-                <button class="av-adm-btn-chip danger" style="min-height:28px; padding:3px 8px; font-size:11px;" data-alpha-action="admin-withdrawal:${w.id}:REJECT" onclick="App.reviewWithdrawal('${w.id}', 'REJECT')" title="Decline and refund to user">Reject</button>
+                <button class="av-adm-btn-chip danger" style="min-height:26px; padding:3px 8px; font-size:11px;" data-alpha-action="admin-withdrawal:${this.escapeHtml(w.id)}:REJECT" onclick="App.reviewWithdrawal('${this.escapeJsStr(w.id)}', 'REJECT')" title="Decline and refund to user">Reject</button>
               </div>
             ` : `<span style="color:#DC2626; font-weight:700; font-size:12px;">Rejected</span>`)}
           </td>
@@ -6830,7 +7567,113 @@ const App = {
     const res = await this.api('/admin/deposits.php');
     const deposits = (res.success && (res.data?.deposits || (Array.isArray(res.data) ? res.data : []))) || [];
     this.state.adminDeposits = deposits;
+    this.state.adminDepositSummary = res.data?.summary || null;
+    if (!this.state.adminDepositNetFilter) this.state.adminDepositNetFilter = 'ALL';
+    if (!this.state.selectedDepositId && deposits.length) {
+      this.state.selectedDepositId = deposits[0].id;
+    }
+    this.renderDepositKpis();
     this.filterAdminDeposits();
+    this.renderDepositInspector();
+  },
+
+  renderDepositKpis() {
+    const summary = this.state.adminDepositSummary;
+    const all = Array.isArray(this.state.adminDeposits) ? this.state.adminDeposits : [];
+    const totalAmt = summary?.total_deposits_usdt ?? all.filter(d => ['COMPLETED', 'APPROVED', 'CONFIRMED'].includes(String(d.status || '').toUpperCase())).reduce((s, d) => s + Number(d.amount || 0), 0);
+    const pendingList = all.filter(d => ['PENDING', 'REQUESTED', 'PENDING_REVIEW'].includes(String(d.status || '').toUpperCase()));
+    const pendingCount = summary?.pending_count ?? pendingList.length;
+    const pendingAmt = summary?.pending_amount_usdt ?? pendingList.reduce((s, d) => s + Number(d.amount || 0), 0);
+    const nets = summary?.active_networks || ['TRC20', 'BEP20', 'ERC20'];
+
+    const elTotal = document.getElementById('adm-dep-kpi-total');
+    const elPend = document.getElementById('adm-dep-kpi-pending');
+    const elPendAmt = document.getElementById('adm-dep-kpi-pending-amt');
+    const elChains = document.getElementById('adm-dep-kpi-chains');
+    const elChainsList = document.getElementById('adm-dep-kpi-chains-list');
+
+    if (elTotal) elTotal.textContent = `$${Number(totalAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`;
+    if (elPend) elPend.textContent = `${pendingCount} Transaction${pendingCount === 1 ? '' : 's'}`;
+    if (elPendAmt) elPendAmt.textContent = `$${Number(pendingAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Awaiting Review`;
+    if (elChains) elChains.textContent = `${nets.length || 3} Chains Active`;
+    if (elChainsList) elChainsList.textContent = nets.join(', ');
+  },
+
+  setAdminDepositNetworkFilter(net = 'ALL', btn) {
+    this.state.adminDepositNetFilter = String(net || 'ALL').toUpperCase();
+    document.querySelectorAll('#adm-sec-deposits .av-adm-net-tab').forEach(b => {
+      b.classList.toggle('active', b === btn || b.getAttribute('data-dep-net') === this.state.adminDepositNetFilter);
+    });
+    this.filterAdminDeposits();
+  },
+
+  selectAdminDeposit(id) {
+    this.state.selectedDepositId = String(id);
+    this.filterAdminDeposits();
+    this.renderDepositInspector();
+  },
+
+  renderDepositInspector() {
+    const box = document.getElementById('adm-dep-inspector-body');
+    if (!box) return;
+    const all = Array.isArray(this.state.adminDeposits) ? this.state.adminDeposits : [];
+    const d = all.find(x => String(x.id) === String(this.state.selectedDepositId)) || all[0];
+    if (!d) {
+      box.innerHTML = `<div style="color:#6B7280;">No deposit records available to inspect.</div>`;
+      return;
+    }
+
+    const txHash = String(d.tx_hash || d.deposit_address || 'Direct Transfer');
+    const shortTx = txHash.length > 16 ? `${txHash.substring(0, 6)}...${txHash.substring(txHash.length - 5)}` : txHash;
+    const status = String(d.status || 'PENDING').toUpperCase();
+    const isPending = status === 'PENDING' || status === 'REQUESTED' || status === 'PENDING_REVIEW';
+    const isCompleted = status === 'COMPLETED' || status === 'APPROVED' || status === 'CONFIRMED';
+
+    const safeProofUrl = this.safeMediaUrl(d.proof_url);
+
+    box.innerHTML = `
+      <div class="av-adm-kv-row">
+        <span>Txn Hash</span>
+        <span style="display:inline-flex; align-items:center; gap:6px;">
+          <code class="mono" style="background:#F3F4F6; padding:2px 7px; border-radius:6px; color:#111827;">${this.escapeHtml(shortTx)}</code>
+          <button type="button" class="av-adm-btn-chip soft-blue" style="min-height:24px; padding:2px 7px; font-size:10.5px;" onclick="App.copyText('${this.escapeJsStr(txHash)}', 'TXN Hash copied!')">Copy</button>
+        </span>
+      </div>
+      <div class="av-adm-kv-row">
+        <span>User</span>
+        <strong>${this.escapeHtml(d.full_name || d.email || 'User')} ${d.numeric_uid ? `(#${this.escapeHtml(d.numeric_uid)})` : ''}</strong>
+      </div>
+      <div class="av-adm-kv-row"><span>Network</span><strong>${this.escapeHtml(d.network || 'TRC20')}</strong></div>
+      <div class="av-adm-kv-row"><span>Amount</span><strong class="mono">${Number(d.amount || 0).toFixed(2)} ${this.escapeHtml(d.asset || 'USDT')}</strong></div>
+      <div class="av-adm-kv-row">
+        <span>Verification</span>
+        <strong style="color:${txHash !== 'Direct Transfer' ? '#059669' : '#D97706'};">${txHash !== 'Direct Transfer' ? 'TXN Reference Submitted' : 'Manual Vault Deposit'}</strong>
+      </div>
+
+      <div class="av-adm-receipt-box">
+        <div style="font-size:11.5px; font-weight:700; color:#4B5563; margin-bottom:8px;">Document Preview &bull; ${this.escapeHtml(d.proof_label || 'receipt.png')}</div>
+        <div class="av-adm-receipt-paper">
+          ${safeProofUrl ? `<img src="${this.escapeHtml(safeProofUrl)}" alt="Deposit Proof Receipt" style="width:100%; border-radius:6px; max-height:160px; object-fit:contain;">` : `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px dashed #E5E7EB; padding-bottom:6px; margin-bottom:6px;">
+              <strong style="font-size:12px; color:#111827;">DEPOSIT RECEIPT</strong>
+              <span class="mono" style="font-size:11px; color:#0052FF; font-weight:700;">${this.escapeHtml(d.short_id || 'DEP')}</span>
+            </div>
+            <div style="font-size:11px; color:#4B5563; display:flex; flex-direction:column; gap:4px;">
+              <div style="display:flex; justify-content:space-between;"><span>Amount:</span><strong class="mono" style="color:#111827;">${Number(d.amount || 0).toFixed(2)} USDT</strong></div>
+              <div style="display:flex; justify-content:space-between;"><span>Chain:</span><strong>${this.escapeHtml(d.network || 'TRC20')}</strong></div>
+              <div style="display:flex; justify-content:space-between;"><span>Vault:</span><span class="mono">${this.escapeHtml((d.deposit_address || '').slice(0, 12) || 'Configured')}</span></div>
+            </div>
+          `}
+        </div>
+      </div>
+
+      ${isPending ? `
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <button type="button" class="av-adm-btn-chip green" style="width:100%; padding:10px; font-size:13.5px; font-weight:800;" data-alpha-action="admin-deposit:${this.escapeHtml(d.id)}:APPROVE" onclick="App.reviewDeposit('${this.escapeJsStr(d.id)}', 'APPROVE')">Approve Deposit</button>
+          <button type="button" class="av-adm-btn-chip danger" style="width:100%; padding:10px; font-size:13.5px; font-weight:800;" data-alpha-action="admin-deposit:${this.escapeHtml(d.id)}:REJECT" onclick="App.reviewDeposit('${this.escapeJsStr(d.id)}', 'REJECT')">Reject Deposit</button>
+        </div>
+      ` : `<div style="text-align:center; padding:8px; border-radius:10px; font-weight:700; font-size:12.5px; background:${isCompleted ? '#ECFDF5' : '#FEF2F2'}; color:${isCompleted ? '#059669' : '#DC2626'};">${isCompleted ? 'Credited to User Spot Balance' : 'Deposit Rejected'}</div>`}
+    `;
   },
 
   filterAdminDeposits() {
@@ -6838,44 +7681,64 @@ const App = {
     if (!container) return;
     const all = Array.isArray(this.state.adminDeposits) ? this.state.adminDeposits : [];
     const q = (document.getElementById('adm-dep-search')?.value || '').trim().toLowerCase();
-    const list = q ? all.filter(d =>
-      String(d.email || '').toLowerCase().includes(q) ||
-      String(d.tx_hash || '').toLowerCase().includes(q) ||
-      String(d.deposit_address || '').toLowerCase().includes(q) ||
-      String(d.network || '').toLowerCase().includes(q)
-    ) : all;
+    const netFilter = String(this.state.adminDepositNetFilter || 'ALL').toUpperCase();
+
+    const list = all.filter(d => {
+      const matchNet = netFilter === 'ALL' || String(d.network || '').toUpperCase() === netFilter;
+      const matchQuery = !q ||
+        String(d.email || '').toLowerCase().includes(q) ||
+        String(d.full_name || '').toLowerCase().includes(q) ||
+        String(d.short_id || d.id || '').toLowerCase().includes(q) ||
+        String(d.tx_hash || '').toLowerCase().includes(q) ||
+        String(d.deposit_address || '').toLowerCase().includes(q) ||
+        String(d.network || '').toLowerCase().includes(q);
+      return matchNet && matchQuery;
+    });
 
     if (!list.length) {
-      container.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#6B7280;">No recent deposits.</td></tr>`;
+      container.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:#6B7280;">No matching deposits found.</td></tr>`;
       return;
     }
 
     container.innerHTML = list.map(d => {
-      const isPending = (d.status || 'PENDING') === 'PENDING';
-      const isCompleted = d.status === 'COMPLETED';
-      const isRejected = d.status === 'REJECTED';
+      const status = String(d.status || 'PENDING').toUpperCase();
+      const isPending = status === 'PENDING' || status === 'REQUESTED' || status === 'PENDING_REVIEW';
+      const isCompleted = status === 'COMPLETED' || status === 'APPROVED' || status === 'CONFIRMED';
+      const isRejected = status === 'REJECTED' || status === 'DECLINED';
       const badgeClass = isCompleted ? 'badge-positive' : (isRejected ? 'badge-danger' : 'badge-warning');
       const badgeText = isCompleted ? 'Approved' : (isRejected ? 'Rejected' : 'Pending');
       const senderInfo = d.tx_hash || d.deposit_address || 'Direct Transfer';
-      const shortSender = senderInfo.length > 16 ? `${senderInfo.substring(0, 8)}...${senderInfo.substring(senderInfo.length - 6)}` : senderInfo;
+      const shortSender = senderInfo.length > 14 ? `${senderInfo.substring(0, 6)}...${senderInfo.substring(senderInfo.length - 4)}` : senderInfo;
+      const shortId = d.short_id || ('DEP-' + String(d.id || '').slice(-4).toUpperCase());
+      const initials = String(d.full_name || d.email || 'U').slice(0, 2).toUpperCase();
+      const isSelected = String(d.id) === String(this.state.selectedDepositId);
 
       return `
-        <tr>
-          <td data-label="User"><strong>${this.escapeHtml(d.email || 'User')}</strong></td>
-          <td data-label="Amount"><strong style="color:#059669; font-family:var(--font-mono);">${d.amount} ${this.escapeHtml(d.asset)}</strong></td>
-          <td data-label="Network"><span class="badge" style="background:#EFF4FF; color:#0052FF; border:1px solid #DBEAFE;">${this.escapeHtml(d.network)}</span></td>
-          <td data-label="Sender / TXID">
-            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              <code style="font-size:11px; word-break:break-all; color:#111827; background:#F3F4F6; padding:2px 6px; border-radius:6px;" title="${this.escapeHtml(senderInfo)}">${this.escapeHtml(shortSender)}</code>
-              <button type="button" class="av-adm-btn-chip soft-blue" style="min-height:26px; padding:2px 8px; font-size:10.5px;" onclick="App.copyText('${senderInfo}', 'Address/TXID copied!')">Copy</button>
+        <tr class="${isSelected ? 'av-adm-row-selected' : ''}" style="cursor:pointer;" onclick="App.selectAdminDeposit('${this.escapeJsStr(d.id)}')">
+          <td data-label="Txn Hash / ID">
+            <code class="mono" style="display:block; font-size:11.5px; color:#111827;" title="${this.escapeHtml(senderInfo)}">${this.escapeHtml(shortSender)}</code>
+            <span style="font-size:11px; color:#6B7280;">${this.escapeHtml(shortId)}</span>
+          </td>
+          <td data-label="User">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="width:28px; height:28px; border-radius:50%; background:#EFF4FF; color:#0052FF; font-size:11px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">${this.escapeHtml(initials)}</span>
+              <div style="min-width:0;">
+                <strong style="display:block; font-size:12.5px; color:#111827;">${this.escapeHtml(d.full_name || d.email || 'User')}</strong>
+                <span style="font-size:11px; color:#6B7280;">${d.numeric_uid ? `#${this.escapeHtml(d.numeric_uid)}` : this.escapeHtml(d.email || '')}</span>
+              </div>
             </div>
           </td>
+          <td data-label="Network / Chain"><span class="badge" style="background:#EFF4FF; color:#0052FF; border:1px solid #DBEAFE;">${this.escapeHtml(d.network || 'TRC20')}</span></td>
+          <td data-label="Amount"><strong style="color:#111827; font-family:var(--font-mono);">${Number(d.amount || 0).toFixed(2)} ${this.escapeHtml(d.asset || 'USDT')}</strong></td>
+          <td data-label="Proof" onclick="event.stopPropagation()">
+            <button type="button" class="av-adm-btn-chip soft-blue" style="min-height:26px; padding:2px 8px; font-size:11px;" onclick="App.selectAdminDeposit('${this.escapeJsStr(d.id)}')">Preview</button>
+          </td>
           <td data-label="Status"><span class="badge ${badgeClass}">${badgeText}</span></td>
-          <td data-label="Action">
+          <td data-label="Action" onclick="event.stopPropagation()">
             ${isPending ? `
               <div class="av-adm-act-row">
-                <button class="av-adm-btn-chip green" data-alpha-action="admin-deposit:${d.id}:APPROVE" onclick="App.reviewDeposit('${d.id}', 'APPROVE')">Approve</button>
-                <button class="av-adm-btn-chip danger" data-alpha-action="admin-deposit:${d.id}:REJECT" onclick="App.reviewDeposit('${d.id}', 'REJECT')">Reject</button>
+                <button class="av-adm-btn-chip green" data-alpha-action="admin-deposit:${this.escapeHtml(d.id)}:APPROVE" onclick="App.reviewDeposit('${this.escapeJsStr(d.id)}', 'APPROVE')">Approve</button>
+                <button class="av-adm-btn-chip danger" data-alpha-action="admin-deposit:${this.escapeHtml(d.id)}:REJECT" onclick="App.reviewDeposit('${this.escapeJsStr(d.id)}', 'REJECT')">Reject</button>
               </div>
             ` : (isCompleted ? `<span style="color:#059669; font-size:12px; font-weight:700;">Credited</span>` : `<span style="color:#DC2626; font-size:12px; font-weight:700;">Rejected</span>`)}
           </td>

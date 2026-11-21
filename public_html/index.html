@@ -3466,7 +3466,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261121_v117_security_hardening">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261121_v119_wallet_transfer_anim">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -3793,8 +3793,19 @@ window.gtranslateSettings = {
         </button>
       </div>
 
+      <!-- Download App CTA (Matches Reference Sidebar) -->
+      <div class="av-drawer-download-wrap">
+        <button type="button" id="drawer-download-app-btn" class="av-drawer-download-cta" onclick="App.toggleSideDrawer(false); App.openAppView('download')">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24">
+            <rect x="6" y="2" width="12" height="20" rx="2.5"></rect>
+            <line x1="10" y1="18" x2="14" y2="18"></line>
+          </svg>
+          <span>Download App</span>
+        </button>
+      </div>
+
       <!-- Signed-in Logout + Disclaimer (Matches 003930) -->
-      <div id="drawer-logout-wrap" style="display:none;margin-top:24px;">
+      <div id="drawer-logout-wrap" style="display:none;margin-top:20px;">
         <button type="button" onclick="App.toggleSideDrawer(false); App.confirmLogout()" style="width:100%;height:46px;border-radius:999px;border:none;background:#F3F4F6;color:#111827;font-size:15px;font-weight:700;cursor:pointer;">Log out</button>
         <p style="font-size:11px;line-height:1.55;color:#9CA3AF;margin-top:16px;">
           PRIME X CAPITAL is committed to institutional asset custody and disciplined quantitative risk management. Digital asset prices fluctuate dynamically; always verify network parameters before initiating external transfers.
@@ -3831,11 +3842,11 @@ window.gtranslateSettings = {
               <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path>
             </svg>
           </button>
-          <a class="av-icon-btn" style="background:transparent;border:none;" href="/downloads/PRIME-X-CAPITAL-Android.apk" download="PRIME-X-CAPITAL-Android.apk" title="Download Android App" aria-label="Download Android App">
+          <button type="button" class="av-icon-btn" style="background:transparent;border:none;" onclick="App.openAppView('download')" title="Download Mobile App" aria-label="Download Mobile App">
             <svg width="22" height="22" fill="none" stroke="#111827" stroke-width="2.1" viewBox="0 0 24 24">
               <path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path>
             </svg>
-          </a>
+          </button>
         </div>
       </header>
 
@@ -3990,7 +4001,7 @@ window.gtranslateSettings = {
           <div class="av-home-clean-balance" id="home-user-card">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">
               <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#4B5563;font-weight:500;">
-                <span>My Wallet · My Assets</span>
+                <span>Total / Spot Balance</span>
                 <span id="home-user-kyc-badge" onclick="App.navigate('kyc')" style="cursor:pointer;font-size:10.5px;padding:2px 8px;border-radius:999px;font-weight:700;" class="badge badge-warning">Unverified</span>
               </div>
               <span style="font-size:11.5px;color:#6B7280;display:inline-flex;align-items:center;gap:4px;">
@@ -4010,6 +4021,12 @@ window.gtranslateSettings = {
                   <circle cx="12" cy="12" r="3"></circle>
                 </svg>
               </button>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:11.5px;">
+              <span style="background:#F8FAFC;border:1px solid #E5EAF3;padding:3px 9px;border-radius:999px;color:#4B5563;">Spot (Deposit + Bonuses): <strong id="home-spot-bal" class="mono" style="color:#111827;">$0.00</strong></span>
+              <span style="background:#EFF4FF;border:1px solid #DBEAFE;padding:3px 9px;border-radius:999px;color:#1E40AF;">Future (Trade/Signal): <strong id="home-future-bal" class="mono" style="color:#0052FF;">$0.00</strong></span>
+              <button type="button" onclick="App.navigate('transfer')" style="background:#0052FF;color:#FFFFFF;border:none;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;">⇄ Transfer</button>
             </div>
 
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
@@ -4295,11 +4312,11 @@ window.gtranslateSettings = {
             <div class="card" style="margin-bottom: 14px;">
               <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                 <div style="flex: 1; min-width: 0;">
-                  <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 8px; gap:6px; flex-wrap:wrap;">
                     <div style="display: flex; align-items: center; gap: 4px;">
-                      <span>Available:</span>
+                      <span>Future Available:</span>
                       <strong id="trade-avail-bal" style="color: #111827;">0 USDT</strong>
-                      <button onclick="App.openDepositModal()" style="color: #0052FF; background: none; border: none; font-weight: 800; font-size: 15px; cursor: pointer; padding: 0 2px;">+</button>
+                      <button onclick="App.navigate('transfer')" title="Transfer Spot to Future" style="color: #0052FF; background: #EFF4FF; border: 1px solid #DBEAFE; border-radius:999px; font-weight: 700; font-size: 10.5px; cursor: pointer; padding: 1px 7px;">⇄ Transfer</button>
                     </div>
                   </div>
 
@@ -4401,7 +4418,10 @@ window.gtranslateSettings = {
               <button type="button" class="av-stepper-btn" onclick="App.stepPerpQty(1)">+</button>
             </div>
 
-            <div style="font-size:11.5px;color:#6B7280;" id="perp-avail-bal">Available: 0</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#6B7280;">
+              <span id="perp-avail-bal">Future Available: 0</span>
+              <button type="button" onclick="App.navigate('transfer')" style="background:none;border:none;color:#0052FF;font-size:11.5px;font-weight:700;cursor:pointer;padding:0;">Transfer ⇄</button>
+            </div>
 
             <div class="av-pct-slider-dots" id="perp-pct-dots">
               <button type="button" class="av-pct-dot-btn active" onclick="App.setPerpPercent(0, this)"><span class="av-pct-dot-circle"></span><span>0%</span></button>
@@ -4530,8 +4550,8 @@ window.gtranslateSettings = {
             </div>
 
             <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#6B7280;">
-              <span>Available</span>
-              <span style="color:#111827;font-weight:700;"><span id="spot-avail-bal">0 USDT</span> <button type="button" onclick="App.openDepositModal()" style="background:#111827;color:#FFFFFF;border:none;border-radius:50%;width:16px;height:16px;font-size:12px;line-height:1;cursor:pointer;">+</button></span>
+              <span>Future Available</span>
+              <span style="color:#111827;font-weight:700;"><span id="spot-avail-bal">0 USDT</span> <button type="button" onclick="App.navigate('transfer')" title="Transfer Spot to Future" style="background:#EFF4FF;color:#0052FF;border:1px solid #DBEAFE;border-radius:999px;padding:1px 7px;font-size:10.5px;font-weight:700;cursor:pointer;">⇄</button></span>
             </div>
 
             <button type="button" id="spot-submit-btn" class="btn-xdx-buy btn-action-bull" style="height:46px;border-radius:999px;font-size:15px;" onclick="App.submitSpotAction()">Buy BTC</button>
@@ -4696,31 +4716,37 @@ window.gtranslateSettings = {
           <button type="button" id="wallet-kyc-pill" onclick="App.navigate('kyc')" style="background:rgba(255,255,255,0.16);border:1px solid rgba(255,255,255,0.38);color:#FFFFFF;padding:4px 11px;border-radius:999px;font-size:11.5px;font-weight:700;cursor:pointer;">Not Verified</button>
         </div>
 
-        <!-- 4 White Circular Quick Actions -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+        <!-- 5 White Circular Quick Actions -->
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center;">
           <div style="cursor:pointer;" onclick="App.openDepositModal()">
-            <div style="width:46px;height:46px;border-radius:50%;background:#FFFFFF;color:#111827;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
-              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><path d="M12 9v6M9 12h6"></path></svg>
+            <div style="width:44px;height:44px;border-radius:50%;background:#FFFFFF;color:#111827;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
+              <svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"></circle><path d="M12 9v6M9 12h6"></path></svg>
             </div>
-            <span style="font-size:11.5px;font-weight:600;color:#FFFFFF;">Deposit</span>
+            <span style="font-size:11px;font-weight:600;color:#FFFFFF;">Deposit</span>
           </div>
           <div style="cursor:pointer;" onclick="App.openWithdrawModal()">
-            <div style="width:46px;height:46px;border-radius:50%;background:#FFFFFF;color:#111827;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
-              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 19V5m-5 5l5-5 5 5"></path><path d="M5 19h14"></path></svg>
+            <div style="width:44px;height:44px;border-radius:50%;background:#FFFFFF;color:#111827;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
+              <svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 19V5m-5 5l5-5 5 5"></path><path d="M5 19h14"></path></svg>
             </div>
-            <span style="font-size:11.5px;font-weight:600;color:#FFFFFF;">Withdrawal</span>
+            <span style="font-size:11px;font-weight:600;color:#FFFFFF;">Withdrawal</span>
+          </div>
+          <div style="cursor:pointer;" onclick="App.navigate('transfer')">
+            <div style="width:44px;height:44px;border-radius:50%;background:#FFFFFF;color:#0052FF;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
+              <svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4l4 4"></path><path d="M17 8v12m0 0l4-4m-4 4l-4-4"></path></svg>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:#FFFFFF;">Transfer</span>
           </div>
           <div style="cursor:pointer;" onclick="App.navigate('copytrading')">
-            <div style="width:46px;height:46px;border-radius:50%;background:#FFFFFF;color:#111827;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
-              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M12 11v6M9 14h6"></path></svg>
+            <div style="width:44px;height:44px;border-radius:50%;background:#FFFFFF;color:#111827;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
+              <svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M12 11v6M9 14h6"></path></svg>
             </div>
-            <span style="font-size:11.5px;font-weight:600;color:#FFFFFF;">Copy Trading</span>
+            <span style="font-size:11px;font-weight:600;color:#FFFFFF;">Copy Trade</span>
           </div>
           <div style="cursor:pointer;" onclick="App.navigate('convert')">
-            <div style="width:46px;height:46px;border-radius:50%;background:#FFFFFF;color:#111827;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
-              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+            <div style="width:44px;height:44px;border-radius:50%;background:#FFFFFF;color:#111827;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
+              <svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
             </div>
-            <span style="font-size:11.5px;font-weight:600;color:#FFFFFF;">Convert</span>
+            <span style="font-size:11px;font-weight:600;color:#FFFFFF;">Convert</span>
           </div>
         </div>
 
@@ -4728,7 +4754,7 @@ window.gtranslateSettings = {
         <div class="wallet-subtabs-row">
           <button type="button" class="wallet-subtab-pill active" data-wsub="overview" onclick="App.switchWalletSubTab('overview', this)">Overview</button>
           <button type="button" class="wallet-subtab-pill" data-wsub="spot" onclick="App.switchWalletSubTab('spot', this)">Spot Wallet</button>
-          <button type="button" class="wallet-subtab-pill" data-wsub="futures" onclick="App.switchWalletSubTab('futures', this)">Futures Account</button>
+          <button type="button" class="wallet-subtab-pill" data-wsub="futures" onclick="App.switchWalletSubTab('futures', this)">Future Account</button>
           <button type="button" class="wallet-subtab-pill" data-wsub="earn" onclick="App.switchWalletSubTab('earn', this)">Earn</button>
         </div>
 
@@ -4737,7 +4763,7 @@ window.gtranslateSettings = {
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px;">
             <div>
               <div style="display:flex;align-items:center;gap:6px;">
-                <span style="font-size:17px;font-weight:800;color:#111827;">Wallet Balance</span>
+                <span style="font-size:17px;font-weight:800;color:#111827;">Total / Spot &amp; Future Balance</span>
                 <button onclick="App.toggleBalanceVisibility()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;" title="Toggle Balance">
                   <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -4745,7 +4771,7 @@ window.gtranslateSettings = {
                   </svg>
                 </button>
               </div>
-              <div id="wallet-refresh-time" style="font-size:11.5px;color:#6B7280;margin-top:2px;">Live Ledger Balance</div>
+              <div id="wallet-refresh-time" style="font-size:11.5px;color:#6B7280;margin-top:2px;">Deposit, Deposit Bonus &amp; Referral Bonus</div>
             </div>
             <button type="button" class="wallet-refresh-corner" onclick="App.refreshWalletData()">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
@@ -4753,31 +4779,62 @@ window.gtranslateSettings = {
             </button>
           </div>
 
-          <div style="background:#F8FAFC;border-radius:14px;padding:12px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:12px;">
-            <div>
-              <div style="font-size:11px;color:#6B7280;">Total</div>
+          <div style="background:#F8FAFC;border-radius:14px;padding:12px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:8px;">
+            <div id="wallet-cell-total" class="av-bal-card-cell">
+              <div style="font-size:11px;color:#6B7280;">Total Balance</div>
               <div id="wallet-total-balance" class="mono" style="font-size:15px;font-weight:800;color:#111827;margin-top:2px;">0.00</div>
               <div id="wallet-total-btc-equiv" style="display:none;">0.0000</div>
             </div>
-            <div>
-              <div style="font-size:11px;color:#6B7280;">Frozen</div>
-              <div class="mono" style="font-size:15px;font-weight:700;color:#F59E0B;margin-top:2px;">0.00 USDT</div>
+            <div id="wallet-cell-spot" class="av-bal-card-cell">
+              <div style="font-size:11px;color:#6B7280;">Spot Balance</div>
+              <div id="wallet-spot-total" class="mono" style="font-size:15px;font-weight:800;color:#00B87C;margin-top:2px;">$0.00</div>
+              <span id="bal-funding" style="display:none;">$0.00</span>
             </div>
-            <div>
-              <div style="font-size:11px;color:#6B7280;">Available</div>
-              <div id="bal-funding" class="mono" style="font-size:15px;font-weight:800;color:#00B87C;margin-top:2px;">$0.00</div>
+            <div id="wallet-cell-future" class="av-bal-card-cell">
+              <div style="font-size:11px;color:#6B7280;">Future Balance</div>
+              <div id="bal-trading" class="mono" style="font-size:15px;font-weight:800;color:#0052FF;margin-top:2px;">$0.00</div>
             </div>
           </div>
 
-          <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid #F1F5F9;">
-              <span style="color:#4B5563;font-weight:600;">Total · Ledger</span>
-              <strong id="bal-exchange" class="mono" style="color:#111827;">$0.00</strong>
+          <div id="wallet-flow-wrap" class="av-wallet-flow-wrap">
+            <div class="av-wallet-flow-labels">
+              <span>Spot <strong id="wallet-flow-spot-pct" class="mono" style="color:#059669;">50%</strong></span>
+              <span id="wallet-flow-status" style="color:#0052FF;font-weight:700;">Spot ⇄ Future Allocation</span>
+              <span>Future <strong id="wallet-flow-future-pct" class="mono" style="color:#0052FF;">50%</strong></span>
             </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 2px;">
-              <span style="color:#4B5563;font-weight:600;">Futures &amp; Trading</span>
-              <strong id="bal-trading" class="mono" style="color:#F59E0B;">$0.00</strong>
+            <div class="av-wallet-flow-track">
+              <div id="wallet-flow-spot-bar" class="av-wallet-flow-spot" style="width:50%;"></div>
+              <div id="wallet-flow-future-bar" class="av-wallet-flow-future" style="width:50%;"></div>
+              <div class="av-wallet-flow-pulse"></div>
             </div>
+          </div>
+
+          <div class="av-wallet-breakdown-grid">
+            <div class="av-wallet-stat-box">
+              <div style="font-size:11px;color:#6B7280;font-weight:600;">Deposit Balance</div>
+              <div id="bal-deposit-principal" class="mono" style="font-size:14.5px;font-weight:800;color:#111827;margin-top:2px;">$0.00</div>
+              <div style="font-size:10px;color:#059669;margin-top:2px;">Transferable to Future</div>
+            </div>
+            <div class="av-wallet-stat-box">
+              <div style="font-size:11px;color:#6B7280;font-weight:600;">Deposit Bonus</div>
+              <div id="bal-deposit-bonus" class="mono" style="font-size:14.5px;font-weight:800;color:#0052FF;margin-top:2px;">$0.00</div>
+              <div style="font-size:10px;color:#0052FF;margin-top:2px;">Transferable to Future</div>
+            </div>
+            <div class="av-wallet-stat-box locked">
+              <div style="font-size:11px;color:#92400E;font-weight:600;">Referral Bonus</div>
+              <div id="bal-referral-bonus" class="mono" style="font-size:14.5px;font-weight:800;color:#B45309;margin-top:2px;">$0.00</div>
+              <div style="font-size:10px;color:#B45309;margin-top:2px;">Spot Only · Locked</div>
+            </div>
+            <div class="av-wallet-stat-box future" style="cursor:pointer;" onclick="App.navigate('transfer')">
+              <div style="font-size:11px;color:#1E40AF;font-weight:600;">Transferable Spot</div>
+              <div id="bal-transferable-spot" class="mono" style="font-size:14.5px;font-weight:800;color:#0052FF;margin-top:2px;">$0.00</div>
+              <div style="font-size:10px;color:#0052FF;font-weight:700;margin-top:2px;">Move Spot → Future ›</div>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 2px 0;margin-top:8px;border-top:1px solid #F1F5F9;font-size:12px;">
+            <span style="color:#6B7280;font-weight:600;">Spot Exchange Sub-Ledger</span>
+            <strong id="bal-exchange" class="mono" style="color:#111827;">$0.00</strong>
           </div>
         </div>
       </div>
@@ -5886,39 +5943,137 @@ window.gtranslateSettings = {
             </div>
           </div>
 
-          <!-- Admin Tab: Withdrawals Desk (Matches Image 3 Payout Queue) -->
+          <!-- Admin Tab: Withdrawals Desk (Redesigned to Match Withdrawals Reference Mockup) -->
           <div id="adm-sec-withdrawals" class="admin-panel-sec" style="display:none;">
-            <div class="card" style="padding:0; overflow:hidden;">
-              <div class="av-adm-section-head">
-                <div>
-                  <h4>Withdrawals Queue</h4>
-                  <p style="margin:2px 0 0; font-size:12px; color:#6B7280;">Review payout requests, copy destination addresses, and authorize or decline disbursements.</p>
+            <div class="card" style="padding:14px 16px; margin-bottom:14px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:8px; flex:1 1 260px; min-width:0;">
+                  <input type="search" id="adm-with-search" placeholder="Search Withdrawal ID, user, wallet, or network..." style="flex:1 1 200px; min-width:0;" oninput="App.filterAdminWithdrawals()">
+                  <select id="adm-with-network-filter" onchange="App.filterAdminWithdrawals()" style="width:auto; min-width:110px;">
+                    <option value="ALL">All Chains</option>
+                    <option value="TRC20">TRC20</option>
+                    <option value="BEP20">BEP20</option>
+                    <option value="ERC20">ERC20</option>
+                  </select>
+                  <select id="adm-with-validation-filter" onchange="App.filterAdminWithdrawals()" style="width:auto; min-width:130px;">
+                    <option value="ALL">All Validation</option>
+                    <option value="ADDRESS_BOUND_VERIFIED">Bound &amp; Verified</option>
+                    <option value="BOUND">Bound Only</option>
+                    <option value="UNBOUND">Unbound</option>
+                  </select>
                 </div>
-                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex:1 1 220px; justify-content:flex-end; min-width:0; max-width:100%;">
-                  <input type="search" id="adm-with-search" placeholder="Search user, wallet, or network..." style="flex:1 1 160px; min-width:0; max-width:260px;" oninput="App.filterAdminWithdrawals()">
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                  <label style="display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:700; color:#111827; cursor:pointer;">
+                    <span>Batch Payout Mode</span>
+                    <span class="av-adm-switch">
+                      <input type="checkbox" id="adm-with-batch-toggle" onchange="App.toggleWithdrawBatchMode(this.checked)">
+                      <span class="av-adm-switch-track"></span>
+                    </span>
+                  </label>
                   <button class="btn-secondary" style="font-size:12px; padding:7px 12px;" onclick="App.loadAdminWithdrawals()">Refresh Payouts</button>
                 </div>
               </div>
-              <div class="table-responsive">
-                <table class="admin-table av-mobile-cards">
-                  <thead>
-                    <tr>
-                      <th>User</th>
-                      <th>Amount</th>
-                      <th>Network</th>
-                      <th>Destination</th>
-                      <th>Status</th>
-                      <th>Quick Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="adm-with-list"></tbody>
-                </table>
+            </div>
+
+            <!-- 3 KPI Summary Cards -->
+            <div class="av-adm-kpi-3">
+              <div class="av-adm-kpi-card">
+                <div class="av-adm-kpi-label">Pending Payouts</div>
+                <div id="adm-with-kpi-pending-count" class="av-adm-kpi-val">0</div>
+                <div id="adm-with-kpi-pending-amt" class="av-adm-kpi-sub">$0.00 USD equivalent</div>
               </div>
+              <div class="av-adm-kpi-card">
+                <div class="av-adm-kpi-label">Batch Ready</div>
+                <div id="adm-with-kpi-batch-count" class="av-adm-kpi-val">0 to Process</div>
+                <div id="adm-with-kpi-batch-amt" class="av-adm-kpi-sub">$0.00</div>
+              </div>
+              <div class="av-adm-kpi-card">
+                <div class="av-adm-kpi-label">Processed Today</div>
+                <div id="adm-with-kpi-today-amt" class="av-adm-kpi-val">$0.00 USD</div>
+                <div id="adm-with-kpi-today-cnt" class="av-adm-kpi-sub">0 approved today</div>
+              </div>
+            </div>
+
+            <div class="av-adm-with-redesign-split">
+              <!-- Left: Interactive Queue List -->
+              <div class="card" style="padding:0; overflow:hidden;">
+                <div class="av-adm-section-head">
+                  <div>
+                    <h4>Interactive queue list</h4>
+                    <p style="margin:2px 0 0; font-size:12px; color:#6B7280;">Review payout requests, verify user-bound wallets, and approve or decline disbursements.</p>
+                  </div>
+                </div>
+                <div class="table-responsive">
+                  <table class="admin-table av-mobile-cards">
+                    <thead>
+                      <tr>
+                        <th style="width:36px;"><input type="checkbox" id="adm-with-select-all" onchange="App.toggleAllWithdrawals(this.checked)" title="Select pending payouts"></th>
+                        <th>Withdrawal ID</th>
+                        <th>User</th>
+                        <th>Requested</th>
+                        <th>Asset / Network</th>
+                        <th>Destination Address</th>
+                        <th>Validation</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adm-with-list"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Right: Batch & Destination Preview Panel -->
+              <aside id="adm-with-inspector" class="av-adm-inspector-card">
+                <h4 style="margin:0 0 8px; font-size:15px; font-weight:800; color:#111827;">Batch &amp; Destination Preview</h4>
+                <div style="font-size:12.5px; font-weight:700; color:#374151; margin-bottom:4px;">Address Verification Rules</div>
+                <div style="font-size:12px; color:#6B7280; margin-bottom:8px;">Checks requested payout addresses against user-bound wallet records:</div>
+                <div class="av-adm-check-list">
+                  <div class="av-adm-check-item"><span style="color:#00B87C; font-weight:900;">✓</span><span>Destination matches user's saved withdrawal address</span></div>
+                  <div class="av-adm-check-item"><span style="color:#00B87C; font-weight:900;">✓</span><span>Network chain matches bound record (TRC20 / BEP20 / ERC20)</span></div>
+                  <div class="av-adm-check-item"><span style="color:#00B87C; font-weight:900;">✓</span><span>KYC tier &amp; withdrawal PIN verified before queue</span></div>
+                </div>
+                <div id="adm-with-preview-details" style="border-top:1px solid #EEF1F6; padding-top:12px;">
+                  <div style="font-size:12px; color:#6B7280;">Select a payout row or check multiple rows in Batch Mode to preview destination and fees.</div>
+                </div>
+              </aside>
             </div>
           </div>
 
-          <!-- Admin Tab: Deposits & Global Wallet Configuration (Matches Image 3) -->
+          <!-- Admin Tab: Deposits & Global Wallet Configuration (Redesigned to Match Deposits Reference Mockup) -->
           <div id="adm-sec-deposits" class="admin-panel-sec" style="display:none;">
+            <!-- Network Filter Tabs + Global Controls -->
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
+              <div class="av-adm-net-tabs" style="margin-bottom:0; flex:1 1 280px;">
+                <button type="button" class="av-adm-net-tab active" data-dep-net="ALL" onclick="App.setAdminDepositNetworkFilter('ALL', this)">All Networks</button>
+                <button type="button" class="av-adm-net-tab" data-dep-net="TRC20" onclick="App.setAdminDepositNetworkFilter('TRC20', this)">TRC20</button>
+                <button type="button" class="av-adm-net-tab" data-dep-net="BEP20" onclick="App.setAdminDepositNetworkFilter('BEP20', this)">BEP20</button>
+                <button type="button" class="av-adm-net-tab" data-dep-net="ERC20" onclick="App.setAdminDepositNetworkFilter('ERC20', this)">ERC20</button>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <input type="search" id="adm-dep-search" placeholder="Search user, DEP-ID, or TXID..." style="min-width:170px;" oninput="App.filterAdminDeposits()">
+                <button class="btn-secondary" style="font-size:12px; padding:7px 12px;" onclick="App.loadAdminDeposits()">Refresh</button>
+              </div>
+            </div>
+
+            <!-- 3 KPI Summary Cards -->
+            <div class="av-adm-kpi-3">
+              <div class="av-adm-kpi-card">
+                <div class="av-adm-kpi-label">Total Deposits</div>
+                <div id="adm-dep-kpi-total" class="av-adm-kpi-val">$0.00 USDT</div>
+                <div class="av-adm-kpi-sub"><span class="badge badge-positive" style="font-size:10.5px;">Verified Ledger</span></div>
+              </div>
+              <div class="av-adm-kpi-card">
+                <div class="av-adm-kpi-label">Pending Deposits</div>
+                <div id="adm-dep-kpi-pending" class="av-adm-kpi-val">0 Transactions</div>
+                <div class="av-adm-kpi-sub"><span id="adm-dep-kpi-pending-amt" class="badge badge-warning" style="font-size:10.5px;">$0.00 Awaiting Review</span></div>
+              </div>
+              <div class="av-adm-kpi-card">
+                <div class="av-adm-kpi-label">Network Activity</div>
+                <div id="adm-dep-kpi-chains" class="av-adm-kpi-val">3 Chains Active</div>
+                <div id="adm-dep-kpi-chains-list" class="av-adm-kpi-sub" style="color:#0052FF;">TRC20, BEP20, ERC20</div>
+              </div>
+            </div>
+
             <div class="av-adm-dep-mobile-tabs">
               <div class="av-adm-seg-tabs" style="width:100%;">
                 <button type="button" id="adm-dep-tab-queue" class="av-adm-seg-btn active" style="flex:1;" onclick="App.switchDepositMobileView('queue')">Transaction Queue</button>
@@ -5926,27 +6081,24 @@ window.gtranslateSettings = {
               </div>
             </div>
 
-            <div class="av-adm-dep-split">
+            <div class="av-adm-dep-redesign-split">
               <!-- Left Column: Active Incoming Deposits Queue -->
               <div id="adm-dep-queue-pane" class="card" style="padding:0; overflow:hidden;">
                 <div class="av-adm-section-head">
                   <div>
                     <h4>Active Deposits Queue</h4>
-                    <p style="margin:2px 0 0; font-size:12px; color:#6B7280;">Verify on-chain TXID submissions and credit user funding wallets.</p>
-                  </div>
-                  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex:1 1 200px; justify-content:flex-end; min-width:0; max-width:100%;">
-                    <input type="search" id="adm-dep-search" placeholder="Search user or TXID..." style="flex:1 1 150px; min-width:0; max-width:240px;" oninput="App.filterAdminDeposits()">
-                    <button class="btn-secondary" style="font-size:12px; padding:7px 12px;" onclick="App.loadAdminDeposits()">Refresh</button>
+                    <p style="margin:2px 0 0; font-size:12px; color:#6B7280;">Click a row to inspect proof receipt, verify on-chain TXN hash, and approve or reject.</p>
                   </div>
                 </div>
                 <div class="table-responsive">
                   <table class="admin-table av-mobile-cards">
                     <thead>
                       <tr>
+                        <th>Txn Hash / ID</th>
                         <th>User</th>
+                        <th>Network / Chain</th>
                         <th>Amount</th>
-                        <th>Network</th>
-                        <th>Sender Address / TXID</th>
+                        <th>Proof</th>
                         <th>Status</th>
                         <th>Quick Actions</th>
                       </tr>
@@ -5956,19 +6108,30 @@ window.gtranslateSettings = {
                 </div>
               </div>
 
-              <!-- Right Column: Global Wallet Configuration (Chain Status Cards) -->
-              <div id="adm-dep-wallet-pane" class="card" style="padding:16px;">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
-                  <div>
-                    <h4 style="margin:0 0 3px; font-size:15px; font-weight:800;">Global Wallet Configuration</h4>
-                    <span id="adm-deposit-status" style="font-size:11.5px; font-weight:700; color:var(--positive);">ON — Users can submit deposits</span>
+              <!-- Right Column: Verify Deposit Inspector + Global Wallet Configuration -->
+              <div style="display:flex; flex-direction:column; gap:14px;">
+                <div id="adm-dep-inspector" class="av-adm-inspector-card">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; font-size:16px; font-weight:800; color:#111827;">Verify Deposit &amp; Proof Receipt</h4>
                   </div>
-                  <button id="adm-deposit-toggle" type="button" class="btn-secondary" style="padding:6px 11px; font-size:11.5px; font-weight:700;" data-enabled="1" onclick="App.toggleDeposits()">Turn OFF</button>
+                  <div id="adm-dep-inspector-body" style="font-size:12.5px; color:#6B7280;">
+                    Select any deposit row from the queue to inspect its TXN hash, network verification status, and receipt preview.
+                  </div>
                 </div>
 
-                <div style="font-size:11.5px; font-weight:700; color:#6B7280; margin-bottom:8px;">Chain Status</div>
-                <div id="adm-dep-config-cards" class="av-adm-chain-cards mobile-swipe">
-                  <div style="text-align:center; padding:16px; color:#6B7280; font-size:12px;">Loading receiving vaults...</div>
+                <div id="adm-dep-wallet-pane" class="card" style="padding:16px;">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+                    <div>
+                      <h4 style="margin:0 0 3px; font-size:15px; font-weight:800;">Global Wallet Configuration</h4>
+                      <span id="adm-deposit-status" style="font-size:11.5px; font-weight:700; color:var(--positive);">ON — Users can submit deposits</span>
+                    </div>
+                    <button id="adm-deposit-toggle" type="button" class="btn-secondary" style="padding:6px 11px; font-size:11.5px; font-weight:700;" data-enabled="1" onclick="App.toggleDeposits()">Turn OFF</button>
+                  </div>
+
+                  <div style="font-size:11.5px; font-weight:700; color:#6B7280; margin-bottom:8px;">Chain Status</div>
+                  <div id="adm-dep-config-cards" class="av-adm-chain-cards mobile-swipe">
+                    <div style="text-align:center; padding:16px; color:#6B7280; font-size:12px;">Loading receiving vaults...</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -5999,9 +6162,9 @@ window.gtranslateSettings = {
                   <label class="form-label">Ledger Category</label>
                   <select id="adj-type" style="width:100%;">
                     <option value="DEPOSIT">Deposit — counts toward profit principal &amp; Total Deposits</option>
-                    <option value="REFERRAL_BONUS">Referral Bonus — excluded from profit principal</option>
-                    <option value="PROFIT">Profit — excluded from profit principal</option>
-                    <option value="OTHER">Other — excluded from profit principal</option>
+                    <option value="REFERRAL_BONUS">Referral Bonus — Spot only, cannot transfer to Future</option>
+                    <option value="PROFIT">Profit — Deposit Bonus / Yield bucket</option>
+                    <option value="OTHER">Deposit Bonus / Promo — transferable to Future</option>
                   </select>
                 </div>
 
@@ -6446,14 +6609,14 @@ window.gtranslateSettings = {
           <svg class="more-item-chevron" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </div>
 
-        <div class="more-menu-item" onclick="window.location.href='/downloads/PRIME-X-CAPITAL-Android.apk'">
+        <div class="more-menu-item" onclick="App.openAppView('download')">
           <div class="more-item-left">
             <div class="more-item-icon">
               <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path>
               </svg>
             </div>
-            <span class="more-item-title">Download Android App</span>
+            <span class="more-item-title">Download App (Android &amp; iOS)</span>
           </div>
           <svg class="more-item-chevron" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </div>
@@ -6534,6 +6697,247 @@ window.gtranslateSettings = {
       </div>
 
       <button class="btn-primary" style="width: 100%; padding: 14px; font-size: 15px; font-weight: 700; border-radius: 999px;" onclick="App.executeConvert()">Confirm Conversion</button>
+    </main>
+
+    <!-- VIEW 11B: TRANSFER (SPOT -> FUTURE BALANCE) -->
+    <main id="view-transfer" class="view-section" style="display: none; padding: 16px;">
+      <div class="av-transfer-shell">
+        <div class="view-back-bar">
+          <button class="btn-back-arrow" onclick="App.navigate('wallet')">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <span class="view-back-title">Transfer</span>
+        </div>
+
+        <div class="av-transfer-notice info">
+          <span style="font-size:16px; line-height:1;">⇄</span>
+          <div>
+            <strong>Spot to Future Transfer Policy:</strong> Only <strong>Deposit Balance</strong> and <strong>Deposit Bonus</strong> can be transferred from Spot to Future Balance for trading &amp; signals. <strong>Referral Bonus</strong> remains in Spot and cannot be transferred to Future.
+          </div>
+        </div>
+
+        <div id="trf-bridge-visual" class="av-trf-bridge">
+          <div class="av-trf-bridge-node">
+            <span style="font-size:10.5px; color:#6B7280; font-weight:700;">From</span>
+            <strong id="trf-bridge-from-label" style="font-size:12.5px; color:#111827;">Spot Wallet</strong>
+          </div>
+          <div class="av-trf-bridge-track">
+            <div class="av-trf-bridge-beam"></div>
+          </div>
+          <div class="av-trf-bridge-node right">
+            <span style="font-size:10.5px; color:#6B7280; font-weight:700;">To</span>
+            <strong id="trf-bridge-to-label" style="font-size:12.5px; color:#0052FF;">Future Wallet</strong>
+          </div>
+        </div>
+
+        <div id="trf-card-from" class="av-trf-card" style="background: #FFFFFF; border: 1px solid var(--border-subtle); border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow-sm);">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+            <span>From</span>
+            <span>Transferable Spot: <strong id="trf-view-avail-from" class="mono" style="color: #0052FF;">0.00 USDT</strong></span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <input type="number" id="trf-view-amount" placeholder="0.00" step="0.01" min="0" style="flex: 1; font-size: 24px; font-weight: 800; background: transparent; border: none; padding: 0; color: var(--text-primary); box-shadow: none;" oninput="App.calcTransferPagePreview()">
+            <select id="trf-view-from" onchange="App.onTransferDirectionChange('from')" style="width: 146px; padding: 8px 12px; font-weight: 700; border-radius: 10px;">
+              <option value="spot" selected>Spot Wallet</option>
+              <option value="trading">Future Wallet</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button type="button" class="pct-btn" onclick="App.setTransferPagePercent(25)">25%</button>
+            <button type="button" class="pct-btn" onclick="App.setTransferPagePercent(50)">50%</button>
+            <button type="button" class="pct-btn" onclick="App.setTransferPagePercent(75)">75%</button>
+            <button type="button" class="pct-btn" onclick="App.setTransferPagePercent(100)">MAX</button>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin: -6px 0 6px;">
+          <button type="button" id="trf-swap-btn" class="btn-swap-circle" onclick="App.swapTransferPageDirection()" title="Swap Wallets">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path d="M7 16V4m0 0L3 8m4-4l4 4"></path>
+              <path d="M17 8v12m0 0l4-4m-4 4l-4-4"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div id="trf-card-to" class="av-trf-card" style="background: #FFFFFF; border: 1px solid var(--border-subtle); border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: var(--shadow-sm);">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+            <span>To</span>
+            <span>Current Balance: <strong id="trf-view-avail-to" class="mono" style="color: var(--text-primary);">0.00 USDT</strong></span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <input type="text" id="trf-view-receive" placeholder="0.00" readonly style="flex: 1; font-size: 24px; font-weight: 800; background: transparent; border: none; padding: 0; color: var(--primary); box-shadow: none;">
+            <select id="trf-view-to" onchange="App.onTransferDirectionChange('to')" style="width: 146px; padding: 8px 12px; font-weight: 700; border-radius: 10px;">
+              <option value="trading" selected>Future Wallet</option>
+              <option value="spot">Spot Wallet</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="background:#FFFFFF; border:1px solid #EEF1F6; border-radius:14px; padding:12px 14px; margin-bottom:14px; display:flex; flex-direction:column; gap:7px; font-size:12.5px;">
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#6B7280;">Total Spot Balance</span>
+            <strong id="trf-view-spot-total" class="mono" style="color:#111827;">$0.00</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#6B7280;">Deposit + Deposit Bonus (Transferable)</span>
+            <strong id="trf-view-transferable" class="mono" style="color:#059669;">$0.00</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span style="color:#B45309;">Referral Bonus (Locked in Spot)</span>
+            <strong id="trf-view-referral-locked" class="mono" style="color:#B45309;">$0.00</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between; padding-top:6px; border-top:1px solid #F1F5F9;">
+            <span style="color:#111827; font-weight:700;">Future Balance After Transfer</span>
+            <strong id="trf-view-future-after" class="mono" style="color:#0052FF;">$0.00</strong>
+          </div>
+        </div>
+
+        <button type="button" id="btn-confirm-transfer-page" class="btn-primary" style="width: 100%; padding: 14px; font-size: 15px; font-weight: 700; border-radius: 999px;" onclick="App.submitTransferPage()">Confirm Transfer</button>
+      </div>
+    </main>
+
+    <!-- VIEW 11C: MOBILE APP DOWNLOAD (ANDROID APK & IOS IPA — Matches Download Mockup) -->
+    <main id="view-download" class="view-section" style="display: none;">
+      <div class="av-download-shell">
+        <div class="view-back-bar">
+          <button class="btn-back-arrow" onclick="App.navigate('home')">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <span class="view-back-title">Download Our App</span>
+        </div>
+
+        <div class="av-download-hero">
+          <h2>Get the PRIME X CAPITAL App</h2>
+          <p>Access your digital assets, trading signals, and instant transfers anytime, anywhere.</p>
+        </div>
+
+        <div class="av-download-grid">
+          <!-- Android Card -->
+          <div class="av-download-card">
+            <div class="av-download-card-title">Android</div>
+            <button type="button" class="av-store-badge-btn" onclick="App.downloadMobileApp('android')" aria-label="Get it on Google Play - Download Android APK">
+              <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#00E676" d="M3.6 2.3L14.2 12 3.6 21.7c-.4-.3-.6-.8-.6-1.4V3.7c0-.6.2-1.1.6-1.4z"/>
+                <path fill="#00B0FF" d="M14.2 12L3.6 2.3c.3-.2.8-.2 1.3.1l12.4 7.1-3.1 2.5z"/>
+                <path fill="#FF3D00" d="M17.3 14.5L4.9 21.6c-.5.3-1 .3-1.3.1L14.2 12l3.1 2.5z"/>
+                <path fill="#FFC400" d="M20.4 12.8l-3.1 1.7-3.1-2.5 3.1-2.5 3.1 1.7c.8.5.8 1.2 0 1.6z"/>
+              </svg>
+              <span style="text-align:left; line-height:1.15;">
+                <span style="display:block; font-size:9px; text-transform:uppercase; letter-spacing:0.06em; opacity:0.85;">GET IT ON</span>
+                <span style="display:block; font-size:16px; font-weight:800;">Google Play</span>
+              </span>
+            </button>
+
+            <button type="button" class="av-download-primary-btn" onclick="App.downloadMobileApp('android')">
+              Download Android APK
+            </button>
+            <div class="av-download-version">Version 3.4.1 (APK) &bull; Direct Signed Package</div>
+
+            <div class="av-download-preview-pair">
+              <div class="av-phone-mockup">
+                <div class="av-phone-notch"></div>
+                <div style="font-size:10px; font-weight:800; color:#111827;">Dashboard</div>
+                <div class="mono" style="font-size:13px; font-weight:900; color:#0052FF; margin:3px 0 6px;">$77,782</div>
+                <svg viewBox="0 0 120 34" width="100%" height="34">
+                  <path d="M2 28 Q 25 22, 46 24 T 88 12 T 118 6" fill="none" stroke="#0052FF" stroke-width="2.2"/>
+                </svg>
+                <div style="font-size:9.5px; color:#6B7280; margin-top:4px;">BTC &bull; ETH &bull; USDT</div>
+              </div>
+              <div class="av-phone-mockup">
+                <div class="av-phone-notch"></div>
+                <div style="font-size:10px; font-weight:800; color:#111827;">Android Build</div>
+                <div style="font-size:11px; font-weight:700; color:#00B87C; margin:4px 0;">Ready to Install</div>
+                <div style="font-size:10px; color:#4B5563; line-height:1.4;">
+                  • Direct APK download<br>
+                  • Live signal alerts<br>
+                  • Biometric vault lock
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- iOS / iPhone Card -->
+          <div class="av-download-card">
+            <div class="av-download-card-title">iOS / iPhone</div>
+            <button type="button" class="av-store-badge-btn" onclick="App.downloadMobileApp('ios')" aria-label="Download on the App Store - Download iOS IPA">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true">
+                <path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.613 0 2.886.06 4.374 2.19-.13.09-2.383 1.37-2.383 4.19 0 3.26 2.854 4.42 2.955 4.45z"/>
+              </svg>
+              <span style="text-align:left; line-height:1.15;">
+                <span style="display:block; font-size:9px; opacity:0.85;">Download on the</span>
+                <span style="display:block; font-size:16px; font-weight:800;">App Store</span>
+              </span>
+            </button>
+
+            <button type="button" class="av-download-primary-btn" onclick="App.downloadMobileApp('ios')">
+              Download iOS IPA
+            </button>
+            <div class="av-download-version">Version 3.4.1 (IPA) &bull; Requires iOS 14.0+</div>
+
+            <div class="av-download-preview-pair">
+              <div class="av-phone-mockup">
+                <div class="av-phone-notch"></div>
+                <div style="font-size:10px; font-weight:800; color:#111827;">Dashboard</div>
+                <div class="mono" style="font-size:13px; font-weight:900; color:#0052FF; margin:3px 0 6px;">$77,782</div>
+                <svg viewBox="0 0 120 34" width="100%" height="34">
+                  <path d="M2 26 Q 28 18, 52 20 T 88 10 T 118 4" fill="none" stroke="#00B87C" stroke-width="2.2"/>
+                </svg>
+                <div style="font-size:9.5px; color:#6B7280; margin-top:4px;">Future &bull; Spot &bull; Signals</div>
+              </div>
+              <div class="av-phone-mockup">
+                <div class="av-phone-notch"></div>
+                <div style="font-size:10px; font-weight:800; color:#111827;">iPhone Build</div>
+                <div style="font-size:11px; font-weight:700; color:#0052FF; margin:4px 0;">iOS Universal IPA</div>
+                <div style="font-size:10px; color:#4B5563; line-height:1.4;">
+                  • Direct IPA package<br>
+                  • Requires iOS 14.0 or later<br>
+                  • Instant deposit alerts
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3-Step Feature Strip -->
+        <div class="av-download-features-strip">
+          <div class="av-download-feature-item">
+            <div class="av-download-feature-icon">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            </div>
+            <strong style="font-size:13.5px; color:#111827;">Secure Login</strong>
+          </div>
+          <div class="av-download-feature-item">
+            <div class="av-download-feature-icon">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            </div>
+            <strong style="font-size:13.5px; color:#111827;">Real-Time Signals</strong>
+          </div>
+          <div class="av-download-feature-item">
+            <div class="av-download-feature-icon">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </div>
+            <strong style="font-size:13.5px; color:#111827;">Fast Deposit/Withdrawal</strong>
+          </div>
+        </div>
+
+        <!-- Scan QR for Instant Mobile Install -->
+        <div class="av-download-qr-card">
+          <div>
+            <strong style="font-size:15px; color:#111827; display:block; margin-bottom:4px;">Take PRIME X CAPITAL with you</strong>
+            <span style="font-size:12.5px; color:#6B7280;">Scan on your phone camera or tap either store badge above to download the Android APK or iOS IPA directly.</span>
+          </div>
+          <div style="padding:8px; background:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px; flex-shrink:0;">
+            <svg width="72" height="72" viewBox="0 0 21 21" shape-rendering="crispEdges" aria-hidden="true">
+              <rect width="21" height="21" fill="#FFFFFF"/>
+              <path fill="#111827" d="M0,0h7v7h-7z M1,1v5h5v-5z M2,2h3v3h-3z M14,0h7v7h-7z M15,1v5h5v-5z M16,2h3v3h-3z M0,14h7v7h-7z M1,15v5h5v-5z M2,16h3v3h-3z M9,1h2v2h-2z M12,2h1v3h-1z M9,5h2v3h-2z M1,9h3v2h-3z M6,9h4v2h-4z M12,9h3v2h-3z M17,9h3v2h-3z M9,13h2v3h-2z M13,13h3v2h-3z M18,14h2v3h-2z M10,18h3v2h-3z M15,18h5v2h-5z"/>
+            </svg>
+          </div>
+        </div>
+      </div>
     </main>
 
     <!-- VIEW 12: SETTINGS -->
@@ -7573,27 +7977,36 @@ window.gtranslateSettings = {
       </div>
 
       <div style="display:flex; flex-direction:column; gap:14px;">
+        <div class="av-transfer-notice warn" style="margin-bottom:0;">
+          <span>🔒 Only <strong>Deposit Balance</strong> and <strong>Deposit Bonus</strong> can be transferred from Spot to Future Balance. <strong>Referral Bonus</strong> stays locked in Spot.</span>
+        </div>
+
         <div class="form-group">
           <label class="form-label">From Wallet</label>
           <select id="trf-from">
-            <option value="exchange">Exchange Wallet</option>
-            <option value="funding">Funding Wallet</option>
-            <option value="trading">Trading Wallet</option>
+            <option value="spot">Spot Wallet (Deposit + Deposit Bonus)</option>
+            <option value="exchange">Spot Exchange Sub-Wallet</option>
+            <option value="funding">Spot Funding Sub-Wallet</option>
+            <option value="trading">Future Wallet</option>
           </select>
         </div>
 
         <div class="form-group">
           <label class="form-label">To Wallet</label>
           <select id="trf-to">
-            <option value="trading">Trading Wallet</option>
-            <option value="exchange">Exchange Wallet</option>
-            <option value="funding">Funding Wallet</option>
+            <option value="trading">Future Wallet (Trades &amp; Signals)</option>
+            <option value="spot">Spot Wallet</option>
+            <option value="exchange">Spot Exchange Sub-Wallet</option>
+            <option value="funding">Spot Funding Sub-Wallet</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Amount (USDT)</label>
-          <input type="number" id="trf-amount" placeholder="0.00" value="500">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+            <label class="form-label" style="margin:0;">Amount (USDT)</label>
+            <span style="color:#6B7280;">Max Transferable Spot: <strong id="trf-modal-max-spot" style="color:#0052FF;">$0.00</strong></span>
+          </div>
+          <input type="number" id="trf-amount" placeholder="0.00" step="0.01" min="0">
         </div>
 
         <div style="font-size:12px; color:var(--text-muted);">
@@ -9010,7 +9423,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261121_v117_security_hardening";
+  const CACHE_VERSION = "20261121_v119_wallet_transfer_anim";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -9042,18 +9455,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261121_v117_security_hardening"></script>
-  <script defer src="/assets/js/chart.js?v=20261121_v117_security_hardening"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261121_v119_wallet_transfer_anim"></script>
+  <script defer src="/assets/js/chart.js?v=20261121_v119_wallet_transfer_anim"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261121_v117_security_hardening"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261121_v117_security_hardening"></script>
+  <script defer src="/assets/js/app.js?v=20261121_v119_wallet_transfer_anim"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261121_v119_wallet_transfer_anim"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261121_v117_security_hardening";
+      var SW_BUILD = "20261121_v119_wallet_transfer_anim";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;
