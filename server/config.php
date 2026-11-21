@@ -70,8 +70,8 @@ define('APP_SECRET', alphavest_required_env('APP_SECRET'));
 
 define('ADMIN_EMAILS', array_values(array_filter(array_map(static function ($e) {
     return strtolower(trim((string)$e));
-}, explode(',', alphavest_env('ADMIN_EMAILS', ''))))));
+}, explode(',', alphavest_env('ADMIN_EMAILS', 'trader@alphavest.io'))))));
 define('ADMIN_MASTER_PASSWORD', alphavest_env('ADMIN_MASTER_PASSWORD', ''));
 
-$allowedOrigins = alphavest_env('ALLOWED_ORIGINS', 'https://alphavest-app.com,https://www.alphavest-app.com');
+$allowedOrigins = alphavest_env('ALLOWED_ORIGINS', 'https://alphavestapp.com,https://www.alphavestapp.com,https://alphavest-app.com,https://www.alphavest-app.com');
 define('ALLOWED_ORIGINS', array_values(array_filter(array_map('trim', explode(',', $allowedOrigins)))));
