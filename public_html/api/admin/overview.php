@@ -46,6 +46,16 @@ $withdrawalsRes = $batch['withdrawals'] ?? ['success'=>false];
 $signalsRes = $batch['signals'] ?? ['success'=>false];
 $positionsRes = $batch['positions'] ?? ['success'=>false];
 
+if (empty($usersRes['success']) && empty($depositsRes['success']) && empty($withdrawalsRes['success'])) {
+    $errMsg = (string)($usersRes['message'] ?? $depositsRes['message'] ?? 'Supabase query failed');
+    $httpCode = (int)($usersRes['http_code'] ?? $depositsRes['http_code'] ?? 0);
+    primex_record_log('ADMIN', 'ADMIN_OVERVIEW_DB_ERROR', $errMsg, [
+        'http_code' => $httpCode,
+        'error' => $usersRes['error'] ?? null
+    ], 'ERROR', (string)($admin['id'] ?? ''), (string)($admin['email'] ?? ''));
+    sendError('SUPABASE_QUERY_FAILED', 'Unable to load admin overview from Supabase: ' . $errMsg . ' (HTTP ' . $httpCode . '). Verify server/.env Supabase API keys.', 502);
+}
+
 $users = $usersRes['success'] && is_array($usersRes['data']) ? $usersRes['data'] : [];
 $deposits = $depositsRes['success'] && is_array($depositsRes['data']) ? $depositsRes['data'] : [];
 $withdrawals = $withdrawalsRes['success'] && is_array($withdrawalsRes['data']) ? $withdrawalsRes['data'] : [];

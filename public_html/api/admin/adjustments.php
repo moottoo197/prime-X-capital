@@ -18,7 +18,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'order' => 'created_at.desc',
         'limit' => '100'
     ]);
-    $adjustments = ($res['success'] && is_array($res['data'])) ? $res['data'] : [];
+    if (empty($res['success'])) {
+        sendError('SUPABASE_QUERY_FAILED', 'Failed to retrieve adjustments: ' . ($res['message'] ?? 'Database error'), 502);
+    }
+    $adjustments = is_array($res['data'] ?? null) ? $res['data'] : [];
     sendSuccess(['adjustments' => $adjustments], 'Adjustments retrieved from Supabase');
 }
 

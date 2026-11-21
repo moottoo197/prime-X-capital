@@ -17,13 +17,15 @@ foreach ($envPaths as $envFile) {
     }
     $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
-        $line = trim($line);
+        $line = preg_replace('/^\xEF\xBB\xBF/', '', (string)$line);
+        $line = trim((string)$line);
         if ($line === '' || $line[0] === '#') continue;
         if (strpos($line, '=') === false) continue;
         [$key, $val] = explode('=', $line, 2);
         $key = trim($key);
         $val = trim($val, " \t\n\r\0\x0B\"'");
-        if ($key !== '' && getenv($key) === false) {
+        $existingEnv = getenv($key);
+        if ($key !== '' && ($existingEnv === false || $existingEnv === '')) {
             putenv("{$key}={$val}");
             $_ENV[$key] = $val;
             $_SERVER[$key] = $val;

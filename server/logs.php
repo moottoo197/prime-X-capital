@@ -173,6 +173,35 @@ if (!function_exists('primex_fetch_combined_logs')) {
                 ]
             ]);
 
+            $failedSources = [];
+            foreach ($batch as $srcKey => $srcRes) {
+                if (empty($srcRes['success'])) {
+                    $failedSources[$srcKey] = [
+                        'http_code' => (int)($srcRes['http_code'] ?? 0),
+                        'error' => $srcRes['error'] ?? 'UNKNOWN',
+                        'message' => $srcRes['message'] ?? 'Query failed'
+                    ];
+                }
+            }
+            if (!empty($failedSources)) {
+                $firstErr = reset($failedSources);
+                $entries[] = [
+                    'id' => 'sb_err_' . substr(md5(json_encode($failedSources)), 0, 8),
+                    'ts' => gmdate('Y-m-d\TH:i:s\Z'),
+                    'level' => 'ERROR',
+                    'category' => 'SUPABASE',
+                    'event' => 'SUPABASE_CONNECTION_FAILED',
+                    'message' => 'Supabase REST queries failed (' . ($firstErr['message'] ?? 'Unknown error') . ' · HTTP ' . ($firstErr['http_code'] ?? 0) . '). Check server/.env SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.',
+                    'actor_id' => null,
+                    'actor_email' => 'system',
+                    'ip' => '-',
+                    'method' => 'GET',
+                    'path' => '/rest/v1',
+                    'source' => 'SUPABASE_HEALTH',
+                    'context' => $failedSources
+                ];
+            }
+
             if (!empty($batch['audit']['success']) && is_array($batch['audit']['data'] ?? null)) {
                 foreach ($batch['audit']['data'] as $row) {
                     $entries[] = [

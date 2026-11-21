@@ -1,5 +1,5 @@
-const CACHE_NAME = "primex-static-v115_logs_and_admin_fix";
-const STATIC_ASSETS = ["/", "/offline.html", "/assets/css/app.css?v=20261121_v115_logs_and_admin_fix", "/assets/js/app.js?v=20261121_v115_logs_and_admin_fix", "/assets/js/chart.js?v=20261121_v115_logs_and_admin_fix", "/assets/js/3d-engine.js?v=20261121_v115_logs_and_admin_fix"];
+const CACHE_NAME = "primex-static-v116_supabase_diag_fix";
+const STATIC_ASSETS = ["/", "/offline.html", "/assets/css/app.css?v=20261121_v116_supabase_diag_fix", "/assets/js/app.js?v=20261121_v116_supabase_diag_fix", "/assets/js/chart.js?v=20261121_v116_supabase_diag_fix", "/assets/js/3d-engine.js?v=20261121_v116_supabase_diag_fix"];
 
 function fallbackResponse(req) {
   return caches.match(req).then(cached => cached || caches.match("/offline.html")).then(res => {

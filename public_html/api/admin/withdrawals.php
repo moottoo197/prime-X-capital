@@ -25,7 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     ]);
     $withRes = $batch['withdrawals'] ?? ['success'=>false];
     if (!$withRes['success']) {
-        sendError('SUPABASE_QUERY_FAILED', '\1Failed to retrieve \2.', 502);
+        $errMsg = (string)($withRes['message'] ?? 'Failed to retrieve withdrawals.');
+        sendError('SUPABASE_QUERY_FAILED', 'Failed to retrieve withdrawals: ' . $errMsg, 502);
     }
     $withdrawals = is_array($withRes['data']) ? $withRes['data'] : [];
 

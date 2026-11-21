@@ -4833,8 +4833,11 @@ const App = {
     const res = await this.api(`/admin/users.php?${query}`);
 
     if (!res.success || !res.data || !res.data.users || !res.data.users.length) {
+      const emptyMsg = (!res.success && res.message)
+        ? `<span style="color:#DC2626; font-weight:600;">${this.escapeHtml(res.message)}</span>`
+        : 'No registered accounts found matching criteria.';
       const emptyHtml = `<tr><td colspan="7" style="text-align:center; padding:24px; color:#6B7280;">
-        No registered accounts found matching criteria.
+        ${emptyMsg}
         <button onclick="App.syncAllFromDatabase()" class="av-adm-btn-chip soft-blue" style="margin-left:10px;">
           Sync Data from Database
         </button>
@@ -4842,6 +4845,7 @@ const App = {
       if (container) container.innerHTML = emptyHtml;
       if (overviewContainer) overviewContainer.innerHTML = emptyHtml;
       if (usersCountPill) usersCountPill.textContent = '0 Users';
+      if (!res.success && res.message) this.toast(res.message, 'error');
       return;
     }
 

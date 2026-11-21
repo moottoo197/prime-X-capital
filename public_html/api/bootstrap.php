@@ -884,17 +884,28 @@ function requireAdmin(): array {
     $email = strtolower(trim((string)($user['email'] ?? '')));
     $role = strtoupper(trim((string)($user['role'] ?? 'USER')));
     $adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
-    if (primex_is_admin_email($email) || !in_array($role, $adminRoles, true)) {
-        if (primex_is_admin_email($email)) {
+
+    if (primex_is_admin_email($email)) {
+        if (!in_array($role, $adminRoles, true)) {
             $user['role'] = 'SUPER_ADMIN';
+            $supabase = getSupabaseClient();
+            if ($supabase->isConfigured() && !empty($user['id'])) {
+                @$supabase->update('profiles', [
+                    'role' => 'SUPER_ADMIN',
+                    'updated_at' => gmdate('Y-m-d H:i:s')
+                ], ['id' => 'eq.' . $user['id']]);
+            }
         }
-        $supabase = getSupabaseClient();
-        if ($supabase->isConfigured() && !empty($user['id'])) {
-            @$supabase->update('profiles', [
-                'role' => $user['role'] ?? 'SUPER_ADMIN',
-                'updated_at' => gmdate('Y-m-d H:i:s')
-            ], ['id' => 'eq.' . $user['id']]);
-        }
+        return $user;
     }
+
+    if (!in_array($role, $adminRoles, true)) {
+        primex_record_log('SECURITY', 'ADMIN_UNAUTHORIZED_ACCESS', 'Blocked non-admin access to admin endpoint', [
+            'role' => $role,
+            'uri' => (string)($_SERVER['REQUEST_URI'] ?? '')
+        ], 'SECURITY', (string)($user['id'] ?? ''), $email);
+        sendError('FORBIDDEN', 'Access denied. Administrator privileges required.', 403);
+    }
+
     return $user;
 }

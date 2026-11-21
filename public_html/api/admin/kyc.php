@@ -26,10 +26,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     ]);
 
     $kycRes = $batch['kyc'] ?? ['success'=>false];
+    $profRes = $batch['profiles'] ?? ['success'=>false];
+    if (empty($kycRes['success']) && empty($profRes['success'])) {
+        $errMsg = (string)($kycRes['message'] ?? $profRes['message'] ?? 'Supabase KYC query failed');
+        $httpCode = (int)($kycRes['http_code'] ?? $profRes['http_code'] ?? 0);
+        primex_record_log('ADMIN', 'ADMIN_KYC_DB_ERROR', $errMsg, [
+            'http_code' => $httpCode,
+            'error' => $kycRes['error'] ?? null
+        ], 'ERROR', (string)($admin['id'] ?? ''), (string)($admin['email'] ?? ''));
+        sendError('SUPABASE_QUERY_FAILED', 'Unable to load KYC records from Supabase: ' . $errMsg . ' (HTTP ' . $httpCode . ').', 502);
+    }
     $submissions = ($kycRes['success'] && is_array($kycRes['data'])) ? $kycRes['data'] : [];
 
     // 2. Fetch all profiles to sync verified users
-    $profRes = $batch['profiles'] ?? ['success'=>false];
     $userMap = [];
     $approvedProfiles = [];
 

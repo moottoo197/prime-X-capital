@@ -312,7 +312,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     ]);
 
     $res = $batch['profiles'] ?? ['success'=>false];
-    $profiles = ($res['success'] && is_array($res['data'])) ? $res['data'] : [];
+    if (empty($res['success'])) {
+        $errMsg = (string)($res['message'] ?? 'Supabase profiles query failed');
+        $httpCode = (int)($res['http_code'] ?? 0);
+        primex_record_log('ADMIN', 'ADMIN_USERS_DB_ERROR', $errMsg, [
+            'http_code' => $httpCode,
+            'error' => $res['error'] ?? null
+        ], 'ERROR', (string)($admin['id'] ?? ''), (string)($admin['email'] ?? ''));
+        sendError('SUPABASE_QUERY_FAILED', 'Unable to load users from Supabase: ' . $errMsg . ' (HTTP ' . $httpCode . ').', 502);
+    }
+    $profiles = is_array($res['data'] ?? null) ? $res['data'] : [];
     $walletsRes = $batch['wallets'] ?? ['success'=>false];
     $walletTotals = [];
     if ($walletsRes['success'] && is_array($walletsRes['data'])) {
