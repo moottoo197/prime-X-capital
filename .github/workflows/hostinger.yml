@@ -22,8 +22,37 @@ jobs:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
         run: |
           set -euo pipefail
+
+          SYNC_ENV=false
+          if [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            SYNC_ENV=true
+            python3 - <<'ENVPY'
+          import os
+          fields = [
+              ("SUPABASE_URL", os.environ.get("SUPABASE_URL", "").strip()),
+              ("SUPABASE_ANON_KEY", os.environ.get("SUPABASE_ANON_KEY", "").strip()),
+              ("SUPABASE_SERVICE_ROLE_KEY", os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()),
+              ("DB_DRIVER", "supabase"),
+              ("APP_SECRET", os.environ.get("APP_SECRET", "").strip()),
+              ("ADMIN_EMAILS", os.environ.get("ADMIN_EMAILS", "trader@alphavest.io").strip()),
+              ("ALLOWED_ORIGINS", os.environ.get("ALLOWED_ORIGINS", "https://alphavestapp.com,https://www.alphavestapp.com").strip()),
+          ]
+          with open("./server/.env", "w", encoding="utf-8") as fh:
+              for k, v in fields:
+                  if v:
+                      fh.write(f"{k}={v}\n")
+          ENVPY
+            chmod 600 ./server/.env
+          fi
+          export SYNC_ENV
 
           FTP_HOST="${FTP_SERVER#ftp://}"
           FTP_HOST="${FTP_HOST#ftps://}"
@@ -31,7 +60,7 @@ jobs:
 
           LFTP_SCRIPT="$(mktemp)"
           chmod 600 "$LFTP_SCRIPT"
-          trap 'rm -f "$LFTP_SCRIPT"' EXIT
+          trap 'rm -f "$LFTP_SCRIPT" ./server/.env' EXIT
 
           export FTP_HOST
           python3 - <<'PY' > "$LFTP_SCRIPT"
@@ -43,6 +72,7 @@ jobs:
 
           user = lftp_quote(os.environ['FTP_USERNAME'])
           host = lftp_quote(os.environ['FTP_HOST'])
+          sync_env = os.environ.get('SYNC_ENV') == 'true'
 
           print("set cmd:fail-exit yes")
           print("set net:max-retries 8")
@@ -56,7 +86,8 @@ jobs:
           print("set xfer:clobber yes")
           print(f"open --env-password -u {user} {host}")
           print('mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --exclude "^\\.git" --exclude "^uploads/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./public_html /public_html')
-          print('mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --exclude "^\\.git" --exclude "^\\.env" --exclude "^storage/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./server /server')
+          env_exclude = '' if sync_env else '--exclude "^\\.env" '
+          print(f'mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --exclude "^\\.git" {env_exclude}--exclude "^storage/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./server /server')
           print("quit")
           PY
 

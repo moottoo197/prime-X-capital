@@ -535,7 +535,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $res = $supabase->update('profiles', $updateData, ['id' => "eq.{$userId}"]);
         if (!$res['success']) {
-            sendError('SUPABASE_UPDATE_FAILED', '\1Failed to update \2.', 502);
+            sendError('SUPABASE_UPDATE_FAILED', 'Failed to update user profile: ' . ($res['message'] ?? 'Database error'), 502);
         }
 
         sendSuccess(['user_id' => $userId, 'updated' => $updateData], 'User updated successfully in Supabase');

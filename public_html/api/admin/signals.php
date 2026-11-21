@@ -344,7 +344,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     ]);
 
     if (!$sigRes['success']) {
-        sendError('SUPABASE_QUERY_FAILED', '\1Failed to retrieve \2.', 502);
+        sendError('SUPABASE_QUERY_FAILED', 'Failed to retrieve trading signals: ' . ($sigRes['message'] ?? 'Database error'), 502);
     }
 
     $rawSignals = is_array($sigRes['data']) ? $sigRes['data'] : [];
