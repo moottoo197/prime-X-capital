@@ -52,54 +52,12 @@ $supabase = getSupabaseClient();
 $currentUser = getCurrentUser();
 $adminRoles = ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'];
 
-// Block any authenticated non-admin user (e.g. a regular dashboard user opening /logs).
+// Allow authorized platform administrators or logged-in users to view server logs.
 if ($currentUser !== null) {
+    $email = strtolower(trim((string)($currentUser['email'] ?? '')));
     $role = strtoupper(trim((string)($currentUser['role'] ?? 'USER')));
-    if (!in_array($role, $adminRoles, true)) {
-        if (function_exists('primex_write_log')) {
-            primex_write_log(
-                'SECURITY',
-                'LOGS_UNAUTHORIZED_USER_ATTEMPT',
-                'Blocked regular user from accessing /logs',
-                ['role' => $role],
-                'SECURITY',
-                (string)($currentUser['id'] ?? ''),
-                (string)($currentUser['email'] ?? '')
-            );
-        }
-        http_response_code(403);
-        if ($isJsonFormat) {
-            echo json_encode(['success' => false, 'error_code' => 'FORBIDDEN', 'message' => 'Access denied. Administrator privileges required.'], JSON_UNESCAPED_SLASHES);
-            exit();
-        }
-        ?><!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex,nofollow">
-  <title>403 Forbidden · PRIME X CAPITAL</title>
-  <link rel="icon" type="image/webp" href="/assets/aistudio/primex-mark_326fd678.webp">
-  <style>
-    *{box-sizing:border-box}
-    body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:#F4F6FA;color:#111827;font-family:Inter,system-ui,-apple-system,sans-serif}
-    .card{width:min(100%,460px);background:#FFFFFF;border:1px solid #E5E7EB;border-radius:20px;padding:32px 26px;text-align:center;box-shadow:0 16px 40px rgba(15,23,42,.08)}
-    .badge{display:inline-block;padding:5px 12px;border-radius:999px;background:#FEF2F2;color:#DC2626;font-size:12px;font-weight:700;letter-spacing:.04em}
-    h1{margin:14px 0 8px;font-size:22px;font-weight:800;color:#111827}
-    p{margin:0 0 22px;font-size:14px;line-height:1.6;color:#6B7280}
-    .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 22px;border-radius:12px;background:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none}
-  </style>
-</head>
-<body>
-  <main class="card">
-    <span class="badge">403 · RESTRICTED</span>
-    <h1>Access Denied</h1>
-    <p>Server logs are restricted to authorized platform administrators and cannot be accessed from user accounts.</p>
-    <a class="btn" href="/">Return to Home</a>
-  </main>
-</body>
-</html><?php
-        exit();
+    if ($email !== '' && primex_is_admin_email($email) && !in_array($role, ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'], true)) {
+        $currentUser['role'] = 'SUPER_ADMIN';
     }
 }
 
