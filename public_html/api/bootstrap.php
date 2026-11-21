@@ -63,7 +63,7 @@ if (!headers_sent() && !defined('PRIMEX_LOGS_WEB_ENTRY')) {
     // slash do not cause a false CORS rejection on shared hosting/proxies.
     $origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
     $allowedOrigins = defined('ALLOWED_ORIGINS') ? ALLOWED_ORIGINS : [];
-    $allowedHosts = ['alphavest-app.com', 'www.alphavest-app.com'];
+    $allowedHosts = ['dunlin-150353.hostingersite.com', 'alphavestapp.com', 'www.alphavestapp.com', 'alphavest-app.com', 'www.alphavest-app.com'];
     $currentHostHeader = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? '')));
     if ($currentHostHeader !== '') {
         $currentHostOnly = strtolower((string)(parse_url('http://' . $currentHostHeader, PHP_URL_HOST) ?? ''));

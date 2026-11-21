@@ -43,7 +43,7 @@ jobs:
               ("DB_DRIVER", "supabase"),
               ("APP_SECRET", os.environ.get("APP_SECRET", "").strip()),
               ("ADMIN_EMAILS", os.environ.get("ADMIN_EMAILS", "trader@alphavest.io").strip()),
-              ("ALLOWED_ORIGINS", os.environ.get("ALLOWED_ORIGINS", "https://alphavestapp.com,https://www.alphavestapp.com").strip()),
+              ("ALLOWED_ORIGINS", os.environ.get("ALLOWED_ORIGINS", "https://dunlin-150353.hostingersite.com,https://alphavestapp.com,https://www.alphavestapp.com").strip()),
           ]
           with open("./server/.env", "w", encoding="utf-8") as fh:
               for k, v in fields:
