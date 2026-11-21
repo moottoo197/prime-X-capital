@@ -338,8 +338,10 @@ class SupabaseClient {
 
         $endpoint = "{$this->url}/auth/v1/token?grant_type=password";
         $body = ['email' => $email, 'password' => $password];
+        $authKey = !empty($this->anonKey) ? $this->anonKey : $this->serviceKey;
         return $this->request('POST', $endpoint, $body, [
-            'apikey: ' . ($this->anonKey ?: $this->serviceKey)
+            'apikey: ' . $authKey,
+            'Authorization: Bearer ' . $authKey
         ]);
     }
 
