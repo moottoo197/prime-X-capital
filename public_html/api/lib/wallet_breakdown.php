@@ -80,6 +80,8 @@ if (!function_exists('primex_compute_wallet_breakdown')) {
         $promoColumnTotal = 0.0;
 
         foreach ($walletRows as $row) {
+            $rowAsset = strtoupper(trim((string)($row['asset'] ?? 'USDT')));
+            if ($rowAsset !== '' && $rowAsset !== 'USDT') continue;
             $val = max(0.0, (float)($row['balance'] ?? 0));
             $promoColumnTotal += max(0.0, (float)($row['promotional_balance'] ?? 0));
             $wType = strtolower(trim((string)($row['wallet_type'] ?? '')));

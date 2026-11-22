@@ -1096,10 +1096,16 @@ body.is-admin-view .bottom-nav {
 }
 
 @media (min-width: 1025px) {
+  body.is-admin-view .app-header {
+    display: none !important;
+  }
+  .admin-top-bar-sticky {
+    top: 10px;
+  }
   .admin-sidebar {
     position: sticky;
     top: 12px;
-    max-height: calc(100vh - 78px);
+    max-height: calc(100vh - 28px);
     border-radius: 18px;
   }
   .admin-menu-toggle-btn { display: none; }
@@ -4875,9 +4881,67 @@ html.color-mode-red-up .btn-action-bear { background: #00B87C !important; box-sh
 .av-adm-dep-redesign-split,
 .av-adm-with-redesign-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(290px, 360px);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 16px;
   align-items: start;
+}
+
+.av-adm-dep-redesign-split > *,
+.av-adm-with-redesign-split > * {
+  min-width: 0;
+}
+
+#adm-sec-deposits .table-responsive,
+#adm-sec-withdrawals .table-responsive {
+  overflow-x: auto !important;
+  overflow-y: visible;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 769px) {
+  #adm-sec-deposits .admin-table {
+    min-width: 720px !important;
+  }
+  #adm-sec-withdrawals .admin-table {
+    min-width: 840px !important;
+  }
+  #adm-sec-deposits .admin-table th,
+  #adm-sec-withdrawals .admin-table th {
+    white-space: nowrap !important;
+    padding: 11px 10px;
+  }
+  #adm-sec-deposits .admin-table td,
+  #adm-sec-withdrawals .admin-table td {
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    padding: 11px 10px;
+  }
+}
+
+.av-adm-user-meta {
+  min-width: 0;
+  max-width: 185px;
+}
+
+.av-adm-user-name {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.av-adm-user-sub {
+  display: block;
+  font-size: 11px;
+  color: #6B7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .av-adm-row-selected {
@@ -4969,7 +5033,7 @@ html.color-mode-red-up .btn-action-bear { background: #00B87C !important; box-sh
   gap: 8px;
 }
 
-@media (max-width: 1040px) {
+@media (max-width: 1340px) {
   .av-adm-dep-redesign-split,
   .av-adm-with-redesign-split {
     grid-template-columns: 1fr;

@@ -1081,6 +1081,7 @@ const App = {
       this.loadConvertView();
     } else if (view === 'transfer') {
       this.loadTransferView();
+      this.loadBalances();
     } else if (view === 'settings') {
       this.loadSettingsView();
     } else if (view === 'kyc') {
@@ -2166,6 +2167,9 @@ const App = {
         this.state.balances = res.data;
         this.writeFastCache('balances', res.data);
         this.renderWalletView();
+        if (this.state.currentView === 'transfer') {
+          this.loadTransferView();
+        }
       }
       return res;
     }).catch(() => null).finally(() => {
@@ -4918,8 +4922,10 @@ const App = {
 
   /* Admin Governance */
   async loadAdminData() {
-    // Overview is the first visible admin screen. Do not block it on the
-    // heavyweight Users roster; that tab loads only when opened.
+    const activeTab = this.state.adminTab || 'overview';
+    const shouldFetchUsers = activeTab === 'overview' || activeTab === 'users';
+    const usersPromise = shouldFetchUsers ? this.loadAdminUsers() : Promise.resolve();
+
     const res = await this.api('/admin/overview.php');
     if (res.success && res.data) {
       this.state.adminMetrics = res.data;
@@ -4932,9 +4938,7 @@ const App = {
         this.openModal('modal-auth');
       }
     }
-    if (this.state.adminTab === 'users') {
-      this.loadAdminUsers();
-    }
+    await usersPromise;
   },
 
   renderAdminOverview() {
@@ -5007,6 +5011,9 @@ const App = {
     });
     if (btnEl && btnEl.classList) btnEl.classList.add('active');
     this.renderAdminAnalyticsChart(target);
+    if (target === 'users' && (!Array.isArray(this.state.adminUsers) || !this.state.adminUsers.length)) {
+      this.loadAdminUsers();
+    }
   },
 
   renderAdminAnalyticsChart(series = 'deposits') {
@@ -5203,7 +5210,12 @@ const App = {
       this.toggleAdminSidebar(false);
     }
 
-    if (tab === 'overview') this.renderAdminOverview();
+    if (tab === 'overview') {
+      this.renderAdminOverview();
+      if (!Array.isArray(this.state.adminUsers) || !this.state.adminUsers.length) {
+        this.loadAdminUsers();
+      }
+    }
     if (tab === 'users') this.loadAdminUsers();
     if (tab === 'kyc') this.loadAdminKyc();
     if (tab === 'withdrawals') this.loadAdminWithdrawals();
@@ -5381,6 +5393,7 @@ const App = {
       </td></tr>`;
       if (container) container.innerHTML = emptyHtml;
       if (overviewContainer) overviewContainer.innerHTML = emptyHtml;
+      if (countBadge) countBadge.textContent = '0';
       if (usersCountPill) usersCountPill.textContent = '0 Users';
       if (!res.success && res.message) this.toast(res.message, 'error');
       return;
@@ -7412,6 +7425,21 @@ const App = {
     this.loadAdminData();
   },
 
+  formatAdminDate(raw) {
+    if (!raw) return 'Recent';
+    let s = String(raw).trim();
+    if (!s) return 'Recent';
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
+      s = s.replace(' ', 'T');
+    }
+    if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+      s += 'Z';
+    }
+    const dt = new Date(s);
+    if (Number.isNaN(dt.getTime())) return 'Recent';
+    return dt.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  },
+
   filterAdminWithdrawals() {
     const container = document.getElementById('adm-with-list');
     if (!container) return;
@@ -7445,7 +7473,7 @@ const App = {
       const destAddr = w.destination_address || '';
       const shortAddr = destAddr.length > 14 ? `${destAddr.substring(0, 6)}...${destAddr.substring(destAddr.length - 6)}` : (destAddr || '—');
       const shortId = w.short_id || ('WIT-' + String(w.id || '').slice(-4).toUpperCase());
-      const reqDate = w.created_at ? new Date(String(w.created_at).replace(' ', 'T') + (String(w.created_at).includes('Z') ? '' : 'Z')).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent';
+      const reqDate = this.formatAdminDate(w.created_at);
       const boundStatus = String(w.bound_status || 'UNBOUND').toUpperCase();
       const valBadge = boundStatus === 'ADDRESS_BOUND_VERIFIED'
         ? `<span class="av-adm-val-badge verified">Address Bound &amp; Verified</span>`
@@ -7454,7 +7482,12 @@ const App = {
           : `<span class="av-adm-val-badge unbound">Unbound</span>`);
       const isSelected = String(w.id) === String(this.state.selectedWithdrawalId);
       const isChecked = selectedIds.has(String(w.id));
-      const initials = String(w.full_name || w.email || 'U').slice(0, 2).toUpperCase();
+      const primaryUserLabel = String(w.full_name || w.email || 'User').trim();
+      const emailStr = String(w.email || '').trim();
+      const secondaryUserLabel = (emailStr && emailStr.toLowerCase() !== primaryUserLabel.toLowerCase())
+        ? emailStr
+        : (w.numeric_uid ? `#${w.numeric_uid}` : '');
+      const initials = primaryUserLabel.slice(0, 2).toUpperCase();
 
       return `
         <tr class="${isSelected ? 'av-adm-row-selected' : ''}" style="cursor:pointer;" onclick="App.selectAdminWithdrawal('${this.escapeJsStr(w.id)}')">
@@ -7463,11 +7496,11 @@ const App = {
           </td>
           <td data-label="Withdrawal ID"><strong class="mono" style="color:#111827;">${this.escapeHtml(shortId)}</strong></td>
           <td data-label="User">
-            <div style="display:flex; align-items:center; gap:8px;">
+            <div class="av-adm-user-cell">
               <span style="width:28px; height:28px; border-radius:50%; background:#EFF4FF; color:#0052FF; font-size:11px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">${this.escapeHtml(initials)}</span>
-              <div style="min-width:0;">
-                <strong style="display:block; font-size:12.5px; color:#111827;">${this.escapeHtml(w.full_name || w.email || 'User')}</strong>
-                <span style="font-size:11px; color:#6B7280;">${this.escapeHtml(w.email || '')}</span>
+              <div class="av-adm-user-meta">
+                <strong class="av-adm-user-name" title="${this.escapeHtml(primaryUserLabel)}">${this.escapeHtml(primaryUserLabel)}</strong>
+                ${secondaryUserLabel ? `<span class="av-adm-user-sub" title="${this.escapeHtml(secondaryUserLabel)}">${this.escapeHtml(secondaryUserLabel)}</span>` : ''}
               </div>
             </div>
           </td>
@@ -7710,7 +7743,12 @@ const App = {
       const senderInfo = d.tx_hash || d.deposit_address || 'Direct Transfer';
       const shortSender = senderInfo.length > 14 ? `${senderInfo.substring(0, 6)}...${senderInfo.substring(senderInfo.length - 4)}` : senderInfo;
       const shortId = d.short_id || ('DEP-' + String(d.id || '').slice(-4).toUpperCase());
-      const initials = String(d.full_name || d.email || 'U').slice(0, 2).toUpperCase();
+      const primaryUserLabel = String(d.full_name || d.email || 'User').trim();
+      const emailStr = String(d.email || '').trim();
+      const secondaryUserLabel = d.numeric_uid
+        ? `#${d.numeric_uid}`
+        : (emailStr && emailStr.toLowerCase() !== primaryUserLabel.toLowerCase() ? emailStr : '');
+      const initials = primaryUserLabel.slice(0, 2).toUpperCase();
       const isSelected = String(d.id) === String(this.state.selectedDepositId);
 
       return `
@@ -7720,11 +7758,11 @@ const App = {
             <span style="font-size:11px; color:#6B7280;">${this.escapeHtml(shortId)}</span>
           </td>
           <td data-label="User">
-            <div style="display:flex; align-items:center; gap:8px;">
+            <div class="av-adm-user-cell">
               <span style="width:28px; height:28px; border-radius:50%; background:#EFF4FF; color:#0052FF; font-size:11px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">${this.escapeHtml(initials)}</span>
-              <div style="min-width:0;">
-                <strong style="display:block; font-size:12.5px; color:#111827;">${this.escapeHtml(d.full_name || d.email || 'User')}</strong>
-                <span style="font-size:11px; color:#6B7280;">${d.numeric_uid ? `#${this.escapeHtml(d.numeric_uid)}` : this.escapeHtml(d.email || '')}</span>
+              <div class="av-adm-user-meta">
+                <strong class="av-adm-user-name" title="${this.escapeHtml(primaryUserLabel)}">${this.escapeHtml(primaryUserLabel)}</strong>
+                ${secondaryUserLabel ? `<span class="av-adm-user-sub" title="${this.escapeHtml(secondaryUserLabel)}">${this.escapeHtml(secondaryUserLabel)}</span>` : ''}
               </div>
             </div>
           </td>
