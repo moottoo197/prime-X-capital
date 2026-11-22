@@ -58,17 +58,14 @@ ini_set('display_errors', '0');
 if (!headers_sent() && !defined('PRIMEX_LOGS_WEB_ENTRY')) {
     header('Content-Type: application/json; charset=utf-8');
     
-    // Credentials-enabled CORS. Accept only AlphaVest production origins.
-    // Normalize scheme/host/port so https://alphavest-app.com:443 and a trailing
+    // Credentials-enabled CORS. Accept only PRIME X CAPITAL production origins.
+    // Normalize scheme/host/port so https://prime-x-capital.com:443 and a trailing
     // slash do not cause a false CORS rejection on shared hosting/proxies.
     $origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
     $allowedOrigins = defined('ALLOWED_ORIGINS') ? ALLOWED_ORIGINS : [];
     $allowedHosts = [
-        'dunlin-150353.hostingersite.com',
-        'alphavestapp.com',
-        'www.alphavestapp.com',
-        'alphavest-app.com',
-        'www.alphavest-app.com',
+        'prime-x-capital.com',
+        'www.prime-x-capital.com',
         'localhost',
         '127.0.0.1'
     ];

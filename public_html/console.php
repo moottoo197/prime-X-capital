@@ -257,7 +257,7 @@ if ($currentUser === null) {
       <input type="hidden" name="action" value="admin_login">
       <input type="hidden" name="csrf_token" value="<?= primex_console_h($csrfCookie) ?>">
       <label for="console-email">Administrator Email</label>
-      <input id="console-email" name="email" type="email" required placeholder="admin@alphavestapp.com" autocomplete="username">
+      <input id="console-email" name="email" type="email" required placeholder="admin@prime-x-capital.com" autocomplete="username">
       <label for="console-password">Password</label>
       <input id="console-password" name="password" type="password" required placeholder="Enter administrator password" autocomplete="current-password">
       <button type="submit">Authenticate &amp; Open Console</button>
@@ -587,7 +587,7 @@ $hasSmtpPass = ($cfg['SMTP_PASS'] !== '');
             </div>
             <div class="field">
               <label for="smtp-user">SMTP Username</label>
-              <input id="smtp-user" name="smtp_user" type="text" value="<?= primex_console_h($cfg['SMTP_USER']) ?>" placeholder="noreply@alphavestapp.com" autocomplete="off">
+              <input id="smtp-user" name="smtp_user" type="text" value="<?= primex_console_h($cfg['SMTP_USER']) ?>" placeholder="noreply@prime-x-capital.com" autocomplete="off">
             </div>
           </div>
 
@@ -605,7 +605,7 @@ $hasSmtpPass = ($cfg['SMTP_PASS'] !== '');
           <div class="form-grid">
             <div class="field">
               <label for="smtp-from">From Email</label>
-              <input id="smtp-from" name="smtp_from" type="email" value="<?= primex_console_h($cfg['SMTP_FROM']) ?>" placeholder="noreply@alphavestapp.com">
+              <input id="smtp-from" name="smtp_from" type="email" value="<?= primex_console_h($cfg['SMTP_FROM']) ?>" placeholder="noreply@prime-x-capital.com">
             </div>
             <div class="field">
               <label for="smtp-from-name">From Display Name</label>

@@ -121,8 +121,8 @@ if ($userId && $supabase->isConfigured()) {
     }
 }
 
-$host = $_SERVER['HTTP_HOST'] ?? 'alphavest.io';
-$proto = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? 'prime-x-capital.com';
+$proto = (function_exists('isHttpsRequest') ? isHttpsRequest() : (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on')) ? 'https' : 'http';
 
 sendSuccess([
     'referral_code' => $referralCode,
