@@ -10688,11 +10688,69 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   },
 
   /* 5. Customer Service & Persistent Live Support Chat (User <-> Admin) */
+  getSupportInitials(label) {
+    const clean = String(label || '').trim();
+    if (!clean) return 'U';
+    const base = clean.includes('@') ? clean.split('@')[0] : clean;
+    const parts = base.replace(/[^A-Za-z0-9\s._-]/g, ' ').split(/[\s._-]+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return base.slice(0, 2).toUpperCase();
+  },
+
+  getSupportAvatarTone(seed) {
+    const tones = ['tone-blue', 'tone-indigo', 'tone-emerald', 'tone-amber', 'tone-slate'];
+    const str = String(seed || 'x');
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return tones[Math.abs(hash) % tones.length];
+  },
+
+  parseSupportTimestamp(value) {
+    if (!value) return null;
+    const raw = String(value).trim();
+    const iso = raw.includes('T') ? raw : raw.replace(' ', 'T') + (raw.endsWith('Z') ? '' : 'Z');
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d;
+  },
+
+  formatChatDateDivider(value) {
+    const d = this.parseSupportTimestamp(value);
+    if (!d) return '';
+    const now = new Date();
+    const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    if (sameDay(d, now)) return 'Today';
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (sameDay(d, yesterday)) return 'Yesterday';
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+  },
+
+  formatChatClock(value) {
+    const d = this.parseSupportTimestamp(value);
+    if (!d) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  },
+
+  formatSupportListTime(value) {
+    const d = this.parseSupportTimestamp(value);
+    if (!d) return '';
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  },
+
   openCustomerService() {
     this.openModal('modal-customer-service');
   },
 
-  async openLiveSupportChat() {
+  async openLiveSupportChat(subject = '', prefillMessage = '') {
     this.closeModal('modal-customer-service');
     if (!this.state.user) {
       this.toast('Please log in to start a live chat with support.', 'info');
@@ -10700,8 +10758,24 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       return;
     }
     this.openModal('modal-support-chat');
-    this.state.userSupportForceNew = false;
+    const hasCustomTopic = typeof subject === 'string' && subject.trim().length > 0;
+    this.state.userSupportForceNew = hasCustomTopic;
+    this.state.userSupportSubject = hasCustomTopic ? subject.trim() : '';
+    if (hasCustomTopic) {
+      this.state.userSupportActiveTicketId = null;
+      this.state.userSupportTicket = null;
+      this.state.userSupportMessages = [];
+      this.renderUserSupportChat(true);
+    }
     await this.loadUserSupportChat(false);
+    if (typeof prefillMessage === 'string' && prefillMessage.trim()) {
+      const input = document.getElementById('chat-input-text');
+      if (input) {
+        input.value = prefillMessage.trim();
+        this.updateSupportCharCount();
+        input.focus();
+      }
+    }
     if (this._userSupportPollTimer) clearInterval(this._userSupportPollTimer);
     this._userSupportPollTimer = setInterval(() => {
       const modal = document.getElementById('modal-support-chat');
@@ -10711,20 +10785,57 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     }, 5000);
   },
 
-  startNewSupportTicket() {
+  startNewSupportTicket(subject = '', prefillMessage = '') {
     this.state.userSupportForceNew = true;
+    this.state.userSupportSubject = (typeof subject === 'string' && subject.trim()) ? subject.trim() : '';
     this.state.userSupportActiveTicketId = null;
     this.state.userSupportTicket = null;
     this.state.userSupportMessages = [];
+    this.renderUserSupportThreads();
     this.renderUserSupportChat(true);
     const input = document.getElementById('chat-input-text');
-    if (input) input.focus();
+    if (input) {
+      if (typeof prefillMessage === 'string' && prefillMessage.trim()) {
+        input.value = prefillMessage.trim();
+        this.updateSupportCharCount();
+      }
+      input.focus();
+    }
+  },
+
+  async selectUserSupportTicket(ticketId) {
+    if (!ticketId) return;
+    this.state.userSupportForceNew = false;
+    this.state.userSupportSubject = '';
+    this.state.userSupportActiveTicketId = ticketId;
+    await this.loadUserSupportChat(false);
+  },
+
+  insertUserSupportStarter(text) {
+    const input = document.getElementById('chat-input-text');
+    if (!input) return;
+    input.value = String(text || '');
+    this.updateSupportCharCount();
+    input.focus();
+  },
+
+  updateSupportCharCount() {
+    const input = document.getElementById('chat-input-text');
+    const counter = document.getElementById('chat-char-count');
+    if (!input || !counter) return;
+    const len = input.value.length;
+    if (len >= 120) {
+      counter.textContent = `${len}/2000`;
+      counter.style.display = 'inline';
+    } else {
+      counter.style.display = 'none';
+    }
   },
 
   async loadUserSupportChat(silent = false) {
     if (!this.state.user) return;
     const chatBox = document.getElementById('chat-messages-container');
-    if (!silent && chatBox && (!Array.isArray(this.state.userSupportMessages) || !this.state.userSupportMessages.length)) {
+    if (!silent && !this.state.userSupportForceNew && chatBox && (!Array.isArray(this.state.userSupportMessages) || !this.state.userSupportMessages.length)) {
       chatBox.innerHTML = '<div style="margin:auto;color:#6B7280;font-size:13px;">Loading conversation...</div>';
     }
     const qs = (!this.state.userSupportForceNew && this.state.userSupportActiveTicketId)
@@ -10734,6 +10845,8 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     if (res && res.success && res.data) {
       const prevCount = Array.isArray(this.state.userSupportMessages) ? this.state.userSupportMessages.length : 0;
       const nextMsgs = Array.isArray(res.data.messages) ? res.data.messages : [];
+      this.state.userSupportTickets = Array.isArray(res.data.tickets) ? res.data.tickets : [];
+      this.renderUserSupportThreads();
       if (!this.state.userSupportForceNew) {
         this.state.userSupportTicket = res.data.ticket || null;
         this.state.userSupportActiveTicketId = res.data.ticket?.id || null;
@@ -10745,9 +10858,31 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     }
   },
 
+  renderUserSupportThreads() {
+    const bar = document.getElementById('chat-thread-switcher');
+    if (!bar) return;
+    const tickets = Array.isArray(this.state.userSupportTickets) ? this.state.userSupportTickets : [];
+    const showBar = tickets.length > 1 || (this.state.userSupportForceNew && tickets.length >= 1);
+    if (!showBar) {
+      bar.style.display = 'none';
+      bar.innerHTML = '';
+      return;
+    }
+    const activeId = this.state.userSupportForceNew ? '' : String(this.state.userSupportActiveTicketId || '');
+    bar.style.display = 'flex';
+    bar.innerHTML = tickets.slice(0, 8).map((t, idx) => {
+      const tid = String(t.id || '');
+      const isSelected = tid === activeId;
+      const subj = String(t.subject || `Thread #${idx + 1}`).trim();
+      const shortLabel = subj.length > 24 ? `${subj.slice(0, 24)}…` : subj;
+      return `<button type="button" class="av-chat-thread-tab${isSelected ? ' active' : ''}" onclick="App.selectUserSupportTicket('${this.escapeHtml(tid)}')">${this.escapeHtml(shortLabel)}</button>`;
+    }).join('');
+  },
+
   renderUserSupportChat(scrollToBottom = true) {
     const chatBox = document.getElementById('chat-messages-container');
     const badge = document.getElementById('chat-ticket-status-badge');
+    const sep = document.getElementById('chat-ticket-meta-sep');
     const subtitle = document.getElementById('chat-status-subtitle');
     if (!chatBox) return;
 
@@ -10755,60 +10890,84 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     const msgs = Array.isArray(this.state.userSupportMessages) ? this.state.userSupportMessages : [];
 
     if (badge) {
-      if (ticket && ticket.status) {
+      if (!this.state.userSupportForceNew && ticket && ticket.status) {
         const st = String(ticket.status).toUpperCase();
-        badge.textContent = st.replace(/_/g, ' ');
-        badge.style.display = 'inline-flex';
-        if (st === 'RESOLVED' || st === 'CLOSED') {
-          badge.style.background = '#ECFDF5';
-          badge.style.color = '#059669';
-        } else if (st === 'WAITING_FOR_USER') {
-          badge.style.background = '#EFF4FF';
-          badge.style.color = '#0052FF';
-        } else {
-          badge.style.background = '#FEF3C7';
-          badge.style.color = '#B45309';
-        }
+        const prettyStatus = st.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+        badge.textContent = prettyStatus;
+        badge.style.display = 'inline';
+        badge.style.color = (st === 'RESOLVED' || st === 'CLOSED') ? '#34D399' : (st === 'WAITING_FOR_USER' ? '#60A5FA' : '#FBBF24');
+        if (sep) sep.style.display = 'inline';
       } else {
         badge.style.display = 'none';
+        if (sep) sep.style.display = 'none';
       }
     }
 
     if (subtitle) {
       if (this.state.userSupportForceNew) {
-        subtitle.textContent = 'Starting a new conversation · Send your message below';
+        subtitle.textContent = this.state.userSupportSubject
+          ? `New inquiry · ${this.state.userSupportSubject}`
+          : 'New conversation · Send your message below';
+      } else if (ticket?.subject && ticket.subject !== 'Platform Support Inquiry') {
+        subtitle.textContent = ticket.subject;
       } else if (ticket?.status === 'WAITING_FOR_USER') {
-        subtitle.textContent = 'Support replied · View message below';
-      } else if (ticket?.id) {
-        subtitle.textContent = 'Live ticket active · Admins reply right here';
+        subtitle.textContent = 'Specialist replied below';
       } else {
-        subtitle.textContent = 'Connected · Messages are delivered directly to admin';
+        subtitle.textContent = 'Direct administrator desk';
       }
     }
 
     if (!msgs.length) {
+      const heading = this.state.userSupportForceNew && this.state.userSupportSubject
+        ? this.escapeHtml(this.state.userSupportSubject)
+        : 'PRIME X CAPITAL Support Desk';
+      const subcopy = this.state.userSupportForceNew
+        ? 'Type your message below or pick a quick starter to open this inquiry.'
+        : 'Messages go straight to an account specialist with live reply updates.';
       chatBox.innerHTML = `
-        <div class="chat-msg bot">
-          <div class="chat-bubble">${this.state.userSupportForceNew
-            ? 'New support conversation ready. Type your inquiry below and our admin team will respond here.'
-            : 'Hello! Welcome to PRIME X CAPITAL Support. Send a message below and an administrator will reply directly in this chat.'}</div>
-          <span class="chat-time">Support Desk</span>
+        <div class="av-chat-welcome-card">
+          <div class="av-chat-welcome-head">
+            <span class="av-chat-welcome-mark">PX</span>
+            <div>
+              <strong>${heading}</strong>
+              <span>${this.escapeHtml(subcopy)}</span>
+            </div>
+          </div>
+          <div class="av-chat-starters">
+            <button type="button" onclick="App.insertUserSupportStarter('Please check the verification status of my recent deposit.')">Check deposit status</button>
+            <button type="button" onclick="App.insertUserSupportStarter('I need help verifying my bound withdrawal address.')">Withdrawal verification</button>
+            <button type="button" onclick="App.insertUserSupportStarter('Could you review my submitted KYC documents?')">KYC document review</button>
+          </div>
         </div>
       `;
       return;
     }
 
-    chatBox.innerHTML = msgs.map(m => {
+    const userInitials = this.getSupportInitials(this.state.user?.first_name || this.state.user?.email || 'You');
+    let lastDivider = '';
+    const htmlParts = [];
+
+    msgs.forEach(m => {
+      const divider = this.formatChatDateDivider(m.created_at);
+      if (divider && divider !== lastDivider) {
+        lastDivider = divider;
+        htmlParts.push(`<div class="av-chat-date-divider"><span>${this.escapeHtml(divider)}</span></div>`);
+      }
       const isUser = String(m.sender_role || '').toUpperCase() === 'USER';
-      const timeLabel = this.formatAdminDate(m.created_at);
-      const roleTag = isUser ? 'You' : 'Support Admin';
-      return `
-        <div class="chat-msg ${isUser ? 'user' : 'bot'}">
-          <div class="chat-bubble">${this.escapeHtml(m.message || '')}</div>
-          <span class="chat-time">${roleTag} · ${this.escapeHtml(timeLabel)}</span>
+      const clock = this.formatChatClock(m.created_at) || this.formatAdminDate(m.created_at);
+      const roleTag = isUser ? 'You' : 'Support Desk';
+      htmlParts.push(`
+        <div class="av-chat-row ${isUser ? 'is-outgoing' : 'is-incoming'}">
+          <div class="av-chat-avatar ${isUser ? 'is-client' : 'is-concierge'}" aria-hidden="true">${isUser ? this.escapeHtml(userInitials) : 'PX'}</div>
+          <div class="av-chat-msg-stack">
+            <div class="av-chat-bubble">${this.escapeHtml(m.message || '')}</div>
+            <span class="av-chat-meta">${roleTag} · ${this.escapeHtml(clock)}</span>
+          </div>
         </div>
-      `;
-    }).join('');
+      `);
+    });
+
+    chatBox.innerHTML = htmlParts.join('');
 
     if (scrollToBottom) {
       chatBox.scrollTop = chatBox.scrollHeight;
@@ -10829,6 +10988,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     if (sendBtn) sendBtn.disabled = true;
     const payload = {
       message: msgText,
+      subject: this.state.userSupportSubject || 'Platform Support Inquiry',
       ticket_id: this.state.userSupportForceNew ? '' : (this.state.userSupportActiveTicketId || ''),
       new_ticket: Boolean(this.state.userSupportForceNew)
     };
@@ -10837,10 +10997,14 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
     if (res && res.success && res.data) {
       input.value = '';
+      this.updateSupportCharCount();
       this.state.userSupportForceNew = false;
+      this.state.userSupportSubject = '';
       this.state.userSupportTicket = res.data.ticket || null;
       this.state.userSupportActiveTicketId = res.data.ticket?.id || null;
+      this.state.userSupportTickets = Array.isArray(res.data.tickets) ? res.data.tickets : (this.state.userSupportTickets || []);
       this.state.userSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
+      this.renderUserSupportThreads();
       this.renderUserSupportChat(true);
     } else {
       this.toast(res?.message || 'Unable to send support message. Please try again.', 'error');
@@ -10848,6 +11012,15 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   },
 
   /* 5b. Admin Support Desk */
+  setAdminSupportFilter(status) {
+    const normalized = String(status || 'ALL').toUpperCase();
+    this.state.adminSupportFilter = normalized;
+    document.querySelectorAll('.av-adm-sup-seg-btn').forEach(btn => {
+      btn.classList.toggle('active', String(btn.dataset.supFilter || '').toUpperCase() === normalized);
+    });
+    this.filterAdminSupport();
+  },
+
   async loadAdminSupport(opts = {}) {
     const silent = Boolean(opts && opts.silent);
     const activeId = this.state.adminSupportActiveId || '';
@@ -10879,6 +11052,12 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     updateSupBadge('adm-badge-support', needsReplyCount);
     updateSupBadge('adm-pill-badge-support', needsReplyCount);
 
+    const tabNeeds = document.getElementById('adm-sup-tab-needs-count');
+    if (tabNeeds) {
+      tabNeeds.textContent = needsReplyCount;
+      tabNeeds.style.display = needsReplyCount > 0 ? 'inline-block' : 'none';
+    }
+
     const qSup = document.getElementById('adm-quick-support');
     if (qSup) {
       if (needsReplyCount > 0) {
@@ -10892,7 +11071,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
     const summaryEl = document.getElementById('adm-sup-inbox-summary');
     if (summaryEl) {
-      summaryEl.textContent = `${tickets.length} conversation(s) · ${needsReplyCount} awaiting admin reply`;
+      summaryEl.textContent = `${tickets.length} conversations · ${needsReplyCount} awaiting reply`;
     }
 
     this.filterAdminSupport();
@@ -10904,7 +11083,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     if (!listEl) return;
 
     const query = (document.getElementById('adm-sup-search')?.value || '').trim().toLowerCase();
-    const filterStatus = (document.getElementById('adm-sup-filter-status')?.value || 'ALL').toUpperCase();
+    const filterStatus = String(this.state.adminSupportFilter || 'ALL').toUpperCase();
     const tickets = Array.isArray(this.state.adminSupportTickets) ? this.state.adminSupportTickets : [];
 
     const filtered = tickets.filter(t => {
@@ -10921,7 +11100,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     });
 
     if (!filtered.length) {
-      listEl.innerHTML = '<div style="padding:28px 16px;text-align:center;color:#6B7280;font-size:13px;">No support conversations match this filter.</div>';
+      listEl.innerHTML = '<div class="av-adm-sup-empty-pane">No support conversations match this filter.</div>';
       return;
     }
 
@@ -10930,26 +11109,36 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       const tid = String(t.id || '');
       const st = String(t.status || 'OPEN').toUpperCase();
       const isSelected = tid === activeId;
-      let pillClass = 'waiting';
-      let pillLabel = st.replace(/_/g, ' ');
+      let statusClass = 'waiting';
+      let statusLabel = 'Awaiting User';
       if (t.needs_reply) {
-        pillClass = 'needs-reply';
-        pillLabel = 'Needs Reply';
+        statusClass = 'needs-reply';
+        statusLabel = 'Needs Reply';
       } else if (st === 'RESOLVED' || st === 'CLOSED') {
-        pillClass = 'resolved';
+        statusClass = 'resolved';
+        statusLabel = st === 'CLOSED' ? 'Closed' : 'Resolved';
       }
-      const uidPart = t.numeric_uid ? ` · UID #${this.escapeHtml(String(t.numeric_uid))}` : '';
-      const timeLabel = this.formatAdminDate(t.last_message_at || t.updated_at || t.created_at);
+      const initials = this.getSupportInitials(t.user_name || t.user_email || 'U');
+      const tone = this.getSupportAvatarTone(t.user_email || tid);
+      const uidPart = t.numeric_uid ? `UID #${this.escapeHtml(String(t.numeric_uid))}` : this.escapeHtml(t.user_name || 'Member');
+      const msgCount = Number(t.message_count || 0);
+      const timeLabel = this.formatSupportListTime(t.last_message_at || t.updated_at || t.created_at);
       return `
         <button type="button" class="av-adm-sup-ticket-item${isSelected ? ' active' : ''}" onclick="App.selectAdminSupportTicket('${this.escapeHtml(tid)}')">
-          <div class="av-adm-sup-item-top">
-            <span class="av-adm-sup-user-label">${this.escapeHtml(t.user_email || t.user_name || 'User')}</span>
-            <span class="av-sup-status-pill ${pillClass}">${this.escapeHtml(pillLabel)}</span>
-          </div>
-          <div class="av-adm-sup-snippet">${this.escapeHtml(t.last_message || t.subject || 'New support inquiry')}</div>
-          <div class="av-adm-sup-meta">
-            <span>${this.escapeHtml((t.user_name || 'Member'))}${uidPart}</span>
-            <span>${this.escapeHtml(timeLabel)}</span>
+          <div class="av-adm-sup-avatar ${tone}" aria-hidden="true">${this.escapeHtml(initials)}</div>
+          <div class="av-adm-sup-item-body">
+            <div class="av-adm-sup-item-top">
+              <span class="av-adm-sup-user-label">${this.escapeHtml(t.user_email || t.user_name || 'User')}</span>
+              <span class="av-adm-sup-time">${this.escapeHtml(timeLabel)}</span>
+            </div>
+            <div class="av-adm-sup-snippet">${this.escapeHtml(t.last_message || t.subject || 'New support inquiry')}</div>
+            <div class="av-adm-sup-meta">
+              <span class="av-sup-status-tag ${statusClass}">${this.escapeHtml(statusLabel)}</span>
+              <span aria-hidden="true">·</span>
+              <span>${uidPart}</span>
+              <span aria-hidden="true">·</span>
+              <span>${msgCount} msg${msgCount === 1 ? '' : 's'}</span>
+            </div>
           </div>
         </button>
       `;
@@ -10977,27 +11166,57 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     if (splitEl) splitEl.classList.remove('is-thread-open');
   },
 
+  insertAdminSupportMacro(text) {
+    const input = document.getElementById('adm-sup-reply-input');
+    if (!input) return;
+    input.value = String(text || '');
+    input.focus();
+  },
+
+  inspectAdminSupportUser() {
+    const tickets = Array.isArray(this.state.adminSupportTickets) ? this.state.adminSupportTickets : [];
+    const active = tickets.find(t => String(t.id) === String(this.state.adminSupportActiveId));
+    if (!active || !active.user_email) return;
+    this.setAdminTab('users');
+    const searchInput = document.getElementById('adm-users-search');
+    if (searchInput) {
+      searchInput.value = active.user_email;
+    }
+    this.filterAdminUsers();
+  },
+
   renderAdminSupportThread(scrollToBottom = true) {
+    const headerAvatar = document.getElementById('adm-sup-thread-avatar');
     const headerUser = document.getElementById('adm-sup-thread-user');
     const headerMeta = document.getElementById('adm-sup-thread-meta');
     const controls = document.getElementById('adm-sup-thread-controls');
     const statusSel = document.getElementById('adm-sup-status-select');
     const msgsEl = document.getElementById('adm-sup-thread-messages');
-    const composer = document.getElementById('adm-sup-composer');
+    const composerWrap = document.getElementById('adm-sup-composer-wrap');
     if (!msgsEl) return;
 
     const tickets = Array.isArray(this.state.adminSupportTickets) ? this.state.adminSupportTickets : [];
     const active = tickets.find(t => String(t.id) === String(this.state.adminSupportActiveId));
 
     if (!active) {
+      if (headerAvatar) {
+        headerAvatar.className = 'av-adm-sup-avatar tone-slate';
+        headerAvatar.textContent = 'PX';
+      }
       if (headerUser) headerUser.textContent = 'Select a conversation';
-      if (headerMeta) headerMeta.textContent = 'Click a user thread to view history and reply';
+      if (headerMeta) headerMeta.textContent = 'Choose a client inquiry to view history and respond';
       if (controls) controls.style.display = 'none';
-      if (composer) composer.style.display = 'none';
-      msgsEl.innerHTML = '<div style="margin:auto;text-align:center;color:#6B7280;padding:24px;font-size:13px;">No conversation selected.</div>';
+      if (composerWrap) composerWrap.style.display = 'none';
+      msgsEl.innerHTML = '<div class="av-adm-sup-empty-pane">Select any customer thread from the queue to inspect messages and reply directly.</div>';
       return;
     }
 
+    const clientInitials = this.getSupportInitials(active.user_name || active.user_email || 'U');
+    const clientTone = this.getSupportAvatarTone(active.user_email || active.id);
+    if (headerAvatar) {
+      headerAvatar.className = `av-adm-sup-avatar ${clientTone}`;
+      headerAvatar.textContent = clientInitials;
+    }
     if (headerUser) headerUser.textContent = `${active.user_email || 'Member'}`;
     if (headerMeta) {
       const uidTag = active.numeric_uid ? `UID #${active.numeric_uid} · ` : '';
@@ -11005,24 +11224,36 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     }
     if (controls) controls.style.display = 'flex';
     if (statusSel) statusSel.value = String(active.status || 'OPEN').toUpperCase();
-    if (composer) composer.style.display = 'flex';
+    if (composerWrap) composerWrap.style.display = 'flex';
 
     const msgs = Array.isArray(this.state.adminSupportMessages) ? this.state.adminSupportMessages : [];
     if (!msgs.length) {
-      msgsEl.innerHTML = '<div style="margin:auto;text-align:center;color:#6B7280;padding:24px;font-size:13px;">No messages in this conversation yet.</div>';
+      msgsEl.innerHTML = '<div class="av-adm-sup-empty-pane">No messages in this conversation yet.</div>';
       return;
     }
 
-    msgsEl.innerHTML = msgs.map(m => {
+    let lastDivider = '';
+    const htmlParts = [];
+    msgs.forEach(m => {
+      const divider = this.formatChatDateDivider(m.created_at);
+      if (divider && divider !== lastDivider) {
+        lastDivider = divider;
+        htmlParts.push(`<div class="av-chat-date-divider"><span>${this.escapeHtml(divider)}</span></div>`);
+      }
       const isAdmin = String(m.sender_role || '').toUpperCase() === 'ADMIN';
-      const timeLabel = this.formatAdminDate(m.created_at);
-      return `
-        <div class="av-sup-msg-row ${isAdmin ? 'from-admin' : 'from-user'}">
-          <div class="av-sup-msg-bubble">${this.escapeHtml(m.message || '')}</div>
-          <div class="av-sup-msg-time">${isAdmin ? 'Admin' : this.escapeHtml(active.user_name || 'User')} · ${this.escapeHtml(timeLabel)}</div>
+      const clock = this.formatChatClock(m.created_at) || this.formatAdminDate(m.created_at);
+      htmlParts.push(`
+        <div class="av-chat-row ${isAdmin ? 'is-outgoing' : 'is-incoming'}">
+          <div class="av-chat-avatar ${isAdmin ? 'is-concierge' : 'is-client'}" aria-hidden="true">${isAdmin ? 'PX' : this.escapeHtml(clientInitials)}</div>
+          <div class="av-chat-msg-stack">
+            <div class="av-chat-bubble">${this.escapeHtml(m.message || '')}</div>
+            <span class="av-chat-meta">${isAdmin ? 'Admin' : this.escapeHtml(active.user_name || 'User')} · ${this.escapeHtml(clock)}</span>
+          </div>
         </div>
-      `;
-    }).join('');
+      `);
+    });
+
+    msgsEl.innerHTML = htmlParts.join('');
 
     if (scrollToBottom) {
       msgsEl.scrollTop = msgsEl.scrollHeight;

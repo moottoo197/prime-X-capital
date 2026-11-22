@@ -3466,7 +3466,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261122_v121_header_console_support_chat">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261122_v122_concierge_support_design">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -6366,49 +6366,57 @@ window.gtranslateSettings = {
 
           <!-- Admin Tab: Support Chat Desk -->
           <div id="adm-sec-support" class="admin-panel-sec" style="display:none;">
-            <div class="card" style="padding:14px 16px; margin-bottom:14px;">
-              <div class="av-adm-filter-bar">
-                <div class="av-adm-filter-inputs">
-                  <input type="search" id="adm-sup-search" class="av-adm-filter-search" placeholder="Search by user email, UID, subject, or message..." oninput="App.filterAdminSupport()">
-                  <select id="adm-sup-filter-status" class="av-adm-filter-select" onchange="App.filterAdminSupport()">
-                    <option value="ALL">All Conversations</option>
-                    <option value="NEEDS_REPLY">Needs Admin Reply</option>
-                    <option value="OPEN">Open / Active</option>
-                    <option value="RESOLVED">Resolved / Closed</option>
-                  </select>
+            <div class="av-adm-sup-toolbar card">
+              <div class="av-adm-sup-toolbar-row">
+                <div class="av-adm-sup-seg-tabs" role="tablist" aria-label="Filter support conversations">
+                  <button type="button" class="av-adm-sup-seg-btn active" data-sup-filter="ALL" onclick="App.setAdminSupportFilter('ALL')">All</button>
+                  <button type="button" class="av-adm-sup-seg-btn" data-sup-filter="NEEDS_REPLY" onclick="App.setAdminSupportFilter('NEEDS_REPLY')">
+                    Needs Reply <span id="adm-sup-tab-needs-count" class="av-adm-sup-tab-count">0</span>
+                  </button>
+                  <button type="button" class="av-adm-sup-seg-btn" data-sup-filter="OPEN" onclick="App.setAdminSupportFilter('OPEN')">Active</button>
+                  <button type="button" class="av-adm-sup-seg-btn" data-sup-filter="RESOLVED" onclick="App.setAdminSupportFilter('RESOLVED')">Resolved</button>
                 </div>
-                <div class="av-adm-filter-actions">
-                  <button class="btn-secondary" style="font-size:12px; padding:7px 12px;" onclick="App.loadAdminSupport()">Refresh Inbox</button>
+                <div class="av-adm-sup-toolbar-right">
+                  <div class="av-adm-sup-search-wrap">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                    <input type="search" id="adm-sup-search" placeholder="Search email, UID, subject, or message..." oninput="App.filterAdminSupport()">
+                  </div>
+                  <button type="button" class="btn-secondary av-adm-sup-refresh-btn" onclick="App.loadAdminSupport()">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                    <span>Refresh</span>
+                  </button>
                 </div>
               </div>
             </div>
 
             <div class="av-adm-support-split" id="adm-sup-split">
               <!-- Ticket List Pane -->
-              <div class="card av-adm-sup-list-pane" style="padding:0; overflow:hidden;">
-                <div class="av-adm-section-head">
+              <div class="card av-adm-sup-list-pane">
+                <div class="av-adm-sup-pane-head">
                   <div>
-                    <h4>Support Conversations</h4>
-                    <p id="adm-sup-inbox-summary" style="margin:2px 0 0; font-size:12px; color:#6B7280;">Loading support conversations...</p>
+                    <h4>Customer Queue</h4>
+                    <p id="adm-sup-inbox-summary" class="av-adm-sup-pane-sub">Loading support conversations...</p>
                   </div>
                 </div>
                 <div id="adm-sup-ticket-list" class="av-adm-sup-ticket-list">
-                  <div style="padding:24px; text-align:center; color:#6B7280; font-size:13px;">Loading support queue...</div>
+                  <div class="av-adm-sup-empty-pane">Loading support queue...</div>
                 </div>
               </div>
 
               <!-- Active Chat Thread Pane -->
-              <div class="card av-adm-sup-thread-pane" style="padding:0; overflow:hidden;">
+              <div class="card av-adm-sup-thread-pane">
                 <div id="adm-sup-thread-header" class="av-adm-sup-thread-header">
-                  <div style="display:flex; align-items:center; gap:10px; min-width:0;">
-                    <button type="button" class="av-adm-sup-back-btn" onclick="App.closeMobileSupportThread()" aria-label="Back to tickets">‹ Back</button>
-                    <div style="min-width:0;">
-                      <div id="adm-sup-thread-user" style="font-size:14.5px; font-weight:800; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Select a conversation</div>
-                      <div id="adm-sup-thread-meta" style="font-size:11.5px; color:#6B7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Click a user thread to view history and reply</div>
+                  <div class="av-adm-sup-thread-id">
+                    <button type="button" class="av-adm-sup-back-btn" onclick="App.closeMobileSupportThread()" aria-label="Back to tickets">‹ Queue</button>
+                    <div id="adm-sup-thread-avatar" class="av-adm-sup-avatar tone-slate" aria-hidden="true">PX</div>
+                    <div class="av-adm-sup-thread-titles">
+                      <div id="adm-sup-thread-user" class="av-adm-sup-thread-user">Select a conversation</div>
+                      <div id="adm-sup-thread-meta" class="av-adm-sup-thread-meta">Choose a client inquiry to view history and respond</div>
                     </div>
                   </div>
-                  <div id="adm-sup-thread-controls" style="display:none; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <select id="adm-sup-status-select" style="width:auto; min-height:34px; padding:5px 10px; font-size:12px;" onchange="App.updateAdminSupportStatus(this.value)">
+                  <div id="adm-sup-thread-controls" class="av-adm-sup-thread-controls" style="display:none;">
+                    <button type="button" id="btn-adm-sup-inspect-user" class="av-adm-sup-inspect-btn" onclick="App.inspectAdminSupportUser()">Inspect User</button>
+                    <select id="adm-sup-status-select" class="av-adm-sup-status-select" onchange="App.updateAdminSupportStatus(this.value)" aria-label="Ticket status">
                       <option value="OPEN">Open</option>
                       <option value="IN_PROGRESS">In Progress</option>
                       <option value="WAITING_FOR_USER">Waiting for User</option>
@@ -6419,14 +6427,24 @@ window.gtranslateSettings = {
                 </div>
 
                 <div id="adm-sup-thread-messages" class="av-adm-sup-thread-messages">
-                  <div style="margin:auto; text-align:center; color:#6B7280; padding:24px; font-size:13px;">
-                    Select any user inquiry on the left to read messages and respond live.
+                  <div class="av-adm-sup-empty-pane">
+                    Select any customer thread from the queue to inspect messages and reply directly.
                   </div>
                 </div>
 
-                <div id="adm-sup-composer" class="av-adm-sup-composer" style="display:none;">
-                  <input type="text" id="adm-sup-reply-input" placeholder="Write a reply to this user..." maxlength="2000" onkeydown="if(event.key==='Enter') App.sendAdminSupportReply()">
-                  <button type="button" id="btn-adm-sup-send" class="btn-primary" style="padding:10px 16px; min-height:42px; flex-shrink:0;" onclick="App.sendAdminSupportReply()">Send Reply</button>
+                <div id="adm-sup-composer-wrap" class="av-adm-sup-composer-wrap" style="display:none;">
+                  <div class="av-adm-sup-macros">
+                    <button type="button" class="av-adm-sup-macro-btn" onclick="App.insertAdminSupportMacro('We are reviewing your account details now and will update you shortly.')">Reviewing account</button>
+                    <button type="button" class="av-adm-sup-macro-btn" onclick="App.insertAdminSupportMacro('Please share your transaction hash (TXID) so our treasury team can verify it immediately.')">Request TXN hash</button>
+                    <button type="button" class="av-adm-sup-macro-btn" onclick="App.insertAdminSupportMacro('This request has been completed and verified on your account. Let us know if you need anything else.')">Resolved &amp; verified</button>
+                  </div>
+                  <div id="adm-sup-composer" class="av-adm-sup-composer">
+                    <input type="text" id="adm-sup-reply-input" placeholder="Write a direct reply to this client..." maxlength="2000" onkeydown="if(event.key==='Enter') App.sendAdminSupportReply()">
+                    <button type="button" id="btn-adm-sup-send" class="av-adm-sup-send-btn" onclick="App.sendAdminSupportReply()">
+                      <span>Send Reply</span>
+                      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -8749,74 +8767,135 @@ window.gtranslateSettings = {
     </div>
   </div>
 
-  <!-- MODAL: CUSTOMER SERVICE (Matches Screenshot 003415) -->
+  <!-- MODAL: CUSTOMER SERVICE CONCIERGE HUB -->
   <div id="modal-customer-service" class="modal-overlay">
-    <div class="modal-content" style="max-width: 460px; min-height: 540px; background:#FFFFFF; border-radius:20px; padding:18px 20px 26px; display:flex; flex-direction:column;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <button type="button" onclick="App.closeModal('modal-customer-service')" style="background:none;border:none;font-size:20px;color:#111827;cursor:pointer;padding:4px;" aria-label="Back">‹</button>
-        <button class="modal-close" onclick="App.closeModal('modal-customer-service')">✕</button>
+    <div class="modal-content av-concierge-hub-modal">
+      <div class="av-concierge-hero">
+        <div class="av-concierge-hero-top">
+          <button type="button" class="av-concierge-icon-btn" onclick="App.closeModal('modal-customer-service')" aria-label="Back">‹</button>
+          <button type="button" class="av-concierge-icon-btn" onclick="App.closeModal('modal-customer-service')" aria-label="Close">✕</button>
+        </div>
+        <div class="av-concierge-hero-body">
+          <div class="av-concierge-brand-badge">
+            <img src="/assets/aistudio/primex-mark_326fd678.webp" alt="PRIME X CAPITAL">
+          </div>
+          <h3>PRIME X Client Concierge</h3>
+          <p>Direct institutional desk for deposits, withdrawals, verification, and trading execution.</p>
+        </div>
       </div>
 
-      <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px 10px;">
-        <svg width="64" height="58" viewBox="0 0 64 58" fill="none" style="margin-bottom:16px;">
-          <line x1="32" y1="6" x2="32" y2="16" stroke="#111827" stroke-width="2.5"/>
-          <circle cx="32" cy="6" r="4" fill="#A3E635"/>
-          <rect x="8" y="24" width="6" height="14" rx="3" fill="#0052FF"/>
-          <rect x="50" y="24" width="6" height="14" rx="3" fill="#0052FF"/>
-          <rect x="14" y="16" width="36" height="28" rx="6" fill="#94A3B8"/>
-          <circle cx="25" cy="30" r="3" fill="#111827"/>
-          <circle cx="39" cy="30" r="3" fill="#111827"/>
-        </svg>
-        <h3 style="font-size:22px; font-weight:800; color:#111827; margin:0 0 10px;">PRIME X CAPITAL Smart support</h3>
-        <p style="font-size:13.5px; color:#6B7280; margin:0;">You will usually receive a reply within a few minutes.</p>
-      </div>
+      <div class="av-concierge-hub-body">
+        <div class="av-concierge-section-label">Choose a topic to begin</div>
+        <div class="av-concierge-topics">
+          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('Deposit & Custody Inquiry', 'Hello, I would like assistance verifying a deposit.')">
+            <span class="av-concierge-topic-ico">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </span>
+            <span class="av-concierge-topic-copy">
+              <strong>Deposit &amp; Custody</strong>
+              <span>TXN verification &amp; wallet credits</span>
+            </span>
+            <span class="av-concierge-topic-arrow" aria-hidden="true">›</span>
+          </button>
 
-      <button type="button" class="av-auth-submit-pill" onclick="App.openLiveSupportChat()">Start conversation</button>
+          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('Withdrawal Desk Inquiry', 'Hello, I have a question regarding a withdrawal request.')">
+            <span class="av-concierge-topic-ico">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+            </span>
+            <span class="av-concierge-topic-copy">
+              <strong>Withdrawal Desk</strong>
+              <span>Payout status &amp; address binding</span>
+            </span>
+            <span class="av-concierge-topic-arrow" aria-hidden="true">›</span>
+          </button>
+
+          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('KYC & Account Verification', 'Hello, I need help with my KYC identity verification.')">
+            <span class="av-concierge-topic-ico">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            </span>
+            <span class="av-concierge-topic-copy">
+              <strong>KYC &amp; Security</strong>
+              <span>Identity review &amp; PIN settings</span>
+            </span>
+            <span class="av-concierge-topic-arrow" aria-hidden="true">›</span>
+          </button>
+
+          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('Signals & Trading Support', 'Hello, I have a question about trading signals or futures balance.')">
+            <span class="av-concierge-topic-ico">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            </span>
+            <span class="av-concierge-topic-copy">
+              <strong>Signals &amp; Trading</strong>
+              <span>Execution &amp; Spot-to-Future transfers</span>
+            </span>
+            <span class="av-concierge-topic-arrow" aria-hidden="true">›</span>
+          </button>
+        </div>
+
+        <button type="button" class="av-concierge-primary-cta" onclick="App.openLiveSupportChat()">
+          <span>Open Live Support Chat</span>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- MODAL: LIVE SUPPORT CHAT (Persistent Admin <-> User Desk) -->
+  <!-- MODAL: LIVE SUPPORT CHAT (Institutional Concierge Thread) -->
   <div id="modal-support-chat" class="modal-overlay">
-    <div class="modal-content av-support-modal-content" style="max-width: 440px; height: min(84dvh, 580px); display: flex; flex-direction: column; padding: 0; overflow: hidden; background:#FFFFFF; border-radius:20px;">
-      <div class="modal-header" style="padding: 12px 14px; border-bottom: 1px solid #F1F5F9; margin-bottom: 0; background: #FFFFFF; gap:8px;">
-        <button type="button" onclick="App.closeModal('modal-support-chat')" style="width:32px;height:32px;border-radius:50%;border:1px solid #EEF1F6;background:#FFFFFF;color:#111827;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;" aria-label="Back">‹</button>
-        <div style="flex:1; min-width:0; display:flex; align-items:center; gap:8px;">
-          <div style="font-size: 15.5px; font-weight: 800; color: #111827; white-space:nowrap;">Live Support</div>
-          <span id="chat-ticket-status-badge" class="badge" style="font-size:10px; font-weight:800; background:#EFF4FF; color:#0052FF; display:none;">OPEN</span>
-        </div>
-        <button type="button" onclick="App.startNewSupportTicket()" style="background:#F3F5F8; border:1px solid #E2E8F0; color:#111827; font-size:11px; font-weight:700; padding:5px 9px; border-radius:999px; cursor:pointer; flex-shrink:0;">+ New</button>
-        <button class="modal-close" onclick="App.closeModal('modal-support-chat')">✕</button>
-      </div>
-
-      <div style="padding:10px 14px 4px; background:#FFFFFF;">
-        <div style="display:flex; align-items:center; gap:12px; border:1px solid #F1F5F9; border-radius:14px; padding:10px 12px; background:#F8FAFC;">
-          <div style="width:38px; height:38px; border-radius:50%; background:#0052FF; color:#FFFFFF; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:17px;">🎧</div>
-          <div style="min-width:0; flex:1;">
-            <div style="font-size:14px; font-weight:800; color:#111827;">PRIME X CAPITAL Support Desk</div>
-            <div id="chat-status-subtitle" style="font-size:11.5px; color:#6B7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Connected · Messages are delivered directly to admin</div>
+    <div class="modal-content av-support-modal-content">
+      <div class="av-concierge-topbar">
+        <button type="button" class="av-concierge-icon-btn" onclick="App.closeModal('modal-support-chat')" aria-label="Back">‹</button>
+        <div class="av-concierge-identity">
+          <div class="av-concierge-monogram" aria-hidden="true">PX</div>
+          <div class="av-concierge-title-wrap">
+            <div class="av-concierge-title-row">
+              <span>PRIME X Concierge</span>
+            </div>
+            <div class="av-concierge-meta-row">
+              <span id="chat-ticket-status-badge" style="display:none;">Open</span>
+              <span id="chat-ticket-meta-sep" aria-hidden="true" style="display:none;">·</span>
+              <span id="chat-status-subtitle">Direct administrator desk</span>
+            </div>
           </div>
         </div>
+        <div class="av-concierge-topbar-actions">
+          <button type="button" class="av-concierge-new-btn" onclick="App.startNewSupportTicket()">New Thread</button>
+          <button type="button" class="av-concierge-icon-btn" onclick="App.closeModal('modal-support-chat')" aria-label="Close">✕</button>
+        </div>
       </div>
 
-      <!-- Chat Messages Scrollable Box -->
-      <div id="chat-messages-container" style="flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: #FFFFFF;">
-        <div class="chat-msg bot">
-          <div class="chat-bubble">
-            Hello! Send us a message below and an administrator will respond directly in this chat.
+      <div id="chat-thread-switcher" class="av-chat-thread-bar" style="display:none;"></div>
+
+      <!-- Chat Messages Scrollable Canvas -->
+      <div id="chat-messages-container" class="av-chat-canvas">
+        <div class="av-chat-welcome-card">
+          <div class="av-chat-welcome-head">
+            <span class="av-chat-welcome-mark">PX</span>
+            <div>
+              <strong>PRIME X CAPITAL Support Desk</strong>
+              <span>Messages go straight to an account specialist.</span>
+            </div>
           </div>
-          <span class="chat-time">Support Desk</span>
+          <div class="av-chat-starters">
+            <button type="button" onclick="App.insertUserSupportStarter('Please check the verification status of my recent deposit.')">Check deposit status</button>
+            <button type="button" onclick="App.insertUserSupportStarter('I need help verifying my bound withdrawal address.')">Withdrawal verification</button>
+            <button type="button" onclick="App.insertUserSupportStarter('Could you review my submitted KYC documents?')">KYC document review</button>
+          </div>
         </div>
       </div>
 
       <!-- Chat Input Bar -->
-      <div style="padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)); background: #FFFFFF; border-top: 1px solid #F1F5F9; display: flex; align-items:center; gap: 8px;">
-        <input type="text" id="chat-input-text" placeholder="Write a message to support..." maxlength="2000" style="flex: 1; min-width:0; background: #F7F8FA; border: 1px solid #EEF1F6; border-radius: 12px; padding: 11px 14px; color: #111827; font-size: 13.5px;" onkeydown="if(event.key==='Enter') App.sendSupportMessage()">
-        <button type="button" id="btn-chat-send" style="width:42px; height:42px; border-radius: 50%; border:none; background:#0052FF; color:#FFFFFF; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" onclick="App.sendSupportMessage()" aria-label="Send message">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-            <line x1="22" y1="2" x2="11" y2="13"></line>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-          </svg>
-        </button>
+      <div class="av-chat-composer-dock">
+        <div class="av-chat-composer-shell">
+          <input type="text" id="chat-input-text" placeholder="Write a message to support..." maxlength="2000" oninput="App.updateSupportCharCount()" onkeydown="if(event.key==='Enter') App.sendSupportMessage()">
+          <span id="chat-char-count" class="av-chat-char-count" style="display:none;">0/2000</span>
+          <button type="button" id="btn-chat-send" class="av-chat-send-btn" onclick="App.sendSupportMessage()" aria-label="Send message">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -9519,7 +9598,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261122_v121_header_console_support_chat";
+  const CACHE_VERSION = "20261122_v122_concierge_support_design";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -9551,18 +9630,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261122_v121_header_console_support_chat"></script>
-  <script defer src="/assets/js/chart.js?v=20261122_v121_header_console_support_chat"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261122_v122_concierge_support_design"></script>
+  <script defer src="/assets/js/chart.js?v=20261122_v122_concierge_support_design"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261122_v121_header_console_support_chat"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261122_v121_header_console_support_chat"></script>
+  <script defer src="/assets/js/app.js?v=20261122_v122_concierge_support_design"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261122_v122_concierge_support_design"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261122_v121_header_console_support_chat";
+      var SW_BUILD = "20261122_v122_concierge_support_design";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;
