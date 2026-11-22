@@ -39,7 +39,8 @@ $routes = [
     'admin/deposit-config' => 'admin/deposit-config.php', 'admin/deposits' => 'admin/deposits.php',
     'admin/withdrawals' => 'admin/withdrawals.php', 'admin/adjustments' => 'admin/adjustments.php',
     'admin/signals' => 'admin/signals.php', 'admin/kyc' => 'admin/kyc.php',
-    'admin/users' => 'admin/users.php', 'admin/users/reset-password' => 'admin/users/reset-password.php'
+    'admin/users' => 'admin/users.php', 'admin/users/reset-password' => 'admin/users/reset-password.php',
+    'support/chat' => 'support/chat.php', 'admin/support' => 'admin/support.php'
 ];
 
 $key = preg_replace('/\.php$/i', '', $apiPath);

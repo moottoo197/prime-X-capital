@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             foreach ($res['data'] as $r) {
                 $k = strtolower($r['setting_key'] ?? '');
                 $v = $r['setting_value'] ?? '';
-                if (!empty($k)) {
+                if (!empty($k) && strpos($k, 'smtp_') !== 0) {
                     $defaultSettings[$k] = $v;
                 }
             }
@@ -77,12 +77,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $minDep = (float)$input['minimum_deposit'];
     }
 
-    // Never persist deposit receiving-address changes. They are permanent.
-    unset($input['hot_wallet_trc20'], $input['hot_wallet_erc20'], $input['trc20_deposit_address'], $input['erc20_deposit_address']);
+    // Never persist deposit receiving-address changes or console-only SMTP credentials here.
+    unset(
+        $input['hot_wallet_trc20'],
+        $input['hot_wallet_erc20'],
+        $input['trc20_deposit_address'],
+        $input['erc20_deposit_address'],
+        $input['smtp_host'],
+        $input['smtp_port'],
+        $input['smtp_encryption'],
+        $input['smtp_user'],
+        $input['smtp_pass'],
+        $input['smtp_from'],
+        $input['smtp_from_name']
+    );
 
     if ($supabase->isConfigured()) {
         foreach ($input as $k => $v) {
             if (is_array($v) || is_object($v)) continue;
+            if (stripos((string)$k, 'smtp_') === 0) continue;
             $valStr = (string)$v;
             $supabase->upsert('system_settings', [[
                 'setting_key' => strtoupper($k),

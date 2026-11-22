@@ -311,6 +311,7 @@ const App = {
       if (config) {
         this.state.systemConfig = config;
         this.state.isRealMoneyMode = Boolean(config.real_money_mode);
+        this.applySystemFeatureFlags(config);
       }
 
       this.updateHeaderAuth();
@@ -378,6 +379,9 @@ const App = {
         localStorage.setItem('alphavest_pending_ref', refCode);
       }
     } catch (e) {}
+
+    // Fetch live feature flags immediately (landing + logged-in UI)
+    this.loadSystemConfig().catch(() => {});
 
     // Stagger startup API requests so shared-hosting PHP workers are never saturated by 503s.
     this.checkAuth().then(async () => {
@@ -2486,6 +2490,10 @@ const App = {
       modal.classList.remove('open');
       modal.style.zIndex = '';
       modal.style.pointerEvents = '';
+    }
+    if (modalId === 'modal-support-chat' && this._userSupportPollTimer) {
+      clearInterval(this._userSupportPollTimer);
+      this._userSupportPollTimer = null;
     }
     if (!document.querySelector('.modal-overlay.open')) {
       this._modalTopZ = 9000;
@@ -4925,6 +4933,7 @@ const App = {
     const activeTab = this.state.adminTab || 'overview';
     const shouldFetchUsers = activeTab === 'overview' || activeTab === 'users';
     const usersPromise = shouldFetchUsers ? this.loadAdminUsers() : Promise.resolve();
+    const supportPromise = this.loadAdminSupport({ silent: true }).catch(() => {});
 
     const res = await this.api('/admin/overview.php');
     if (res.success && res.data) {
@@ -4938,7 +4947,7 @@ const App = {
         this.openModal('modal-auth');
       }
     }
-    await usersPromise;
+    await Promise.all([usersPromise, supportPromise]);
   },
 
   renderAdminOverview() {
@@ -4966,7 +4975,7 @@ const App = {
     const badge = document.getElementById('adm-mode-badge');
     const btnLabel = document.getElementById('adm-mode-btn-label');
     if (badge) {
-      badge.textContent = `${mode} ENVIRONMENT`;
+      badge.textContent = mode;
       badge.className = mode === 'LIVE' ? 'badge badge-positive' : 'badge badge-demo';
     }
     if (btnLabel) {
@@ -5161,7 +5170,7 @@ const App = {
   setAdminTab(tab) {
     const allowedTabs = [
       'overview', 'users', 'referrals', 'deposits', 'withdrawals',
-      'kyc', 'signals', 'signal-schedules', 'adjustments', 'settings'
+      'kyc', 'support', 'signals', 'signal-schedules', 'adjustments', 'settings'
     ];
     if (!allowedTabs.includes(tab)) {
       tab = 'overview';
@@ -5188,6 +5197,7 @@ const App = {
       deposits: 'Incoming Deposits',
       withdrawals: 'Withdrawals Desk',
       kyc: 'KYC Identity Desk',
+      support: 'Live Support Desk',
       users: 'Users Directory',
       adjustments: 'Balance Adjustments',
       'signal-schedules': 'Signal Timetable',
@@ -5215,6 +5225,7 @@ const App = {
       if (!Array.isArray(this.state.adminUsers) || !this.state.adminUsers.length) {
         this.loadAdminUsers();
       }
+      this.loadAdminSupport({ silent: true }).catch(() => {});
     }
     if (tab === 'users') this.loadAdminUsers();
     if (tab === 'kyc') this.loadAdminKyc();
@@ -5228,6 +5239,18 @@ const App = {
     } else if (this._adminDepositPollTimer) {
       clearInterval(this._adminDepositPollTimer);
       this._adminDepositPollTimer = null;
+    }
+    if (tab === 'support') {
+      this.loadAdminSupport();
+      if (this._adminSupportPollTimer) clearInterval(this._adminSupportPollTimer);
+      this._adminSupportPollTimer = setInterval(() => {
+        if (this.state?.adminTab === 'support' && this.state?.currentView === 'admin') {
+          this.loadAdminSupport({ silent: true });
+        }
+      }, 8000);
+    } else if (this._adminSupportPollTimer) {
+      clearInterval(this._adminSupportPollTimer);
+      this._adminSupportPollTimer = null;
     }
     if (tab === 'signals') this.loadAdminSignals();
     if (tab === 'settings') this.loadAdminSettings();
@@ -8640,13 +8663,37 @@ const App = {
     this.navigate(this.state.currentView);
   },
 
-  /* System Configuration, Mode Toggling & Production Secrets Hub */
+  /* System Configuration, Feature Flags, Mode Toggling & Production Secrets Hub */
+  applySystemFeatureFlags(config = {}) {
+    const features = (config && typeof config.features === 'object' && config.features) ? config.features : {};
+    const langEnabled = features.language !== false;
+    this.state.languageFeatureEnabled = langEnabled;
+    if (document.body) {
+      document.body.classList.toggle('lang-feature-disabled', !langEnabled);
+    }
+    if (!langEnabled) {
+      const currentLang = (localStorage.getItem('alphavest_language') || 'en').toLowerCase();
+      if (currentLang === 'ka') {
+        try { localStorage.setItem('alphavest_language', 'en'); } catch (e) {}
+      }
+      const publicLanguage = document.getElementById('av-public-language');
+      if (publicLanguage) publicLanguage.value = 'en';
+      if (document.documentElement.lang && document.documentElement.lang !== 'en') {
+        document.documentElement.lang = 'en';
+        try {
+          document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; path=/; SameSite=Lax';
+        } catch (e) {}
+      }
+    }
+  },
+
   async loadSystemConfig() {
     const res = await this.api('/system/config.php');
     if (res.success && res.data) {
       this.state.systemConfig = res.data;
       this.writeFastCache('system_config', res.data);
       this.state.isRealMoneyMode = Boolean(res.data.real_money_mode);
+      this.applySystemFeatureFlags(res.data);
       this.updateAppModeUI();
     }
   },
@@ -10071,6 +10118,10 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   },
 
   openLanguageSelector() {
+    if (this.state.languageFeatureEnabled === false || document.body?.classList.contains('lang-feature-disabled')) {
+      this.closeModal('modal-language-select');
+      return;
+    }
     const current = localStorage.getItem('alphavest_language') || 'en';
     document.querySelectorAll('[data-language-option]').forEach(item => {
       const active = item.getAttribute('data-language-option') === current;
@@ -10082,6 +10133,10 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   },
 
   setLanguage(lang, label) {
+    if (this.state.languageFeatureEnabled === false || document.body?.classList.contains('lang-feature-disabled')) {
+      this.closeModal('modal-language-select');
+      return;
+    }
     const language = lang === 'ka' ? 'ka' : 'en';
     const languageLabel = label || (language === 'ka' ? 'ქართული' : 'English');
     try { localStorage.setItem('alphavest_language', language); } catch (e) {}
@@ -10446,10 +10501,10 @@ STORAGE_BUCKET_MARKETING=marketing-assets
         <div style="display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0;">
           <div style="font-size: 20px; line-height: 1; flex-shrink: 0; padding-top: 2px;">${icon}</div>
           <div style="flex: 1; min-width: 0;">
-            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
-              <span style="font-size: 10px; font-weight: 800; color: ${badgeColor}; background: ${badgeBg}; padding: 2px 7px; border-radius: 5px; letter-spacing: 0.4px;">${badgeText}</span>
-              ${isUnread ? '<span style="width: 7px; height: 7px; border-radius: 50%; background: #F6465D; display: inline-block;"></span>' : ''}
-              <span style="font-size: 11px; color: #6B7280;">${this.escapeHtml(latest.created_at || 'Just now')}</span>
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 3px;">
+              <span style="font-size: 10px; font-weight: 800; color: ${badgeColor}; background: ${badgeBg}; padding: 2px 7px; border-radius: 5px; letter-spacing: 0.4px; white-space: nowrap;">${badgeText}</span>
+              ${isUnread ? '<span style="width: 7px; height: 7px; border-radius: 50%; background: #F6465D; display: inline-block; flex-shrink: 0;"></span>' : ''}
+              <span style="font-size: 11px; color: #6B7280; white-space: nowrap;">${this.escapeHtml(this.formatAdminDate(latest.created_at))}</span>
             </div>
             <div style="font-size: 13.5px; font-weight: 700; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">
               ${this.escapeHtml(latest.title)}
@@ -10569,7 +10624,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
               <span style="font-size: 16px;">${icon}</span>
               <span style="font-size: 10.5px; font-weight: 800; color: ${tagColor}; background: ${tagBg}; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px;">${tagText}</span>
             </div>
-            <span style="font-size: 11px; color: #6B7280;">${this.escapeHtml(item.created_at || 'Just now')}</span>
+            <span style="font-size: 11px; color: #6B7280; white-space: nowrap;">${this.escapeHtml(this.formatAdminDate(item.created_at))}</span>
           </div>
           <div style="font-size: 13.5px; font-weight: 700; color: #111827; margin-bottom: 4px;">
             ${this.escapeHtml(item.title)}
@@ -10632,59 +10687,390 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     this.toast(isWide ? "Switched to Full Desktop View" : "Switched to Mobile View (Exact Video Match)", "info");
   },
 
-  /* 5. Customer Service & Live Chat */
+  /* 5. Customer Service & Persistent Live Support Chat (User <-> Admin) */
   openCustomerService() {
     this.openModal('modal-customer-service');
   },
 
-  openLiveSupportChat() {
+  async openLiveSupportChat() {
     this.closeModal('modal-customer-service');
+    if (!this.state.user) {
+      this.toast('Please log in to start a live chat with support.', 'info');
+      this.openModal('modal-auth');
+      return;
+    }
     this.openModal('modal-support-chat');
+    this.state.userSupportForceNew = false;
+    await this.loadUserSupportChat(false);
+    if (this._userSupportPollTimer) clearInterval(this._userSupportPollTimer);
+    this._userSupportPollTimer = setInterval(() => {
+      const modal = document.getElementById('modal-support-chat');
+      if (modal && modal.classList.contains('open') && this.state.user) {
+        this.loadUserSupportChat(true);
+      }
+    }, 5000);
   },
 
-  sendSupportMessage() {
+  startNewSupportTicket() {
+    this.state.userSupportForceNew = true;
+    this.state.userSupportActiveTicketId = null;
+    this.state.userSupportTicket = null;
+    this.state.userSupportMessages = [];
+    this.renderUserSupportChat(true);
     const input = document.getElementById('chat-input-text');
-    const msgText = input?.value?.trim();
-    if (!msgText) return;
+    if (input) input.focus();
+  },
 
+  async loadUserSupportChat(silent = false) {
+    if (!this.state.user) return;
     const chatBox = document.getElementById('chat-messages-container');
+    if (!silent && chatBox && (!Array.isArray(this.state.userSupportMessages) || !this.state.userSupportMessages.length)) {
+      chatBox.innerHTML = '<div style="margin:auto;color:#6B7280;font-size:13px;">Loading conversation...</div>';
+    }
+    const qs = (!this.state.userSupportForceNew && this.state.userSupportActiveTicketId)
+      ? `?ticket_id=${encodeURIComponent(this.state.userSupportActiveTicketId)}`
+      : '';
+    const res = await this.api(`/support/chat.php${qs}`);
+    if (res && res.success && res.data) {
+      const prevCount = Array.isArray(this.state.userSupportMessages) ? this.state.userSupportMessages.length : 0;
+      const nextMsgs = Array.isArray(res.data.messages) ? res.data.messages : [];
+      if (!this.state.userSupportForceNew) {
+        this.state.userSupportTicket = res.data.ticket || null;
+        this.state.userSupportActiveTicketId = res.data.ticket?.id || null;
+        this.state.userSupportMessages = nextMsgs;
+        this.renderUserSupportChat(nextMsgs.length !== prevCount || !silent);
+      }
+    } else if (!silent) {
+      this.toast(res?.message || 'Unable to load support conversation.', 'error');
+    }
+  },
+
+  renderUserSupportChat(scrollToBottom = true) {
+    const chatBox = document.getElementById('chat-messages-container');
+    const badge = document.getElementById('chat-ticket-status-badge');
+    const subtitle = document.getElementById('chat-status-subtitle');
     if (!chatBox) return;
 
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const ticket = this.state.userSupportTicket;
+    const msgs = Array.isArray(this.state.userSupportMessages) ? this.state.userSupportMessages : [];
 
-    // Append User Message
-    const userDiv = document.createElement('div');
-    userDiv.className = 'chat-msg user';
-    userDiv.innerHTML = `
-      <div class="chat-bubble">${msgText}</div>
-      <div class="chat-time">${timeStr}</div>
-    `;
-    chatBox.appendChild(userDiv);
-    input.value = '';
-    chatBox.scrollTop = chatBox.scrollHeight;
-
-    // Simulate Agent Response
-    setTimeout(() => {
-      const botDiv = document.createElement('div');
-      botDiv.className = 'chat-msg bot';
-      let reply = "Thank you for contacting PRIME X CAPITAL 24/7 Global Support. Your inquiry has been routed to our institutional desk. How can we assist you with deposits, withdrawals, or contract settlements today?";
-      const lower = msgText.toLowerCase();
-      if (lower.includes('deposit') || lower.includes('fund')) {
-        reply = "Deposits in USDT (TRC-20, ERC-20) and BTC are credited within 1-3 network confirmations. You can click 'Deposit' on the Home screen to view your dedicated deposit vault address.";
-      } else if (lower.includes('withdraw')) {
-        reply = "Withdrawals are processed automatically 24/7 once submitted through the Wallet tab. Please make sure your destination address and network match.";
-      } else if (lower.includes('kyc') || lower.includes('verify')) {
-        reply = "You can submit your Tier 2 KYC verification directly in the Settings -> Real Name Verification tab. Identity cards, Passports, and Driver's Licenses are supported.";
-      } else if (lower.includes('oil') || lower.includes('crude')) {
-        reply = "PRIME X CAPITAL provides continuous trading on Crude Oil (OIL/USDT) with automated rollover and up to 100x leverage. You can access it under the Options / Futures tab.";
+    if (badge) {
+      if (ticket && ticket.status) {
+        const st = String(ticket.status).toUpperCase();
+        badge.textContent = st.replace(/_/g, ' ');
+        badge.style.display = 'inline-flex';
+        if (st === 'RESOLVED' || st === 'CLOSED') {
+          badge.style.background = '#ECFDF5';
+          badge.style.color = '#059669';
+        } else if (st === 'WAITING_FOR_USER') {
+          badge.style.background = '#EFF4FF';
+          badge.style.color = '#0052FF';
+        } else {
+          badge.style.background = '#FEF3C7';
+          badge.style.color = '#B45309';
+        }
+      } else {
+        badge.style.display = 'none';
       }
-      botDiv.innerHTML = `
-        <div class="chat-bubble">${reply}</div>
-        <div class="chat-time">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+    }
+
+    if (subtitle) {
+      if (this.state.userSupportForceNew) {
+        subtitle.textContent = 'Starting a new conversation · Send your message below';
+      } else if (ticket?.status === 'WAITING_FOR_USER') {
+        subtitle.textContent = 'Support replied · View message below';
+      } else if (ticket?.id) {
+        subtitle.textContent = 'Live ticket active · Admins reply right here';
+      } else {
+        subtitle.textContent = 'Connected · Messages are delivered directly to admin';
+      }
+    }
+
+    if (!msgs.length) {
+      chatBox.innerHTML = `
+        <div class="chat-msg bot">
+          <div class="chat-bubble">${this.state.userSupportForceNew
+            ? 'New support conversation ready. Type your inquiry below and our admin team will respond here.'
+            : 'Hello! Welcome to PRIME X CAPITAL Support. Send a message below and an administrator will reply directly in this chat.'}</div>
+          <span class="chat-time">Support Desk</span>
+        </div>
       `;
-      chatBox.appendChild(botDiv);
+      return;
+    }
+
+    chatBox.innerHTML = msgs.map(m => {
+      const isUser = String(m.sender_role || '').toUpperCase() === 'USER';
+      const timeLabel = this.formatAdminDate(m.created_at);
+      const roleTag = isUser ? 'You' : 'Support Admin';
+      return `
+        <div class="chat-msg ${isUser ? 'user' : 'bot'}">
+          <div class="chat-bubble">${this.escapeHtml(m.message || '')}</div>
+          <span class="chat-time">${roleTag} · ${this.escapeHtml(timeLabel)}</span>
+        </div>
+      `;
+    }).join('');
+
+    if (scrollToBottom) {
       chatBox.scrollTop = chatBox.scrollHeight;
-    }, 700);
+    }
+  },
+
+  async sendSupportMessage() {
+    if (!this.state.user) {
+      this.toast('Please sign in first to contact support.', 'info');
+      this.openModal('modal-auth');
+      return;
+    }
+    const input = document.getElementById('chat-input-text');
+    const sendBtn = document.getElementById('btn-chat-send');
+    const msgText = input?.value?.trim() || '';
+    if (!msgText) return;
+
+    if (sendBtn) sendBtn.disabled = true;
+    const payload = {
+      message: msgText,
+      ticket_id: this.state.userSupportForceNew ? '' : (this.state.userSupportActiveTicketId || ''),
+      new_ticket: Boolean(this.state.userSupportForceNew)
+    };
+    const res = await this.api('/support/chat.php', 'POST', payload);
+    if (sendBtn) sendBtn.disabled = false;
+
+    if (res && res.success && res.data) {
+      input.value = '';
+      this.state.userSupportForceNew = false;
+      this.state.userSupportTicket = res.data.ticket || null;
+      this.state.userSupportActiveTicketId = res.data.ticket?.id || null;
+      this.state.userSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
+      this.renderUserSupportChat(true);
+    } else {
+      this.toast(res?.message || 'Unable to send support message. Please try again.', 'error');
+    }
+  },
+
+  /* 5b. Admin Support Desk */
+  async loadAdminSupport(opts = {}) {
+    const silent = Boolean(opts && opts.silent);
+    const activeId = this.state.adminSupportActiveId || '';
+    const qs = activeId ? `?ticket_id=${encodeURIComponent(activeId)}` : '';
+    const res = await this.api(`/admin/support.php${qs}`);
+    if (!res || !res.success || !res.data) {
+      if (!silent && this.state.adminTab === 'support') {
+        this.toast(res?.message || 'Unable to load support tickets.', 'error');
+      }
+      return;
+    }
+
+    const tickets = Array.isArray(res.data.tickets) ? res.data.tickets : [];
+    const needsReplyCount = Number(res.data.needs_reply_count || 0);
+    const openCount = Number(res.data.open_count || 0);
+
+    this.state.adminSupportTickets = tickets;
+    this.state.adminSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
+    if (!this.state.adminSupportActiveId && res.data.active_ticket_id) {
+      this.state.adminSupportActiveId = res.data.active_ticket_id;
+    }
+
+    const updateSupBadge = (id, cnt) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = cnt;
+      el.style.display = cnt > 0 ? 'inline-flex' : 'none';
+    };
+    updateSupBadge('adm-badge-support', needsReplyCount);
+    updateSupBadge('adm-pill-badge-support', needsReplyCount);
+
+    const qSup = document.getElementById('adm-quick-support');
+    if (qSup) {
+      if (needsReplyCount > 0) {
+        qSup.textContent = `${needsReplyCount} Needs Reply`;
+        qSup.className = 'av-adm-action-count warn';
+      } else {
+        qSup.textContent = `${openCount} Open`;
+        qSup.className = 'av-adm-action-count';
+      }
+    }
+
+    const summaryEl = document.getElementById('adm-sup-inbox-summary');
+    if (summaryEl) {
+      summaryEl.textContent = `${tickets.length} conversation(s) · ${needsReplyCount} awaiting admin reply`;
+    }
+
+    this.filterAdminSupport();
+    this.renderAdminSupportThread(!silent);
+  },
+
+  filterAdminSupport() {
+    const listEl = document.getElementById('adm-sup-ticket-list');
+    if (!listEl) return;
+
+    const query = (document.getElementById('adm-sup-search')?.value || '').trim().toLowerCase();
+    const filterStatus = (document.getElementById('adm-sup-filter-status')?.value || 'ALL').toUpperCase();
+    const tickets = Array.isArray(this.state.adminSupportTickets) ? this.state.adminSupportTickets : [];
+
+    const filtered = tickets.filter(t => {
+      const st = String(t.status || 'OPEN').toUpperCase();
+      if (filterStatus === 'NEEDS_REPLY' && !t.needs_reply) return false;
+      if (filterStatus === 'OPEN' && ['RESOLVED', 'CLOSED'].includes(st)) return false;
+      if (filterStatus === 'RESOLVED' && !['RESOLVED', 'CLOSED'].includes(st)) return false;
+
+      if (query) {
+        const hay = `${t.user_email || ''} ${t.user_name || ''} ${t.numeric_uid || ''} ${t.subject || ''} ${t.last_message || ''}`.toLowerCase();
+        if (!hay.includes(query)) return false;
+      }
+      return true;
+    });
+
+    if (!filtered.length) {
+      listEl.innerHTML = '<div style="padding:28px 16px;text-align:center;color:#6B7280;font-size:13px;">No support conversations match this filter.</div>';
+      return;
+    }
+
+    const activeId = String(this.state.adminSupportActiveId || '');
+    listEl.innerHTML = filtered.map(t => {
+      const tid = String(t.id || '');
+      const st = String(t.status || 'OPEN').toUpperCase();
+      const isSelected = tid === activeId;
+      let pillClass = 'waiting';
+      let pillLabel = st.replace(/_/g, ' ');
+      if (t.needs_reply) {
+        pillClass = 'needs-reply';
+        pillLabel = 'Needs Reply';
+      } else if (st === 'RESOLVED' || st === 'CLOSED') {
+        pillClass = 'resolved';
+      }
+      const uidPart = t.numeric_uid ? ` · UID #${this.escapeHtml(String(t.numeric_uid))}` : '';
+      const timeLabel = this.formatAdminDate(t.last_message_at || t.updated_at || t.created_at);
+      return `
+        <button type="button" class="av-adm-sup-ticket-item${isSelected ? ' active' : ''}" onclick="App.selectAdminSupportTicket('${this.escapeHtml(tid)}')">
+          <div class="av-adm-sup-item-top">
+            <span class="av-adm-sup-user-label">${this.escapeHtml(t.user_email || t.user_name || 'User')}</span>
+            <span class="av-sup-status-pill ${pillClass}">${this.escapeHtml(pillLabel)}</span>
+          </div>
+          <div class="av-adm-sup-snippet">${this.escapeHtml(t.last_message || t.subject || 'New support inquiry')}</div>
+          <div class="av-adm-sup-meta">
+            <span>${this.escapeHtml((t.user_name || 'Member'))}${uidPart}</span>
+            <span>${this.escapeHtml(timeLabel)}</span>
+          </div>
+        </button>
+      `;
+    }).join('');
+  },
+
+  async selectAdminSupportTicket(ticketId) {
+    this.state.adminSupportActiveId = ticketId;
+    const splitEl = document.getElementById('adm-sup-split');
+    if (splitEl) splitEl.classList.add('is-thread-open');
+    this.filterAdminSupport();
+
+    const res = await this.api(`/admin/support.php?ticket_id=${encodeURIComponent(ticketId)}`);
+    if (res && res.success && res.data) {
+      if (Array.isArray(res.data.tickets)) this.state.adminSupportTickets = res.data.tickets;
+      this.state.adminSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
+      this.renderAdminSupportThread(true);
+    } else {
+      this.toast(res?.message || 'Unable to load ticket thread.', 'error');
+    }
+  },
+
+  closeMobileSupportThread() {
+    const splitEl = document.getElementById('adm-sup-split');
+    if (splitEl) splitEl.classList.remove('is-thread-open');
+  },
+
+  renderAdminSupportThread(scrollToBottom = true) {
+    const headerUser = document.getElementById('adm-sup-thread-user');
+    const headerMeta = document.getElementById('adm-sup-thread-meta');
+    const controls = document.getElementById('adm-sup-thread-controls');
+    const statusSel = document.getElementById('adm-sup-status-select');
+    const msgsEl = document.getElementById('adm-sup-thread-messages');
+    const composer = document.getElementById('adm-sup-composer');
+    if (!msgsEl) return;
+
+    const tickets = Array.isArray(this.state.adminSupportTickets) ? this.state.adminSupportTickets : [];
+    const active = tickets.find(t => String(t.id) === String(this.state.adminSupportActiveId));
+
+    if (!active) {
+      if (headerUser) headerUser.textContent = 'Select a conversation';
+      if (headerMeta) headerMeta.textContent = 'Click a user thread to view history and reply';
+      if (controls) controls.style.display = 'none';
+      if (composer) composer.style.display = 'none';
+      msgsEl.innerHTML = '<div style="margin:auto;text-align:center;color:#6B7280;padding:24px;font-size:13px;">No conversation selected.</div>';
+      return;
+    }
+
+    if (headerUser) headerUser.textContent = `${active.user_email || 'Member'}`;
+    if (headerMeta) {
+      const uidTag = active.numeric_uid ? `UID #${active.numeric_uid} · ` : '';
+      headerMeta.textContent = `${uidTag}${active.subject || 'Platform Support Inquiry'}`;
+    }
+    if (controls) controls.style.display = 'flex';
+    if (statusSel) statusSel.value = String(active.status || 'OPEN').toUpperCase();
+    if (composer) composer.style.display = 'flex';
+
+    const msgs = Array.isArray(this.state.adminSupportMessages) ? this.state.adminSupportMessages : [];
+    if (!msgs.length) {
+      msgsEl.innerHTML = '<div style="margin:auto;text-align:center;color:#6B7280;padding:24px;font-size:13px;">No messages in this conversation yet.</div>';
+      return;
+    }
+
+    msgsEl.innerHTML = msgs.map(m => {
+      const isAdmin = String(m.sender_role || '').toUpperCase() === 'ADMIN';
+      const timeLabel = this.formatAdminDate(m.created_at);
+      return `
+        <div class="av-sup-msg-row ${isAdmin ? 'from-admin' : 'from-user'}">
+          <div class="av-sup-msg-bubble">${this.escapeHtml(m.message || '')}</div>
+          <div class="av-sup-msg-time">${isAdmin ? 'Admin' : this.escapeHtml(active.user_name || 'User')} · ${this.escapeHtml(timeLabel)}</div>
+        </div>
+      `;
+    }).join('');
+
+    if (scrollToBottom) {
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+  },
+
+  async sendAdminSupportReply() {
+    const ticketId = this.state.adminSupportActiveId;
+    const input = document.getElementById('adm-sup-reply-input');
+    const sendBtn = document.getElementById('btn-adm-sup-send');
+    const message = input?.value?.trim() || '';
+    if (!ticketId || !message) return;
+
+    if (sendBtn) sendBtn.disabled = true;
+    const res = await this.api('/admin/support.php', 'POST', {
+      action: 'REPLY',
+      ticket_id: ticketId,
+      message
+    });
+    if (sendBtn) sendBtn.disabled = false;
+
+    if (res && res.success) {
+      input.value = '';
+      if (Array.isArray(res.data?.messages)) {
+        this.state.adminSupportMessages = res.data.messages;
+      }
+      await this.loadAdminSupport({ silent: true });
+      this.renderAdminSupportThread(true);
+      this.toast('Reply sent to user', 'success');
+    } else {
+      this.toast(res?.message || 'Unable to send reply.', 'error');
+    }
+  },
+
+  async updateAdminSupportStatus(status) {
+    const ticketId = this.state.adminSupportActiveId;
+    if (!ticketId || !status) return;
+    const res = await this.api('/admin/support.php', 'POST', {
+      action: 'STATUS',
+      ticket_id: ticketId,
+      status
+    });
+    if (res && res.success) {
+      this.toast(`Ticket marked as ${status.replace(/_/g, ' ')}`, 'success');
+      await this.loadAdminSupport({ silent: true });
+    } else {
+      this.toast(res?.message || 'Unable to update ticket status.', 'error');
+    }
   },
 
   /* ==========================================================================

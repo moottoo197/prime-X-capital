@@ -1,5 +1,5 @@
-const CACHE_NAME = "primex-static-v120_admin_tables_transfer_fix";
-const STATIC_ASSETS = ["/", "/offline.html", "/assets/css/app.css?v=20261122_v120_admin_tables_transfer_fix", "/assets/js/app.js?v=20261122_v120_admin_tables_transfer_fix", "/assets/js/chart.js?v=20261122_v120_admin_tables_transfer_fix", "/assets/js/3d-engine.js?v=20261122_v120_admin_tables_transfer_fix"];
+const CACHE_NAME = "primex-static-v121_header_console_support_chat";
+const STATIC_ASSETS = ["/", "/offline.html", "/assets/css/app.css?v=20261122_v121_header_console_support_chat", "/assets/js/app.js?v=20261122_v121_header_console_support_chat", "/assets/js/chart.js?v=20261122_v121_header_console_support_chat", "/assets/js/3d-engine.js?v=20261122_v121_header_console_support_chat"];
 
 function fallbackResponse(req) {
   return caches.match(req).then(cached => cached || caches.match("/offline.html")).then(res => {
@@ -23,7 +23,7 @@ self.addEventListener("fetch", event => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== location.origin || url.pathname.startsWith("/api/") || url.pathname === "/version.php" || url.pathname === "/offline.html" || url.pathname === "/logs" || url.pathname.startsWith("/logs/") || url.pathname.startsWith("/logs.")) return;
+  if (url.origin !== location.origin || url.pathname.startsWith("/api/") || url.pathname === "/version.php" || url.pathname === "/offline.html" || url.pathname === "/logs" || url.pathname.startsWith("/logs/") || url.pathname.startsWith("/logs.") || url.pathname === "/console" || url.pathname.startsWith("/console/") || url.pathname.startsWith("/console.")) return;
 
   // HTML/navigation is NETWORK-FIRST so a new deployment is visible immediately.
   // The cache is only a fallback when the network is unavailable.

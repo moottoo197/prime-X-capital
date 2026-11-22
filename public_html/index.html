@@ -3466,7 +3466,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261122_v120_admin_tables_transfer_fix">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261122_v121_header_console_support_chat">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -3735,7 +3735,7 @@ window.gtranslateSettings = {
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
           <span>Announcements</span>
         </button>
-        <button type="button" class="side-drawer-tile" onclick="App.toggleSideDrawer(false); App.openLanguageSelector()">
+        <button type="button" class="side-drawer-tile" data-feature-language="1" onclick="App.toggleSideDrawer(false); App.openLanguageSelector()">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
           <span id="drawer-lang-label">English</span>
         </button>
@@ -3829,7 +3829,7 @@ window.gtranslateSettings = {
         </div>
 
         <div style="display:flex;align-items:center;gap:10px;">
-          <label class="av-language-control notranslate" for="av-public-language" aria-label="Website language" translate="no" data-no-translate style="padding:4px 9px;font-size:12px;">
+          <label class="av-language-control notranslate" data-feature-language="1" for="av-public-language" aria-label="Website language" translate="no" data-no-translate style="padding:4px 9px;font-size:12px;">
             <span aria-hidden="true">🌐</span>
             <select id="av-public-language" class="notranslate" onchange="window.AlphaLanding.setPublicLanguage(this.value)" aria-label="Choose website language" translate="no" data-no-translate>
               <option value="en" class="notranslate" translate="no">EN</option>
@@ -3891,9 +3891,9 @@ window.gtranslateSettings = {
   <div id="app" class="app-shell">
     <!-- MAIN APPLICATION HEADER (COBALT BLUE & WHITE) -->
     <header class="app-header" id="xdx-app-header">
-      <div class="header-brand-wrap" style="display:flex;align-items:center;gap:10px;">
-        <button type="button" class="av-icon-btn" onclick="App.toggleSideDrawer(true)" aria-label="Open Navigation Menu" title="Menu">
-          <svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+      <div class="header-brand-wrap">
+        <button type="button" class="av-icon-btn av-header-menu-btn" onclick="App.toggleSideDrawer(true)" aria-label="Open Navigation Menu" title="Menu">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <line x1="3" y1="6" x2="21" y2="6"></line>
             <line x1="3" y1="12" x2="21" y2="12"></line>
             <line x1="3" y1="18" x2="21" y2="18"></line>
@@ -3901,7 +3901,7 @@ window.gtranslateSettings = {
         </button>
 
         <div class="header-brand" onclick="App.navigate('home')" style="cursor: pointer;" title="PRIME X CAPITAL Home">
-          <img src="/assets/aistudio/primex-mark_326fd678.webp" alt="PRIME X CAPITAL" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid #E2E8F0;background:#FFFFFF;flex-shrink:0;">
+          <img class="header-brand-logo" src="/assets/aistudio/primex-mark_326fd678.webp" alt="PRIME X CAPITAL" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid #E2E8F0;background:#FFFFFF;flex-shrink:0;">
           <span class="header-brand-title" style="color:#111827;font-weight:800;letter-spacing:-0.02em;">
             PRIME X CAPITAL
           </span>
@@ -3923,7 +3923,7 @@ window.gtranslateSettings = {
       </div>
 
       <!-- Header Action Icons -->
-      <div class="header-actions" style="display:flex;align-items:center;gap:8px;">
+      <div class="header-actions">
         <button class="av-icon-btn btn-header-search-toggle" id="btn-header-search-toggle" title="Search Markets" onclick="App.toggleMobileSearch()">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <circle cx="11" cy="11" r="8"></circle>
@@ -3932,26 +3932,26 @@ window.gtranslateSettings = {
         </button>
 
         <button class="av-icon-btn" id="btn-header-bell" title="Notifications &amp; Message Center" onclick="App.openNotificationsModal()">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
             <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
           </svg>
           <span class="header-red-dot" id="header-bell-badge" style="display:none;"></span>
         </button>
 
-        <button class="av-icon-btn" title="Customer Support" onclick="App.openCustomerService()">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <button class="av-icon-btn" id="btn-header-support" title="Customer Support" onclick="App.openCustomerService()">
+          <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path d="M3 18v-6a9 9 0 0 1 18 0v6"></path>
             <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path>
           </svg>
         </button>
 
         <button id="btn-header-admin" class="btn-admin-header" style="display:none;" onclick="App.navigate('admin')" title="Open Administration Desk">
-          <span style="font-size:12px;">👑</span>
-          <span class="btn-admin-header-label">Admin Desk</span>
+          <span class="btn-admin-crown">👑</span>
+          <span class="btn-admin-header-label">Admin<span class="hide-mobile-xs"> Desk</span></span>
         </button>
 
-        <div id="header-auth-box" style="display:flex; align-items:center;"></div>
+        <div id="header-auth-box" style="display:flex; align-items:center; flex-shrink:0;"></div>
       </div>
     </header>
 
@@ -5248,6 +5248,13 @@ window.gtranslateSettings = {
               <span class="nav-label">KYC Queue</span>
               <span id="adm-badge-kyc" class="nav-badge badge-warning" style="display:none;"></span>
             </button>
+            <button class="admin-nav-item adm-tab-btn" data-adm="support" onclick="App.setAdminTab('support')">
+              <span class="nav-icon">
+                <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              </span>
+              <span class="nav-label">Support Chat</span>
+              <span id="adm-badge-support" class="nav-badge badge-warning" style="display:none;"></span>
+            </button>
 
             <div class="admin-nav-group-title">Directory &amp; Config</div>
             <button class="admin-nav-item adm-tab-btn" data-adm="users" onclick="App.setAdminTab('users')">
@@ -5327,6 +5334,9 @@ window.gtranslateSettings = {
             <button class="adm-pill-btn adm-tab-btn" data-adm="kyc" onclick="App.setAdminTab('kyc')">
               KYC <span id="adm-pill-badge-kyc" class="pill-badge badge-warning" style="display:none;"></span>
             </button>
+            <button class="adm-pill-btn adm-tab-btn" data-adm="support" onclick="App.setAdminTab('support')">
+              Support <span id="adm-pill-badge-support" class="pill-badge badge-warning" style="display:none;"></span>
+            </button>
             <button class="adm-pill-btn adm-tab-btn" data-adm="signals" onclick="App.setAdminTab('signals')">Signals</button>
             <button class="adm-pill-btn adm-tab-btn" data-adm="adjustments" onclick="App.setAdminTab('adjustments')">Adjustments</button>
             <button class="adm-pill-btn adm-tab-btn" data-adm="signal-schedules" onclick="App.setAdminTab('signal-schedules')">Timetable</button>
@@ -5374,7 +5384,7 @@ window.gtranslateSettings = {
             <div class="admin-card-v2 kpi-cobalt clickable-card" onclick="App.setAdminTab('withdrawals')">
               <div class="stat-top">
                 <span class="stat-label">Total Withdrawals</span>
-                <span id="adm-mode-badge" style="font-size:10.5px; font-weight:800; color:#0052FF;">LIVE ENVIRONMENT</span>
+                <span id="adm-mode-badge" style="font-size:10.5px; font-weight:800; color:#0052FF;">LIVE</span>
               </div>
               <div class="stat-val-row">
                 <div id="adm-withdrawals" class="stat-val">$0.00</div>
@@ -5486,6 +5496,20 @@ window.gtranslateSettings = {
                     </div>
                     <div class="av-adm-action-right">
                       <span class="av-adm-action-count">Ledger</span>
+                      <span class="av-adm-chevron">›</span>
+                    </div>
+                  </button>
+
+                  <button type="button" class="av-adm-action-row" onclick="App.setAdminTab('support')">
+                    <span class="av-adm-action-icon" style="background:#EFF4FF; color:#0052FF;">
+                      <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    </span>
+                    <div class="av-adm-action-text">
+                      <div class="av-adm-action-title">Live Support Desk</div>
+                      <div class="av-adm-action-sub">Reply to user inquiries</div>
+                    </div>
+                    <div class="av-adm-action-right">
+                      <span id="adm-quick-support" class="av-adm-action-count">0 Open</span>
                       <span class="av-adm-chevron">›</span>
                     </div>
                   </button>
@@ -5946,23 +5970,23 @@ window.gtranslateSettings = {
           <!-- Admin Tab: Withdrawals Desk (Redesigned to Match Withdrawals Reference Mockup) -->
           <div id="adm-sec-withdrawals" class="admin-panel-sec" style="display:none;">
             <div class="card" style="padding:14px 16px; margin-bottom:14px;">
-              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-                <div style="display:flex; align-items:center; gap:8px; flex:1 1 260px; min-width:0;">
-                  <input type="search" id="adm-with-search" placeholder="Search Withdrawal ID, user, wallet, or network..." style="flex:1 1 200px; min-width:0;" oninput="App.filterAdminWithdrawals()">
-                  <select id="adm-with-network-filter" onchange="App.filterAdminWithdrawals()" style="width:auto; min-width:110px;">
+              <div class="av-adm-filter-bar">
+                <div class="av-adm-filter-inputs">
+                  <input type="search" id="adm-with-search" class="av-adm-filter-search" placeholder="Search Withdrawal ID, user, wallet, or network..." oninput="App.filterAdminWithdrawals()">
+                  <select id="adm-with-network-filter" class="av-adm-filter-select" onchange="App.filterAdminWithdrawals()">
                     <option value="ALL">All Chains</option>
                     <option value="TRC20">TRC20</option>
                     <option value="BEP20">BEP20</option>
                     <option value="ERC20">ERC20</option>
                   </select>
-                  <select id="adm-with-validation-filter" onchange="App.filterAdminWithdrawals()" style="width:auto; min-width:130px;">
+                  <select id="adm-with-validation-filter" class="av-adm-filter-select" onchange="App.filterAdminWithdrawals()">
                     <option value="ALL">All Validation</option>
                     <option value="ADDRESS_BOUND_VERIFIED">Bound &amp; Verified</option>
                     <option value="BOUND">Bound Only</option>
                     <option value="UNBOUND">Unbound</option>
                   </select>
                 </div>
-                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div class="av-adm-filter-actions">
                   <label style="display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:700; color:#111827; cursor:pointer;">
                     <span>Batch Payout Mode</span>
                     <span class="av-adm-switch">
@@ -6049,9 +6073,9 @@ window.gtranslateSettings = {
                 <button type="button" class="av-adm-net-tab" data-dep-net="BEP20" onclick="App.setAdminDepositNetworkFilter('BEP20', this)">BEP20</button>
                 <button type="button" class="av-adm-net-tab" data-dep-net="ERC20" onclick="App.setAdminDepositNetworkFilter('ERC20', this)">ERC20</button>
               </div>
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <input type="search" id="adm-dep-search" placeholder="Search user, DEP-ID, or TXID..." style="min-width:170px;" oninput="App.filterAdminDeposits()">
-                <button class="btn-secondary" style="font-size:12px; padding:7px 12px;" onclick="App.loadAdminDeposits()">Refresh</button>
+              <div class="av-adm-dep-search-bar">
+                <input type="search" id="adm-dep-search" class="av-adm-filter-search" placeholder="Search user, DEP-ID, or TXID..." oninput="App.filterAdminDeposits()">
+                <button class="btn-secondary" style="font-size:12px; padding:7px 12px; flex-shrink:0;" onclick="App.loadAdminDeposits()">Refresh</button>
               </div>
             </div>
 
@@ -6339,6 +6363,74 @@ window.gtranslateSettings = {
               </div>
             </div>
           </div>
+
+          <!-- Admin Tab: Support Chat Desk -->
+          <div id="adm-sec-support" class="admin-panel-sec" style="display:none;">
+            <div class="card" style="padding:14px 16px; margin-bottom:14px;">
+              <div class="av-adm-filter-bar">
+                <div class="av-adm-filter-inputs">
+                  <input type="search" id="adm-sup-search" class="av-adm-filter-search" placeholder="Search by user email, UID, subject, or message..." oninput="App.filterAdminSupport()">
+                  <select id="adm-sup-filter-status" class="av-adm-filter-select" onchange="App.filterAdminSupport()">
+                    <option value="ALL">All Conversations</option>
+                    <option value="NEEDS_REPLY">Needs Admin Reply</option>
+                    <option value="OPEN">Open / Active</option>
+                    <option value="RESOLVED">Resolved / Closed</option>
+                  </select>
+                </div>
+                <div class="av-adm-filter-actions">
+                  <button class="btn-secondary" style="font-size:12px; padding:7px 12px;" onclick="App.loadAdminSupport()">Refresh Inbox</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="av-adm-support-split" id="adm-sup-split">
+              <!-- Ticket List Pane -->
+              <div class="card av-adm-sup-list-pane" style="padding:0; overflow:hidden;">
+                <div class="av-adm-section-head">
+                  <div>
+                    <h4>Support Conversations</h4>
+                    <p id="adm-sup-inbox-summary" style="margin:2px 0 0; font-size:12px; color:#6B7280;">Loading support conversations...</p>
+                  </div>
+                </div>
+                <div id="adm-sup-ticket-list" class="av-adm-sup-ticket-list">
+                  <div style="padding:24px; text-align:center; color:#6B7280; font-size:13px;">Loading support queue...</div>
+                </div>
+              </div>
+
+              <!-- Active Chat Thread Pane -->
+              <div class="card av-adm-sup-thread-pane" style="padding:0; overflow:hidden;">
+                <div id="adm-sup-thread-header" class="av-adm-sup-thread-header">
+                  <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                    <button type="button" class="av-adm-sup-back-btn" onclick="App.closeMobileSupportThread()" aria-label="Back to tickets">‹ Back</button>
+                    <div style="min-width:0;">
+                      <div id="adm-sup-thread-user" style="font-size:14.5px; font-weight:800; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Select a conversation</div>
+                      <div id="adm-sup-thread-meta" style="font-size:11.5px; color:#6B7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Click a user thread to view history and reply</div>
+                    </div>
+                  </div>
+                  <div id="adm-sup-thread-controls" style="display:none; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <select id="adm-sup-status-select" style="width:auto; min-height:34px; padding:5px 10px; font-size:12px;" onchange="App.updateAdminSupportStatus(this.value)">
+                      <option value="OPEN">Open</option>
+                      <option value="IN_PROGRESS">In Progress</option>
+                      <option value="WAITING_FOR_USER">Waiting for User</option>
+                      <option value="RESOLVED">Resolved</option>
+                      <option value="CLOSED">Closed</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div id="adm-sup-thread-messages" class="av-adm-sup-thread-messages">
+                  <div style="margin:auto; text-align:center; color:#6B7280; padding:24px; font-size:13px;">
+                    Select any user inquiry on the left to read messages and respond live.
+                  </div>
+                </div>
+
+                <div id="adm-sup-composer" class="av-adm-sup-composer" style="display:none;">
+                  <input type="text" id="adm-sup-reply-input" placeholder="Write a reply to this user..." maxlength="2000" onkeydown="if(event.key==='Enter') App.sendAdminSupportReply()">
+                  <button type="button" id="btn-adm-sup-send" class="btn-primary" style="padding:10px 16px; min-height:42px; flex-shrink:0;" onclick="App.sendAdminSupportReply()">Send Reply</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div><!-- /.admin-main-content -->
       </div><!-- /.admin-layout-wrapper -->
 
@@ -6416,7 +6508,7 @@ window.gtranslateSettings = {
           <svg class="more-item-chevron" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </div>
 
-        <div class="more-menu-item" onclick="App.openLanguageSelector()">
+        <div class="more-menu-item" data-feature-language="1" onclick="App.openLanguageSelector()">
           <div class="more-item-left">
             <div class="more-item-icon" aria-hidden="true">🌐</div>
             <span class="more-item-title">Language / ენა</span>
@@ -7049,10 +7141,10 @@ window.gtranslateSettings = {
             </svg>
           </div>
         </div>
-        <div class="settings-row" onclick="App.openLanguageSelector()">
+        <div class="settings-row" data-feature-language="1" onclick="App.openLanguageSelector()">
           <span class="settings-row-title">Language / ენა</span>
           <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="font-size: 13px; color: var(--text-muted);">English</span>
+            <span id="settings-lang-label" style="font-size: 13px; color: var(--text-muted);">English</span>
             <svg class="more-item-chevron" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
@@ -8061,7 +8153,7 @@ window.gtranslateSettings = {
           <button type="button" onclick="App.closeModal('modal-auth'); App.openCustomerService();" style="background:none;border:none;color:#111827;cursor:pointer;padding:4px;" aria-label="Support">
             <svg width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
           </button>
-          <button type="button" onclick="App.openLanguageSelector()" style="background:none;border:none;color:#111827;cursor:pointer;padding:4px;" aria-label="Language">
+          <button type="button" data-feature-language="1" onclick="App.openLanguageSelector()" style="background:none;border:none;color:#111827;cursor:pointer;padding:4px;" aria-label="Language">
             <svg width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
           </button>
         </div>
@@ -8683,39 +8775,43 @@ window.gtranslateSettings = {
     </div>
   </div>
 
-  <!-- MODAL: LIVE SUPPORT CHAT (Matches Screenshot 003423) -->
+  <!-- MODAL: LIVE SUPPORT CHAT (Persistent Admin <-> User Desk) -->
   <div id="modal-support-chat" class="modal-overlay">
-    <div class="modal-content" style="max-width: 440px; height: 560px; display: flex; flex-direction: column; padding: 0; overflow: hidden; background:#FFFFFF; border-radius:20px;">
-      <div class="modal-header" style="padding: 14px 16px; border-bottom: 1px solid #F1F5F9; margin-bottom: 0; background: #FFFFFF;">
-        <button type="button" onclick="App.closeModal('modal-support-chat')" style="width:32px;height:32px;border-radius:50%;border:1px solid #EEF1F6;background:#FFFFFF;color:#111827;cursor:pointer;display:flex;align-items:center;justify-content:center;">‹</button>
-        <div style="font-size: 16px; font-weight: 800; color: #111827;">Customer Service</div>
+    <div class="modal-content av-support-modal-content" style="max-width: 440px; height: min(84dvh, 580px); display: flex; flex-direction: column; padding: 0; overflow: hidden; background:#FFFFFF; border-radius:20px;">
+      <div class="modal-header" style="padding: 12px 14px; border-bottom: 1px solid #F1F5F9; margin-bottom: 0; background: #FFFFFF; gap:8px;">
+        <button type="button" onclick="App.closeModal('modal-support-chat')" style="width:32px;height:32px;border-radius:50%;border:1px solid #EEF1F6;background:#FFFFFF;color:#111827;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;" aria-label="Back">‹</button>
+        <div style="flex:1; min-width:0; display:flex; align-items:center; gap:8px;">
+          <div style="font-size: 15.5px; font-weight: 800; color: #111827; white-space:nowrap;">Live Support</div>
+          <span id="chat-ticket-status-badge" class="badge" style="font-size:10px; font-weight:800; background:#EFF4FF; color:#0052FF; display:none;">OPEN</span>
+        </div>
+        <button type="button" onclick="App.startNewSupportTicket()" style="background:#F3F5F8; border:1px solid #E2E8F0; color:#111827; font-size:11px; font-weight:700; padding:5px 9px; border-radius:999px; cursor:pointer; flex-shrink:0;">+ New</button>
         <button class="modal-close" onclick="App.closeModal('modal-support-chat')">✕</button>
       </div>
 
-      <div style="padding:12px 14px 4px; background:#FFFFFF;">
-        <div style="display:flex; align-items:center; gap:12px; border:1px solid #F1F5F9; border-radius:14px; padding:12px 14px; background:#FFFFFF;">
-          <div style="width:40px; height:40px; border-radius:50%; background:#111827; color:#FFFFFF; display:flex; align-items:center; justify-content:center; flex-shrink:0;">🎧</div>
-          <div>
-            <div style="font-size:15px; font-weight:800; color:#111827;">How can I assist you?</div>
-            <div style="font-size:12px; color:#6B7280;">Online</div>
+      <div style="padding:10px 14px 4px; background:#FFFFFF;">
+        <div style="display:flex; align-items:center; gap:12px; border:1px solid #F1F5F9; border-radius:14px; padding:10px 12px; background:#F8FAFC;">
+          <div style="width:38px; height:38px; border-radius:50%; background:#0052FF; color:#FFFFFF; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:17px;">🎧</div>
+          <div style="min-width:0; flex:1;">
+            <div style="font-size:14px; font-weight:800; color:#111827;">PRIME X CAPITAL Support Desk</div>
+            <div id="chat-status-subtitle" style="font-size:11.5px; color:#6B7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Connected · Messages are delivered directly to admin</div>
           </div>
         </div>
       </div>
 
       <!-- Chat Messages Scrollable Box -->
-      <div id="chat-messages-container" style="flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; background: #FFFFFF;">
+      <div id="chat-messages-container" style="flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: #FFFFFF;">
         <div class="chat-msg bot">
           <div class="chat-bubble">
-            Hello! Welcome to PRIME X CAPITAL Global Institutional Trading Support. How can we assist with your deposits, options settlements, or account verification today?
+            Hello! Send us a message below and an administrator will respond directly in this chat.
           </div>
-          <span class="chat-time">Just now</span>
+          <span class="chat-time">Support Desk</span>
         </div>
       </div>
 
       <!-- Chat Input Bar -->
-      <div style="padding: 10px 14px 14px; background: #FFFFFF; border-top: 1px solid #F1F5F9; display: flex; align-items:center; gap: 10px;">
-        <input type="text" id="chat-input-text" placeholder="Please enter a message" style="flex: 1; background: #F7F8FA; border: 1px solid #EEF1F6; border-radius: 12px; padding: 11px 14px; color: #111827; font-size: 13.5px;" onkeydown="if(event.key==='Enter') App.sendSupportMessage()">
-        <button type="button" style="width:40px; height:40px; border-radius: 50%; border:none; background:#60A5FA; color:#FFFFFF; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" onclick="App.sendSupportMessage()" aria-label="Send message">
+      <div style="padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)); background: #FFFFFF; border-top: 1px solid #F1F5F9; display: flex; align-items:center; gap: 8px;">
+        <input type="text" id="chat-input-text" placeholder="Write a message to support..." maxlength="2000" style="flex: 1; min-width:0; background: #F7F8FA; border: 1px solid #EEF1F6; border-radius: 12px; padding: 11px 14px; color: #111827; font-size: 13.5px;" onkeydown="if(event.key==='Enter') App.sendSupportMessage()">
+        <button type="button" id="btn-chat-send" style="width:42px; height:42px; border-radius: 50%; border:none; background:#0052FF; color:#FFFFFF; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" onclick="App.sendSupportMessage()" aria-label="Send message">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <line x1="22" y1="2" x2="11" y2="13"></line>
             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -9423,7 +9519,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261122_v120_admin_tables_transfer_fix";
+  const CACHE_VERSION = "20261122_v121_header_console_support_chat";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -9455,18 +9551,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261122_v120_admin_tables_transfer_fix"></script>
-  <script defer src="/assets/js/chart.js?v=20261122_v120_admin_tables_transfer_fix"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261122_v121_header_console_support_chat"></script>
+  <script defer src="/assets/js/chart.js?v=20261122_v121_header_console_support_chat"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261122_v120_admin_tables_transfer_fix"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261122_v120_admin_tables_transfer_fix"></script>
+  <script defer src="/assets/js/app.js?v=20261122_v121_header_console_support_chat"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261122_v121_header_console_support_chat"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261122_v120_admin_tables_transfer_fix";
+      var SW_BUILD = "20261122_v121_header_console_support_chat";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;
@@ -9588,6 +9684,7 @@ window.gtranslateSettings = {
       hide:hide,
       show:show,
       setPublicLanguage:function(lang){
+        if(document.body&&document.body.classList.contains('lang-feature-disabled')) return;
         var language=lang==='ka'?'ka':'en';
         try{localStorage.setItem('alphavest_language',language);}catch(e){}
         if(window.AlphavestTranslate && typeof window.AlphavestTranslate.setLanguage==='function'){
@@ -9607,6 +9704,17 @@ window.gtranslateSettings = {
       openApp:function(){hide(); if(window.App&&typeof App.navigate==='function') App.navigate(App.state?.currentView || 'home');},
       openAuth:function(mode){hide(); if(window.App){ if(typeof App.openModal==='function') App.openModal('modal-auth'); if(typeof App.switchAuthBox==='function') App.switchAuthBox(mode==='register'?'register':'login'); }}
     };
+    try{
+      fetch('/api/system/config.php',{credentials:'same-origin',cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+        if(j&&j.success&&j.data){
+          if(window.App&&typeof App.applySystemFeatureFlags==='function'){App.applySystemFeatureFlags(j.data);}
+          else{
+            var en=j.data.features?j.data.features.language!==false:true;
+            if(document.body) document.body.classList.toggle('lang-feature-disabled',!en);
+          }
+        }
+      }).catch(function(){});
+    }catch(e){}
     var attempts=0;
     var watch=setInterval(function(){
       attempts++;
