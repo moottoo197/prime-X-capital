@@ -3466,7 +3466,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261122_v122_concierge_support_design">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261122_v123_admin_support_desk">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -6366,23 +6366,70 @@ window.gtranslateSettings = {
 
           <!-- Admin Tab: Support Chat Desk -->
           <div id="adm-sec-support" class="admin-panel-sec" style="display:none;">
+            <!-- Obsidian Midnight Command Header -->
+            <div class="av-adm-sup-hero">
+              <div class="av-adm-sup-hero-grid" aria-hidden="true"></div>
+              <div class="av-adm-sup-hero-inner">
+                <div class="av-adm-sup-hero-left">
+                  <div class="av-adm-sup-hero-mark" aria-hidden="true">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                  </div>
+                  <div class="av-adm-sup-hero-copy">
+                    <div class="av-adm-sup-hero-eyebrow">PRIME X DESK · LIVE QUEUE</div>
+                    <h3>Live Support Command</h3>
+                    <p>Direct client inquiries, KYC verification reviews, and treasury desk triage</p>
+                  </div>
+                </div>
+                <div class="av-adm-sup-hero-metrics" aria-label="Support queue summary">
+                  <div class="av-adm-sup-metric">
+                    <span class="av-adm-sup-metric-label">Total</span>
+                    <strong id="adm-sup-kpi-total" class="av-adm-sup-metric-val">0</strong>
+                  </div>
+                  <div class="av-adm-sup-metric">
+                    <span class="av-adm-sup-metric-label">Needs Reply</span>
+                    <strong id="adm-sup-kpi-needs" class="av-adm-sup-metric-val is-amber">0</strong>
+                  </div>
+                  <div class="av-adm-sup-metric">
+                    <span class="av-adm-sup-metric-label">Active Open</span>
+                    <strong id="adm-sup-kpi-open" class="av-adm-sup-metric-val is-blue">0</strong>
+                  </div>
+                  <div class="av-adm-sup-metric">
+                    <span class="av-adm-sup-metric-label">Resolved</span>
+                    <strong id="adm-sup-kpi-resolved" class="av-adm-sup-metric-val is-emerald">0</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Interactive Filter & Search Controls Above Chat List -->
             <div class="av-adm-sup-toolbar card">
               <div class="av-adm-sup-toolbar-row">
                 <div class="av-adm-sup-seg-tabs" role="tablist" aria-label="Filter support conversations">
-                  <button type="button" class="av-adm-sup-seg-btn active" data-sup-filter="ALL" onclick="App.setAdminSupportFilter('ALL')">All</button>
-                  <button type="button" class="av-adm-sup-seg-btn" data-sup-filter="NEEDS_REPLY" onclick="App.setAdminSupportFilter('NEEDS_REPLY')">
-                    Needs Reply <span id="adm-sup-tab-needs-count" class="av-adm-sup-tab-count">0</span>
+                  <button type="button" class="av-adm-sup-seg-btn active" role="tab" aria-selected="true" data-sup-filter="ALL" onclick="App.setAdminSupportFilter('ALL')">
+                    <span>All</span>
+                    <span id="adm-sup-count-all" class="av-adm-sup-tab-count neutral">0</span>
                   </button>
-                  <button type="button" class="av-adm-sup-seg-btn" data-sup-filter="OPEN" onclick="App.setAdminSupportFilter('OPEN')">Active</button>
-                  <button type="button" class="av-adm-sup-seg-btn" data-sup-filter="RESOLVED" onclick="App.setAdminSupportFilter('RESOLVED')">Resolved</button>
+                  <button type="button" class="av-adm-sup-seg-btn" role="tab" aria-selected="false" data-sup-filter="NEEDS_REPLY" onclick="App.setAdminSupportFilter('NEEDS_REPLY')">
+                    <span>Needs Reply</span>
+                    <span id="adm-sup-tab-needs-count" class="av-adm-sup-tab-count warn">0</span>
+                  </button>
+                  <button type="button" class="av-adm-sup-seg-btn" role="tab" aria-selected="false" data-sup-filter="OPEN" onclick="App.setAdminSupportFilter('OPEN')">
+                    <span>Active</span>
+                    <span id="adm-sup-count-open" class="av-adm-sup-tab-count neutral">0</span>
+                  </button>
+                  <button type="button" class="av-adm-sup-seg-btn" role="tab" aria-selected="false" data-sup-filter="RESOLVED" onclick="App.setAdminSupportFilter('RESOLVED')">
+                    <span>Resolved</span>
+                    <span id="adm-sup-count-resolved" class="av-adm-sup-tab-count neutral">0</span>
+                  </button>
                 </div>
                 <div class="av-adm-sup-toolbar-right">
                   <div class="av-adm-sup-search-wrap">
                     <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-                    <input type="search" id="adm-sup-search" placeholder="Search email, UID, subject, or message..." oninput="App.filterAdminSupport()">
+                    <input type="search" id="adm-sup-search" placeholder="Search email, UID, subject, or message..." oninput="App.onAdminSupportSearchInput()">
+                    <button type="button" id="btn-adm-sup-clear-search" class="av-adm-sup-clear-btn" onclick="App.clearAdminSupportSearch()" aria-label="Clear search" style="display:none;">✕</button>
                   </div>
-                  <button type="button" class="btn-secondary av-adm-sup-refresh-btn" onclick="App.loadAdminSupport()">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                  <button type="button" id="btn-adm-sup-refresh" class="av-adm-sup-refresh-btn" onclick="App.loadAdminSupport({ manual: true })">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
                     <span>Refresh</span>
                   </button>
                 </div>
@@ -6393,10 +6440,11 @@ window.gtranslateSettings = {
               <!-- Ticket List Pane -->
               <div class="card av-adm-sup-list-pane">
                 <div class="av-adm-sup-pane-head">
-                  <div>
+                  <div class="av-adm-sup-pane-title-row">
                     <h4>Customer Queue</h4>
-                    <p id="adm-sup-inbox-summary" class="av-adm-sup-pane-sub">Loading support conversations...</p>
+                    <span id="adm-sup-active-filter-label" class="av-adm-sup-filter-tag">All</span>
                   </div>
+                  <p id="adm-sup-inbox-summary" class="av-adm-sup-pane-sub">Loading support conversations...</p>
                 </div>
                 <div id="adm-sup-ticket-list" class="av-adm-sup-ticket-list">
                   <div class="av-adm-sup-empty-pane">Loading support queue...</div>
@@ -6416,6 +6464,7 @@ window.gtranslateSettings = {
                   </div>
                   <div id="adm-sup-thread-controls" class="av-adm-sup-thread-controls" style="display:none;">
                     <button type="button" id="btn-adm-sup-inspect-user" class="av-adm-sup-inspect-btn" onclick="App.inspectAdminSupportUser()">Inspect User</button>
+                    <button type="button" id="btn-adm-sup-resolve" class="av-adm-sup-resolve-btn" onclick="App.updateAdminSupportStatus('RESOLVED')">Mark Resolved</button>
                     <select id="adm-sup-status-select" class="av-adm-sup-status-select" onchange="App.updateAdminSupportStatus(this.value)" aria-label="Ticket status">
                       <option value="OPEN">Open</option>
                       <option value="IN_PROGRESS">In Progress</option>
@@ -6425,6 +6474,8 @@ window.gtranslateSettings = {
                     </select>
                   </div>
                 </div>
+
+                <div id="adm-sup-context-bar" class="av-adm-sup-context-bar" style="display:none;"></div>
 
                 <div id="adm-sup-thread-messages" class="av-adm-sup-thread-messages">
                   <div class="av-adm-sup-empty-pane">
@@ -6436,10 +6487,12 @@ window.gtranslateSettings = {
                   <div class="av-adm-sup-macros">
                     <button type="button" class="av-adm-sup-macro-btn" onclick="App.insertAdminSupportMacro('We are reviewing your account details now and will update you shortly.')">Reviewing account</button>
                     <button type="button" class="av-adm-sup-macro-btn" onclick="App.insertAdminSupportMacro('Please share your transaction hash (TXID) so our treasury team can verify it immediately.')">Request TXN hash</button>
+                    <button type="button" class="av-adm-sup-macro-btn" onclick="App.insertAdminSupportMacro('Our compliance team is reviewing your KYC verification documents and will update your status shortly.')">KYC under review</button>
                     <button type="button" class="av-adm-sup-macro-btn" onclick="App.insertAdminSupportMacro('This request has been completed and verified on your account. Let us know if you need anything else.')">Resolved &amp; verified</button>
                   </div>
                   <div id="adm-sup-composer" class="av-adm-sup-composer">
-                    <input type="text" id="adm-sup-reply-input" placeholder="Write a direct reply to this client..." maxlength="2000" onkeydown="if(event.key==='Enter') App.sendAdminSupportReply()">
+                    <input type="text" id="adm-sup-reply-input" placeholder="Write a direct reply to this client..." maxlength="2000" oninput="App.updateAdminSupportCharCount()" onkeydown="if(event.key==='Enter') App.sendAdminSupportReply()">
+                    <span id="adm-sup-char-count" class="av-adm-sup-char-count" style="display:none;">0/2000</span>
                     <button type="button" id="btn-adm-sup-send" class="av-adm-sup-send-btn" onclick="App.sendAdminSupportReply()">
                       <span>Send Reply</span>
                       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
@@ -9598,7 +9651,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261122_v122_concierge_support_design";
+  const CACHE_VERSION = "20261122_v123_admin_support_desk";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -9630,18 +9683,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261122_v122_concierge_support_design"></script>
-  <script defer src="/assets/js/chart.js?v=20261122_v122_concierge_support_design"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261122_v123_admin_support_desk"></script>
+  <script defer src="/assets/js/chart.js?v=20261122_v123_admin_support_desk"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261122_v122_concierge_support_design"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261122_v122_concierge_support_design"></script>
+  <script defer src="/assets/js/app.js?v=20261122_v123_admin_support_desk"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261122_v123_admin_support_desk"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261122_v122_concierge_support_design";
+      var SW_BUILD = "20261122_v123_admin_support_desk";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

@@ -1,5 +1,5 @@
-const CACHE_NAME = "primex-static-v122_concierge_support_design";
-const STATIC_ASSETS = ["/", "/offline.html", "/assets/css/app.css?v=20261122_v122_concierge_support_design", "/assets/js/app.js?v=20261122_v122_concierge_support_design", "/assets/js/chart.js?v=20261122_v122_concierge_support_design", "/assets/js/3d-engine.js?v=20261122_v122_concierge_support_design"];
+const CACHE_NAME = "primex-static-v123_admin_support_desk";
+const STATIC_ASSETS = ["/", "/offline.html", "/assets/css/app.css?v=20261122_v123_admin_support_desk", "/assets/js/app.js?v=20261122_v123_admin_support_desk", "/assets/js/chart.js?v=20261122_v123_admin_support_desk", "/assets/js/3d-engine.js?v=20261122_v123_admin_support_desk"];
 
 function fallbackResponse(req) {
   return caches.match(req).then(cached => cached || caches.match("/offline.html")).then(res => {

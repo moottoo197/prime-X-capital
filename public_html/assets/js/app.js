@@ -181,6 +181,11 @@ const App = {
     adminPreviewUserId: null,
     adminPreviewUser: null,
     adminMetrics: null,
+    adminSupportTickets: [],
+    adminSupportMessages: [],
+    adminSupportActiveId: null,
+    adminSupportFilter: 'ALL',
+    adminSupportLoaded: false,
     marketingAssets: [],
     marketingPromotions: null,
     marketingClaims: [],
@@ -11014,77 +11019,176 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   /* 5b. Admin Support Desk */
   setAdminSupportFilter(status) {
     const normalized = String(status || 'ALL').toUpperCase();
-    this.state.adminSupportFilter = normalized;
+    const allowed = ['ALL', 'NEEDS_REPLY', 'OPEN', 'RESOLVED'];
+    const nextFilter = allowed.includes(normalized) ? normalized : 'ALL';
+    this.state.adminSupportFilter = nextFilter;
+
     document.querySelectorAll('.av-adm-sup-seg-btn').forEach(btn => {
-      btn.classList.toggle('active', String(btn.dataset.supFilter || '').toUpperCase() === normalized);
+      const isActive = String(btn.dataset.supFilter || '').toUpperCase() === nextFilter;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
+
+    const filterLabelMap = {
+      ALL: 'All',
+      NEEDS_REPLY: 'Needs Reply',
+      OPEN: 'Active',
+      RESOLVED: 'Resolved'
+    };
+    const filterTagEl = document.getElementById('adm-sup-active-filter-label');
+    if (filterTagEl) {
+      filterTagEl.textContent = filterLabelMap[nextFilter] || 'All';
+    }
+
+    if (!this.state.adminSupportLoaded && (!Array.isArray(this.state.adminSupportTickets) || !this.state.adminSupportTickets.length)) {
+      this.loadAdminSupport({ silent: true });
+    }
     this.filterAdminSupport();
   },
 
-  async loadAdminSupport(opts = {}) {
-    const silent = Boolean(opts && opts.silent);
-    const activeId = this.state.adminSupportActiveId || '';
-    const qs = activeId ? `?ticket_id=${encodeURIComponent(activeId)}` : '';
-    const res = await this.api(`/admin/support.php${qs}`);
-    if (!res || !res.success || !res.data) {
-      if (!silent && this.state.adminTab === 'support') {
-        this.toast(res?.message || 'Unable to load support tickets.', 'error');
-      }
-      return;
+  onAdminSupportSearchInput() {
+    const input = document.getElementById('adm-sup-search');
+    const clearBtn = document.getElementById('btn-adm-sup-clear-search');
+    const hasVal = Boolean(input && input.value.trim().length > 0);
+    if (clearBtn) clearBtn.style.display = hasVal ? 'inline-flex' : 'none';
+    this.filterAdminSupport();
+  },
+
+  clearAdminSupportSearch() {
+    const input = document.getElementById('adm-sup-search');
+    const clearBtn = document.getElementById('btn-adm-sup-clear-search');
+    if (input) {
+      input.value = '';
+      input.focus();
     }
+    if (clearBtn) clearBtn.style.display = 'none';
+    this.filterAdminSupport();
+  },
 
-    const tickets = Array.isArray(res.data.tickets) ? res.data.tickets : [];
-    const needsReplyCount = Number(res.data.needs_reply_count || 0);
-    const openCount = Number(res.data.open_count || 0);
+  resetAdminSupportFilters() {
+    const input = document.getElementById('adm-sup-search');
+    const clearBtn = document.getElementById('btn-adm-sup-clear-search');
+    if (input) input.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    this.setAdminSupportFilter('ALL');
+  },
 
-    this.state.adminSupportTickets = tickets;
-    this.state.adminSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
-    if (!this.state.adminSupportActiveId && res.data.active_ticket_id) {
-      this.state.adminSupportActiveId = res.data.active_ticket_id;
+  updateAdminSupportMetrics(tickets) {
+    const list = Array.isArray(tickets) ? tickets : [];
+    const totalCount = list.length;
+    let needsCount = 0;
+    let openCount = 0;
+    let resolvedCount = 0;
+
+    list.forEach(t => {
+      const st = String(t.status || 'OPEN').toUpperCase();
+      const isResolved = st === 'RESOLVED' || st === 'CLOSED';
+      if (isResolved) resolvedCount++;
+      else openCount++;
+      if (t.needs_reply) needsCount++;
+    });
+
+    const setText = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(val);
+    };
+    setText('adm-sup-kpi-total', totalCount);
+    setText('adm-sup-kpi-needs', needsCount);
+    setText('adm-sup-kpi-open', openCount);
+    setText('adm-sup-kpi-resolved', resolvedCount);
+    setText('adm-sup-count-all', totalCount);
+    setText('adm-sup-count-open', openCount);
+    setText('adm-sup-count-resolved', resolvedCount);
+
+    const tabNeeds = document.getElementById('adm-sup-tab-needs-count');
+    if (tabNeeds) {
+      tabNeeds.textContent = String(needsCount);
+      tabNeeds.style.display = needsCount > 0 ? 'inline-block' : 'none';
     }
 
     const updateSupBadge = (id, cnt) => {
       const el = document.getElementById(id);
       if (!el) return;
-      el.textContent = cnt;
+      el.textContent = String(cnt);
       el.style.display = cnt > 0 ? 'inline-flex' : 'none';
     };
-    updateSupBadge('adm-badge-support', needsReplyCount);
-    updateSupBadge('adm-pill-badge-support', needsReplyCount);
-
-    const tabNeeds = document.getElementById('adm-sup-tab-needs-count');
-    if (tabNeeds) {
-      tabNeeds.textContent = needsReplyCount;
-      tabNeeds.style.display = needsReplyCount > 0 ? 'inline-block' : 'none';
-    }
+    updateSupBadge('adm-badge-support', needsCount);
+    updateSupBadge('adm-pill-badge-support', needsCount);
 
     const qSup = document.getElementById('adm-quick-support');
     if (qSup) {
-      if (needsReplyCount > 0) {
-        qSup.textContent = `${needsReplyCount} Needs Reply`;
+      if (needsCount > 0) {
+        qSup.textContent = `${needsCount} Needs Reply`;
         qSup.className = 'av-adm-action-count warn';
       } else {
         qSup.textContent = `${openCount} Open`;
         qSup.className = 'av-adm-action-count';
       }
     }
+  },
 
-    const summaryEl = document.getElementById('adm-sup-inbox-summary');
-    if (summaryEl) {
-      summaryEl.textContent = `${tickets.length} conversations · ${needsReplyCount} awaiting reply`;
+  async loadAdminSupport(opts = {}) {
+    const silent = Boolean(opts && opts.silent);
+    const manual = Boolean(opts && opts.manual);
+    const refreshBtn = document.getElementById('btn-adm-sup-refresh');
+
+    if (manual && refreshBtn) {
+      refreshBtn.classList.add('is-loading');
+      refreshBtn.disabled = true;
     }
 
+    const activeId = this.state.adminSupportActiveId || '';
+    const qs = activeId ? `?ticket_id=${encodeURIComponent(activeId)}` : '';
+    const res = await this.api(`/admin/support.php${qs}`);
+
+    if (manual && refreshBtn) {
+      refreshBtn.classList.remove('is-loading');
+      refreshBtn.disabled = false;
+    }
+
+    if (!res || !res.success || !res.data) {
+      if ((!silent || manual) && this.state.adminTab === 'support') {
+        this.toast(res?.message || 'Unable to load support tickets.', 'error');
+      }
+      return;
+    }
+
+    const tickets = Array.isArray(res.data.tickets) ? res.data.tickets : [];
+    this.state.adminSupportLoaded = true;
+    this.state.adminSupportTickets = tickets;
+    this.state.adminSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
+
+    const hasActive = tickets.some(t => String(t.id) === String(this.state.adminSupportActiveId || ''));
+    if (!hasActive) {
+      this.state.adminSupportActiveId = res.data.active_ticket_id || (tickets[0]?.id || null);
+    }
+
+    this.updateAdminSupportMetrics(tickets);
     this.filterAdminSupport();
     this.renderAdminSupportThread(!silent);
+
+    if (manual) {
+      this.toast(`Support inbox synced · ${tickets.length} conversation${tickets.length === 1 ? '' : 's'}`, 'success');
+    }
   },
 
   filterAdminSupport() {
     const listEl = document.getElementById('adm-sup-ticket-list');
     if (!listEl) return;
 
-    const query = (document.getElementById('adm-sup-search')?.value || '').trim().toLowerCase();
+    const searchInput = document.getElementById('adm-sup-search');
+    const query = (searchInput?.value || '').trim().toLowerCase();
+    const clearBtn = document.getElementById('btn-adm-sup-clear-search');
+    if (clearBtn) clearBtn.style.display = query.length > 0 ? 'inline-flex' : 'none';
+
     const filterStatus = String(this.state.adminSupportFilter || 'ALL').toUpperCase();
     const tickets = Array.isArray(this.state.adminSupportTickets) ? this.state.adminSupportTickets : [];
+
+    document.querySelectorAll('.av-adm-sup-seg-btn').forEach(btn => {
+      const isActive = String(btn.dataset.supFilter || '').toUpperCase() === filterStatus;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
 
     const filtered = tickets.filter(t => {
       const st = String(t.status || 'OPEN').toUpperCase();
@@ -11093,14 +11197,33 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       if (filterStatus === 'RESOLVED' && !['RESOLVED', 'CLOSED'].includes(st)) return false;
 
       if (query) {
-        const hay = `${t.user_email || ''} ${t.user_name || ''} ${t.numeric_uid || ''} ${t.subject || ''} ${t.last_message || ''}`.toLowerCase();
+        const hay = `${t.id || ''} ${t.user_email || ''} ${t.user_name || ''} ${t.numeric_uid || ''} ${t.subject || ''} ${t.last_message || ''}`.toLowerCase();
         if (!hay.includes(query)) return false;
       }
       return true;
     });
 
+    const summaryEl = document.getElementById('adm-sup-inbox-summary');
+    if (summaryEl) {
+      const needsCount = tickets.filter(t => t.needs_reply).length;
+      if (filtered.length !== tickets.length) {
+        summaryEl.textContent = `Showing ${filtered.length} of ${tickets.length} · ${needsCount} awaiting reply`;
+      } else {
+        summaryEl.textContent = `${tickets.length} conversation${tickets.length === 1 ? '' : 's'} · ${needsCount} awaiting reply`;
+      }
+    }
+
     if (!filtered.length) {
-      listEl.innerHTML = '<div class="av-adm-sup-empty-pane">No support conversations match this filter.</div>';
+      const hasConstraint = filterStatus !== 'ALL' || query.length > 0;
+      const msg = hasConstraint
+        ? 'No conversations match the current filter or search.'
+        : 'No support conversations yet. Client messages will appear here automatically.';
+      listEl.innerHTML = `
+        <div class="av-adm-sup-empty-pane">
+          <span>${this.escapeHtml(msg)}</span>
+          ${hasConstraint ? '<button type="button" class="av-adm-sup-reset-btn" onclick="App.resetAdminSupportFilters()">Show All Conversations</button>' : ''}
+        </div>
+      `;
       return;
     }
 
@@ -11123,15 +11246,25 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       const uidPart = t.numeric_uid ? `UID #${this.escapeHtml(String(t.numeric_uid))}` : this.escapeHtml(t.user_name || 'Member');
       const msgCount = Number(t.message_count || 0);
       const timeLabel = this.formatSupportListTime(t.last_message_at || t.updated_at || t.created_at);
+      const rawSubj = String(t.subject || '').trim();
+      const showSubj = rawSubj && rawSubj !== 'Platform Support Inquiry';
+      const lastSender = String(t.last_sender_role || '').toUpperCase();
+      const snippetRaw = t.last_message || rawSubj || 'New support inquiry';
+      const snippetText = (lastSender === 'ADMIN' && t.last_message) ? `You: ${snippetRaw}` : snippetRaw;
+
       return `
         <button type="button" class="av-adm-sup-ticket-item${isSelected ? ' active' : ''}" onclick="App.selectAdminSupportTicket('${this.escapeHtml(tid)}')">
-          <div class="av-adm-sup-avatar ${tone}" aria-hidden="true">${this.escapeHtml(initials)}</div>
+          <div class="av-adm-sup-avatar-wrap">
+            <div class="av-adm-sup-avatar ${tone}" aria-hidden="true">${this.escapeHtml(initials)}</div>
+            ${t.needs_reply ? '<span class="av-adm-sup-unread-dot" aria-hidden="true"></span>' : ''}
+          </div>
           <div class="av-adm-sup-item-body">
             <div class="av-adm-sup-item-top">
               <span class="av-adm-sup-user-label">${this.escapeHtml(t.user_email || t.user_name || 'User')}</span>
               <span class="av-adm-sup-time">${this.escapeHtml(timeLabel)}</span>
             </div>
-            <div class="av-adm-sup-snippet">${this.escapeHtml(t.last_message || t.subject || 'New support inquiry')}</div>
+            ${showSubj ? `<div class="av-adm-sup-subject">${this.escapeHtml(rawSubj)}</div>` : ''}
+            <div class="av-adm-sup-snippet">${this.escapeHtml(snippetText)}</div>
             <div class="av-adm-sup-meta">
               <span class="av-sup-status-tag ${statusClass}">${this.escapeHtml(statusLabel)}</span>
               <span aria-hidden="true">·</span>
@@ -11153,8 +11286,12 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
     const res = await this.api(`/admin/support.php?ticket_id=${encodeURIComponent(ticketId)}`);
     if (res && res.success && res.data) {
-      if (Array.isArray(res.data.tickets)) this.state.adminSupportTickets = res.data.tickets;
+      if (Array.isArray(res.data.tickets)) {
+        this.state.adminSupportTickets = res.data.tickets;
+        this.updateAdminSupportMetrics(res.data.tickets);
+      }
       this.state.adminSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
+      this.filterAdminSupport();
       this.renderAdminSupportThread(true);
     } else {
       this.toast(res?.message || 'Unable to load ticket thread.', 'error');
@@ -11166,10 +11303,24 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     if (splitEl) splitEl.classList.remove('is-thread-open');
   },
 
+  updateAdminSupportCharCount() {
+    const input = document.getElementById('adm-sup-reply-input');
+    const counter = document.getElementById('adm-sup-char-count');
+    if (!input || !counter) return;
+    const len = input.value.length;
+    if (len >= 120) {
+      counter.textContent = `${len}/2000`;
+      counter.style.display = 'inline';
+    } else {
+      counter.style.display = 'none';
+    }
+  },
+
   insertAdminSupportMacro(text) {
     const input = document.getElementById('adm-sup-reply-input');
     if (!input) return;
     input.value = String(text || '');
+    this.updateAdminSupportCharCount();
     input.focus();
   },
 
@@ -11190,7 +11341,9 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     const headerUser = document.getElementById('adm-sup-thread-user');
     const headerMeta = document.getElementById('adm-sup-thread-meta');
     const controls = document.getElementById('adm-sup-thread-controls');
+    const resolveBtn = document.getElementById('btn-adm-sup-resolve');
     const statusSel = document.getElementById('adm-sup-status-select');
+    const contextBar = document.getElementById('adm-sup-context-bar');
     const msgsEl = document.getElementById('adm-sup-thread-messages');
     const composerWrap = document.getElementById('adm-sup-composer-wrap');
     if (!msgsEl) return;
@@ -11206,6 +11359,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       if (headerUser) headerUser.textContent = 'Select a conversation';
       if (headerMeta) headerMeta.textContent = 'Choose a client inquiry to view history and respond';
       if (controls) controls.style.display = 'none';
+      if (contextBar) contextBar.style.display = 'none';
       if (composerWrap) composerWrap.style.display = 'none';
       msgsEl.innerHTML = '<div class="av-adm-sup-empty-pane">Select any customer thread from the queue to inspect messages and reply directly.</div>';
       return;
@@ -11213,6 +11367,9 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
     const clientInitials = this.getSupportInitials(active.user_name || active.user_email || 'U');
     const clientTone = this.getSupportAvatarTone(active.user_email || active.id);
+    const activeStatus = String(active.status || 'OPEN').toUpperCase();
+    const isResolved = activeStatus === 'RESOLVED' || activeStatus === 'CLOSED';
+
     if (headerAvatar) {
       headerAvatar.className = `av-adm-sup-avatar ${clientTone}`;
       headerAvatar.textContent = clientInitials;
@@ -11223,8 +11380,25 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       headerMeta.textContent = `${uidTag}${active.subject || 'Platform Support Inquiry'}`;
     }
     if (controls) controls.style.display = 'flex';
-    if (statusSel) statusSel.value = String(active.status || 'OPEN').toUpperCase();
+    if (resolveBtn) resolveBtn.style.display = isResolved ? 'none' : 'inline-flex';
+    if (statusSel) statusSel.value = activeStatus;
     if (composerWrap) composerWrap.style.display = 'flex';
+
+    if (contextBar) {
+      const shortTicket = String(active.id || '').slice(0, 8).toUpperCase();
+      const prettyStatus = activeStatus.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+      const lastBy = String(active.last_sender_role || '').toUpperCase() === 'ADMIN' ? 'Admin Desk' : (active.user_name || 'Client');
+      contextBar.style.display = 'flex';
+      contextBar.innerHTML = `
+        <span>Ticket <strong>#${this.escapeHtml(shortTicket)}</strong></span>
+        <span aria-hidden="true">·</span>
+        <span>Topic: <strong>${this.escapeHtml(active.subject || 'Platform Support Inquiry')}</strong></span>
+        <span aria-hidden="true">·</span>
+        <span>Status: <strong>${this.escapeHtml(prettyStatus)}</strong></span>
+        <span aria-hidden="true">·</span>
+        <span>Last reply: <strong>${this.escapeHtml(lastBy)}</strong></span>
+      `;
+    }
 
     const msgs = Array.isArray(this.state.adminSupportMessages) ? this.state.adminSupportMessages : [];
     if (!msgs.length) {
@@ -11277,6 +11451,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
     if (res && res.success) {
       input.value = '';
+      this.updateAdminSupportCharCount();
       if (Array.isArray(res.data?.messages)) {
         this.state.adminSupportMessages = res.data.messages;
       }
