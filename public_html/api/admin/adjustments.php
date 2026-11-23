@@ -54,6 +54,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!in_array($walletType, ['funding', 'exchange', 'trading'], true)) {
         sendError('VALIDATION_ERROR', 'Invalid wallet type');
     }
+    if ($adjustmentType === 'REFERRAL_BONUS' && $walletType === 'trading') {
+        sendError('VALIDATION_ERROR', 'Referral Bonus is Spot-only and cannot be credited directly to Future/Trading wallet. Select Spot (Funding or Exchange).');
+    }
 
     // Prevent manually adding a second signal-profit credit after the user has
     // already received an automated signal profit. Only explicit signal-profit

@@ -841,12 +841,12 @@ function getCurrentUser(): ?array {
             && (strpos($requestPath, '/api/auth/me.php') === false)
             && (strpos($requestPath, '/api/auth/logout.php') === false)
             && (strpos($requestPath, '/logs') === false);
-        if ($requestMethod === 'GET' && $previewId !== '' && preg_match('/^[A-Za-z0-9_-]{8,64}$/', $previewId) && $previewAllowedPath
+        if ($requestMethod === 'GET' && $previewId !== '' && preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $previewId) && $previewAllowedPath
             && in_array(strtoupper((string)($sessionOwner['role'] ?? '')), $adminRoles, true)
             && $previewId !== (string)$sessionOwner['id'] && $supabase->isConfigured()) {
             $previewRes = $supabase->select('profiles', ['id' => 'eq.' . $previewId, 'limit' => '1']);
             if ($previewRes['success'] && !empty($previewRes['data'][0])) {
-                $target = $previewRes['data'][0];
+                $target = primex_normalize_effective_user($previewRes['data'][0]);
                 $target['_admin_preview'] = true;
                 $target['_admin_viewer_id'] = (string)$sessionOwner['id'];
                 return $target;

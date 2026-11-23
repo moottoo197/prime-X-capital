@@ -3,6 +3,7 @@
  * User Notifications - Event Driven & Real-time Synchronization
  */
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/lib/notification_reads.php';
 
 $user = getCurrentUser();
 if (!$user) {
@@ -12,7 +13,8 @@ if (!$user) {
     ], 'Guest notifications');
 }
 
-$userId = $user['id'];
+$userId = (string)$user['id'];
+$isAdminPreview = !empty($user['_admin_preview']);
 $supabase = getSupabaseClient();
 $notifications = [];
 
@@ -30,7 +32,7 @@ if ($supabase->isConfigured()) {
         ],
         'kyc' => [
             'table' => 'kyc_submissions',
-            'params' => ['user_id' => "eq.{$userId}", 'order' => 'created_at.desc', 'limit' => '5']
+            'params' => ['user_id' => "eq.{$userId}", 'select' => 'id,user_id,status,reviewer_notes,reviewed_at,updated_at,created_at', 'order' => 'created_at.desc', 'limit' => '5']
         ],
         'signals' => [
             'table' => 'user_signal_executions',
@@ -42,13 +44,13 @@ if ($supabase->isConfigured()) {
     $depRes = $batch['deposits'] ?? ['success'=>false];
     if ($depRes['success'] && is_array($depRes['data'])) {
         foreach ($depRes['data'] as $d) {
-            $status = $d['status'] ?? 'PENDING';
+            $status = strtoupper((string)($d['status'] ?? 'PENDING'));
             $amt = (float)($d['amount'] ?? 0);
             $asset = $d['asset'] ?? 'USDT';
             $net = $d['network'] ?? 'TRC20';
             $time = $d['updated_at'] ?? $d['created_at'] ?? gmdate('Y-m-d H:i:s');
 
-            if ($status === 'COMPLETED') {
+            if (in_array($status, ['COMPLETED', 'APPROVED', 'CONFIRMED'], true)) {
                 $notifications[] = [
                     'id' => 'notif_dep_' . ($d['id'] ?? bin2hex(random_bytes(4))),
                     'user_id' => $userId,
@@ -77,14 +79,14 @@ if ($supabase->isConfigured()) {
     $withRes = $batch['withdrawals'] ?? ['success'=>false];
     if ($withRes['success'] && is_array($withRes['data'])) {
         foreach ($withRes['data'] as $w) {
-            $status = $w['status'] ?? 'REQUESTED';
+            $status = strtoupper((string)($w['status'] ?? 'REQUESTED'));
             $amt = (float)($w['amount'] ?? 0);
             $asset = $w['asset'] ?? 'USDT';
             $net = $w['network'] ?? 'TRC20';
             $txHash = $w['tx_hash'] ?? '';
             $time = $w['updated_at'] ?? $w['created_at'] ?? gmdate('Y-m-d H:i:s');
 
-            if ($status === 'COMPLETED') {
+            if (in_array($status, ['COMPLETED', 'APPROVED', 'CONFIRMED'], true)) {
                 $txMsg = !empty($txHash) ? " Transaction Hash: {$txHash}" : "";
                 $notifications[] = [
                     'id' => 'notif_with_' . ($w['id'] ?? bin2hex(random_bytes(4))),
@@ -114,7 +116,7 @@ if ($supabase->isConfigured()) {
     $kycRes = $batch['kyc'] ?? ['success'=>false];
     if ($kycRes['success'] && is_array($kycRes['data'])) {
         foreach ($kycRes['data'] as $k) {
-            $status = $k['status'] ?? 'PENDING';
+            $status = strtoupper((string)($k['status'] ?? 'PENDING'));
             $time = $k['reviewed_at'] ?? $k['updated_at'] ?? $k['created_at'] ?? gmdate('Y-m-d H:i:s');
 
             if ($status === 'APPROVED') {
@@ -146,6 +148,8 @@ if ($supabase->isConfigured()) {
     $sigRes = $batch['signals'] ?? ['success'=>false];
     if ($sigRes['success'] && is_array($sigRes['data'])) {
         foreach ($sigRes['data'] as $s) {
+            $signalId = (string)($s['signal_id'] ?? '');
+            if (strpos($signalId, 'sig_test_') === 0) continue;
             $profit = (float)($s['profit_amount'] ?? 0);
             $sym = $s['symbol'] ?? 'USDT';
             $pct = $s['profit_percentage'] ?? '2.5';
@@ -169,16 +173,14 @@ usort($notifications, function($a, $b) {
     return strcmp($b['created_at'] ?? '', $a['created_at'] ?? '');
 });
 
-// Check read status from cookie / cutoff timestamp
-$readIds = [];
-if (!empty($_COOKIE['read_notifications'])) {
-    $readIds = array_values(array_filter(explode(',', (string)$_COOKIE['read_notifications'])));
-}
-$readBeforeTs = !empty($_COOKIE['read_notifications_before']) ? (int)$_COOKIE['read_notifications_before'] : 0;
+// Load persistent per-user read state (Supabase + server file + cookies)
+$readState = primex_load_notification_read_state($supabase, $userId, !$isAdminPreview);
+$readIds = $readState['ids'] ?? [];
+$readBeforeTs = (int)($readState['before_ts'] ?? 0);
 
 $unreadCount = 0;
 foreach ($notifications as &$n) {
-    $createdTs = !empty($n['created_at']) ? (int)strtotime((string)$n['created_at']) : 0;
+    $createdTs = !empty($n['created_at']) ? primex_notif_parse_utc_ts((string)$n['created_at']) : 0;
     $isMarkedById = in_array($n['id'], $readIds, true);
     $isMarkedByTime = ($readBeforeTs > 0 && $createdTs > 0 && $createdTs <= $readBeforeTs);
     if ($isMarkedById || $isMarkedByTime) {
@@ -191,5 +193,7 @@ unset($n);
 
 sendSuccess([
     'notifications' => array_slice($notifications, 0, 30),
-    'unread_count'  => $unreadCount
+    'unread_count'  => $unreadCount,
+    'read_before_ts' => $readBeforeTs,
+    'read_ids' => $readIds
 ], 'Notifications loaded');

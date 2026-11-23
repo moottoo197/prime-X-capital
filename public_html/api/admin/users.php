@@ -30,19 +30,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $userId = (string)($profile['id'] ?? '');
         if ($userId === '') sendError('USER_NOT_FOUND', 'User account was not found.', 404);
 
-        // Fetch all user-scoped evidence concurrently. We deliberately use '*'
-        // for the dossier because this is an admin-only detail endpoint and the
-        // schema has evolved over time (for example KYC DOB/address columns).
-        $batch = $supabase->selectMany([
-            'wallets' => ['table' => 'wallet_balances', 'params' => ['user_id' => 'eq.' . $userId, 'asset' => 'eq.USDT', 'order' => 'wallet_type.asc']],
-            'kyc' => ['table' => 'kyc_submissions', 'params' => ['user_id' => 'eq.' . $userId, 'order' => 'created_at.desc', 'limit' => '20']],
-            'deposits' => ['table' => 'deposits', 'params' => ['user_id' => 'eq.' . $userId, 'order' => 'created_at.desc', 'limit' => '500']],
-            'withdrawals' => ['table' => 'withdrawals', 'params' => ['user_id' => 'eq.' . $userId, 'order' => 'created_at.desc', 'limit' => '500']],
-            'ledger' => ['table' => 'ledger_entries', 'params' => ['user_id' => 'eq.' . $userId, 'order' => 'created_at.desc', 'limit' => '5000']],
-            'executions' => ['table' => 'user_signal_executions', 'params' => ['user_id' => 'eq.' . $userId, 'order' => 'executed_at.desc', 'limit' => '500']],
-            'signals' => ['table' => 'trading_signals', 'params' => ['created_at' => 'gte.' . (string)($profile['created_at'] ?? '1970-01-01T00:00:00Z'), 'order' => 'created_at.asc', 'limit' => '1000']],
-            'signal_history' => ['table' => 'trading_signal_history', 'params' => ['created_at' => 'gte.' . (string)($profile['created_at'] ?? '1970-01-01T00:00:00Z'), 'order' => 'created_at.asc', 'limit' => '1000']]
-        ]);
+        $mode = strtolower(trim((string)($_GET['mode'] ?? 'full')));
+        $isSummaryMode = ($mode === 'summary');
+        $sinceCreated = (string)($profile['created_at'] ?? '1970-01-01T00:00:00Z');
+
+        // Fetch user-scoped evidence concurrently with explicit minimal columns
+        // so opening a user dashboard is fast and never pulls large KYC document blobs.
+        $queries = [
+            'wallets' => [
+                'table' => 'wallet_balances',
+                'params' => [
+                    'user_id' => 'eq.' . $userId,
+                    'asset' => 'eq.USDT',
+                    'select' => 'wallet_type,asset,balance,available_balance,reserved_balance,promotional_balance',
+                    'order' => 'wallet_type.asc'
+                ]
+            ],
+            'kyc' => [
+                'table' => 'kyc_submissions',
+                'params' => [
+                    'user_id' => 'eq.' . $userId,
+                    'select' => 'id,user_id,status,legal_name,date_of_birth,country,document_type,document_number,address,reviewer_notes,rejection_reason,created_at,reviewed_at,updated_at',
+                    'order' => 'created_at.desc',
+                    'limit' => $isSummaryMode ? '2' : '10'
+                ]
+            ],
+            'deposits' => [
+                'table' => 'deposits',
+                'params' => [
+                    'user_id' => 'eq.' . $userId,
+                    'select' => 'id,asset,network,amount,fee,net_amount,status,tx_hash,deposit_address,rejection_reason,created_at,updated_at',
+                    'order' => 'created_at.desc',
+                    'limit' => $isSummaryMode ? '50' : '250'
+                ]
+            ],
+            'withdrawals' => [
+                'table' => 'withdrawals',
+                'params' => [
+                    'user_id' => 'eq.' . $userId,
+                    'select' => 'id,asset,network,amount,fee,net_amount,status,destination_address,tx_hash,rejection_reason,created_at,updated_at',
+                    'order' => 'created_at.desc',
+                    'limit' => $isSummaryMode ? '50' : '250'
+                ]
+            ],
+            'ledger' => [
+                'table' => 'ledger_entries',
+                'params' => [
+                    'user_id' => 'eq.' . $userId,
+                    'select' => 'id,entry_type,wallet_type,asset,amount,balance_before,balance_after,description,reference_id,created_at',
+                    'order' => 'created_at.desc',
+                    'limit' => $isSummaryMode ? '300' : '1000'
+                ]
+            ],
+            'executions' => [
+                'table' => 'user_signal_executions',
+                'params' => [
+                    'user_id' => 'eq.' . $userId,
+                    'select' => 'id,signal_id,symbol,direction,profit_amount,balance_before,balance_after,status,executed_at,created_at',
+                    'order' => 'executed_at.desc',
+                    'limit' => $isSummaryMode ? '50' : '250'
+                ]
+            ],
+            'signals' => [
+                'table' => 'trading_signals',
+                'params' => [
+                    'created_at' => 'gte.' . $sinceCreated,
+                    'select' => 'id,symbol,direction,profit_percentage,status,published_at,scheduled_at,expires_at,created_at',
+                    'order' => 'created_at.asc',
+                    'limit' => $isSummaryMode ? '200' : '500'
+                ]
+            ],
+            'signal_history' => [
+                'table' => 'trading_signal_history',
+                'params' => [
+                    'created_at' => 'gte.' . $sinceCreated,
+                    'select' => 'id,symbol,direction,profit_percentage,status,published_at,scheduled_at,expires_at,created_at',
+                    'order' => 'created_at.asc',
+                    'limit' => $isSummaryMode ? '200' : '500'
+                ]
+            ]
+        ];
+        $batch = $supabase->selectMany($queries);
 
         $rows = static function(array $result): array {
             return ($result['success'] ?? false) && is_array($result['data'] ?? null) ? $result['data'] : [];
@@ -58,12 +126,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $wallets = [];
         $totalBalance = 0.0;
+        $promoColumnTotal = 0.0;
         foreach ($walletRows as $w) {
-            $type = strtolower((string)($w['wallet_type'] ?? 'unknown'));
-            $balance = (float)($w['balance'] ?? $w['available_balance'] ?? 0);
+            $type = strtolower(trim((string)($w['wallet_type'] ?? 'unknown')));
+            $balance = max(0.0, (float)($w['balance'] ?? $w['available_balance'] ?? 0));
+            $promoColumnTotal += max(0.0, (float)($w['promotional_balance'] ?? 0));
             $wallets[$type] = ($wallets[$type] ?? 0.0) + $balance;
             $totalBalance += $balance;
         }
+        $spotTotal = round((float)($wallets['funding'] ?? 0.0) + (float)($wallets['exchange'] ?? 0.0), 2);
+        $futureTotal = round((float)($wallets['trading'] ?? 0.0), 2);
+        $totalBalance = round($spotTotal + $futureTotal, 2);
 
         $sumByStatus = static function(array $items, string $amountField = 'amount'): array {
             $out = ['count' => 0, 'amount' => 0.0];
@@ -118,28 +191,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $adjustmentCredits = round($adjustmentCredits, 2);
         $adjustmentDebits = round($adjustmentDebits, 2);
         $depositAdjustmentNet = 0.0;
-        foreach ($adjustments as $adj) {
-            $adjDesc = strtoupper(trim((string)($adj['description'] ?? '')));
-            $adjReason = strtoupper(trim((string)($adj['reason'] ?? '')));
-            $adjRef = strtoupper(trim((string)($adj['reference_id'] ?? '')));
-            $adjTypeText = trim($adjDesc . ' ' . $adjReason . ' ' . $adjRef);
-            // Deposit-type adjustments are principal. Support both the newer
-            // typed format ([DEPOSIT]) and older admin adjustments whose reason
-            // explicitly says Deposit. Referral Bonus, Profit, and Other are
-            // never included in principal. Negative Deposit adjustments reduce
-            // the principal just like a deposit reversal.
-            $isTypedDeposit = strpos($adjDesc, '[DEPOSIT]') === 0 || strpos($adjReason, '[DEPOSIT]') === 0 || strpos($adjRef, '[DEPOSIT]') === 0;
-            $isLegacyDeposit = !$isTypedDeposit
-                && strpos($adjDesc, '[REFERRAL_BONUS]') !== 0
-                && strpos($adjDesc, '[PROFIT]') !== 0
-                && strpos($adjDesc, '[OTHER]') !== 0
-                && preg_match('/\bDEPOSIT\b/i', $adjTypeText);
-            if ($isTypedDeposit || $isLegacyDeposit) {
-                $depositAdjustmentNet += (float)($adj['amount'] ?? 0);
+        $referralBonusRaw = 0.0;
+        $depositBonusRaw = 0.0;
+        foreach ($ledgerRows as $entry) {
+            $et = strtoupper(trim((string)($entry['entry_type'] ?? '')));
+            $amt = (float)($entry['amount'] ?? 0);
+            $eDesc = strtoupper(trim((string)($entry['description'] ?? '')));
+            $eRef = strtoupper(trim((string)($entry['reference_id'] ?? '')));
+            $eSource = trim($eDesc . ' ' . $eRef);
+            if ($et === 'REFERRAL_COMMISSION') {
+                $referralBonusRaw += $amt;
+            } elseif (in_array($et, ['DEPOSIT_BONUS', 'BONUS', 'PROMO_BONUS', 'WELCOME_BONUS', 'STIPEND'], true)) {
+                $depositBonusRaw += $amt;
+            } elseif ($et === 'ADJUSTMENT') {
+                if (strpos($eDesc, '[REFERRAL_BONUS]') === 0 || strpos($eRef, '[REFERRAL_BONUS]') === 0 || preg_match('/\bREFERRAL\b/i', $eSource)) {
+                    $referralBonusRaw += $amt;
+                } elseif (strpos($eDesc, '[DEPOSIT]') === 0 || strpos($eRef, '[DEPOSIT]') === 0 || (strpos($eDesc, '[PROFIT]') !== 0 && strpos($eDesc, '[OTHER]') !== 0 && preg_match('/\bDEPOSIT\b/i', $eSource))) {
+                    $depositAdjustmentNet += $amt;
+                } elseif (strpos($eDesc, '[PROFIT]') === 0 || strpos($eDesc, '[OTHER]') === 0 || preg_match('/\b(BONUS|PROMO|REWARD|STIPEND)\b/i', $eSource)) {
+                    $depositBonusRaw += $amt;
+                } elseif ($amt > 0) {
+                    $depositBonusRaw += $amt;
+                }
             }
         }
         $depositAdjustmentNet = round($depositAdjustmentNet, 2);
         $fundedCapital = max(0.0, (float)$completedDeposits['amount'] + $depositAdjustmentNet);
+        $lockedReferralInSpot = round(min($spotTotal, max(0.0, $referralBonusRaw)), 2);
+        $transferableSpot = round(max(0.0, $spotTotal - $lockedReferralInSpot), 2);
+        $nonReferralPool = round($transferableSpot + $futureTotal, 2);
+        $depositBonusCombined = max(0.0, $depositBonusRaw, $promoColumnTotal);
+        $depositBonusTotal = round(min($nonReferralPool, $depositBonusCombined), 2);
+        $depositBalanceTotal = round(max(0.0, $nonReferralPool - $depositBonusTotal), 2);
 
         // Match signal execution records to their immutable TRADE_PNL ledger
         // records. This lets the admin see a confirmed execution that has no
@@ -254,12 +337,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         sendSuccess([
             'user' => $safeProfile,
             'wallets' => array_map(static fn($v) => round($v, 2), $wallets),
+            'wallet_breakdown' => [
+                'total_assets_usdt' => round($totalBalance, 2),
+                'spot_total_usdt' => $spotTotal,
+                'future_total_usdt' => $futureTotal,
+                'deposit_balance_usdt' => $depositBalanceTotal,
+                'deposit_bonus_usdt' => $depositBonusTotal,
+                'referral_bonus_usdt' => $lockedReferralInSpot,
+                'transferable_spot_usdt' => $transferableSpot,
+                'funded_deposit_principal_usdt' => round($fundedCapital, 2),
+                'breakdown' => [
+                    'funding_total_usdt' => round((float)($wallets['funding'] ?? 0.0), 2),
+                    'exchange_total_usdt' => round((float)($wallets['exchange'] ?? 0.0), 2),
+                    'trading_total_usdt' => $futureTotal,
+                    'spot_total_usdt' => $spotTotal,
+                    'future_total_usdt' => $futureTotal,
+                    'deposit_balance_usdt' => $depositBalanceTotal,
+                    'deposit_bonus_usdt' => $depositBonusTotal,
+                    'referral_bonus_usdt' => $lockedReferralInSpot,
+                    'transferable_spot_usdt' => $transferableSpot,
+                    'locked_referral_spot_usdt' => $lockedReferralInSpot,
+                    'funded_deposit_principal_usdt' => round($fundedCapital, 2)
+                ]
+            ],
             'total_balance_usdt' => round($totalBalance, 2),
             'kyc' => $kyc,
             'deposits' => $depositRows,
             'withdrawals' => $withdrawalRows,
-            'adjustments' => array_slice($adjustments, 0, 200),
-            'recent_transactions' => $recentTransactions,
+            'adjustments' => array_slice($adjustments, 0, $isSummaryMode ? 40 : 200),
+            'recent_transactions' => array_slice($recentTransactions, 0, $isSummaryMode ? 30 : 200),
             'financial_summary' => [
                 'deposit_count' => count($depositRows),
                 'deposit_total_requested' => round(array_sum(array_map(static fn($r) => (float)($r['amount'] ?? 0), $depositRows)), 2),
@@ -274,6 +380,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'adjustment_debits' => $adjustmentDebits,
                 'adjustment_net' => $adjustmentNet,
                 'funded_capital_principal' => round($fundedCapital, 2),
+                'referral_bonus_usdt' => $lockedReferralInSpot,
+                'deposit_bonus_usdt' => $depositBonusTotal,
+                'spot_total_usdt' => $spotTotal,
+                'future_total_usdt' => $futureTotal,
                 'deposit_status' => $depositStatus,
                 'withdrawal_status' => $withdrawalStatus
             ],
@@ -285,9 +395,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'missed_signal_count' => count($missedSignals),
                 'recorded_signal_count' => count($allRecordedSignals)
             ],
-            'signal_executions' => $executionRows,
-            'confirmed_without_profit' => $confirmedNoProfit,
-            'missed_signals' => $missedSignals
+            'signal_executions' => $isSummaryMode ? array_slice($executionRows, 0, 15) : $executionRows,
+            'confirmed_without_profit' => $isSummaryMode ? [] : $confirmedNoProfit,
+            'missed_signals' => $isSummaryMode ? [] : $missedSignals
         ], 'Complete user account dossier retrieved');
     }
 
@@ -310,7 +420,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ],
         'wallets' => [
             'table' => 'wallet_balances',
-            'params' => ['select' => 'user_id,balance,available_balance,wallet_type,asset']
+            'params' => ['asset' => 'eq.USDT', 'select' => 'user_id,balance,available_balance,wallet_type,asset']
         ]
     ]);
 
@@ -330,7 +440,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     if ($walletsRes['success'] && is_array($walletsRes['data'])) {
         foreach ($walletsRes['data'] as $wb) {
             $uid = $wb['user_id'] ?? '';
-            $walletTotals[$uid] = ($walletTotals[$uid] ?? 0.0) + (float)($wb['balance'] ?? $wb['available_balance'] ?? 0);
+            $walletTotals[$uid] = ($walletTotals[$uid] ?? 0.0) + max(0.0, (float)($wb['balance'] ?? $wb['available_balance'] ?? 0));
         }
     }
 

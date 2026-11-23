@@ -3468,7 +3468,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261123_v127_tx_emails_download">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261123_v128_ux_fixes">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -4014,21 +4014,15 @@ window.gtranslateSettings = {
               </span>
             </div>
 
-            <div style="display:flex;align-items:baseline;gap:8px;margin:2px 0 6px;">
-              <span style="font-size:34px;font-weight:900;color:#111827;letter-spacing:-0.03em;line-height:1;">$<span id="home-balance-val" class="mono">0.00</span></span>
-              <span style="font-size:14px;color:#6B7280;font-weight:600;">USDT</span>
+            <div style="display:flex;align-items:baseline;gap:8px;margin:2px 0 8px;">
+              <span style="font-size:34px;font-weight:900;color:#111827;letter-spacing:-0.03em;line-height:1;"><span id="home-balance-currency-sym">$</span><span id="home-balance-val" class="mono">0.00</span></span>
+              <span id="home-balance-currency-code" style="font-size:14px;color:#6B7280;font-weight:600;">USDT</span>
               <button onclick="App.toggleBalanceVisibility()" title="Toggle Balance" style="color:#6B7280;display:inline-flex;align-items:center;background:none;border:none;cursor:pointer;padding:2px;margin-left:2px;">
                 <svg id="balance-eye-icon" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                   <circle cx="12" cy="12" r="3"></circle>
                 </svg>
               </button>
-            </div>
-
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:11.5px;">
-              <span style="background:#F8FAFC;border:1px solid #E5EAF3;padding:3px 9px;border-radius:999px;color:#4B5563;">Spot (Deposit + Bonuses): <strong id="home-spot-bal" class="mono" style="color:#111827;">$0.00</strong></span>
-              <span style="background:#EFF4FF;border:1px solid #DBEAFE;padding:3px 9px;border-radius:999px;color:#1E40AF;">Future (Trade/Signal): <strong id="home-future-bal" class="mono" style="color:#0052FF;">$0.00</strong></span>
-              <button type="button" onclick="App.navigate('transfer')" style="background:#0052FF;color:#FFFFFF;border:none;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;">⇄ Transfer</button>
             </div>
 
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
@@ -6176,22 +6170,23 @@ window.gtranslateSettings = {
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label">Select Wallet</label>
-                  <select id="adj-wallet" style="width:100%;">
-                    <option value="funding">Funding Wallet</option>
-                    <option value="exchange">Exchange Wallet</option>
-                    <option value="trading">Trading Wallet</option>
+                  <label class="form-label" for="adj-wallet">Select Wallet</label>
+                  <select id="adj-wallet" style="width:100%;" onchange="App.syncAdjustmentWalletForCategory('adj')">
+                    <option value="funding">Spot — Funding Wallet (USDT)</option>
+                    <option value="exchange">Spot — Exchange Sub-Ledger (USDT)</option>
+                    <option value="trading">Future — Trading Wallet (USDT)</option>
                   </select>
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label">Ledger Category</label>
-                  <select id="adj-type" style="width:100%;">
+                  <label class="form-label" for="adj-type">Ledger Category</label>
+                  <select id="adj-type" style="width:100%;" onchange="App.syncAdjustmentWalletForCategory('adj')">
                     <option value="DEPOSIT">Deposit — counts toward profit principal &amp; Total Deposits</option>
-                    <option value="REFERRAL_BONUS">Referral Bonus — Spot only, cannot transfer to Future</option>
-                    <option value="PROFIT">Profit — Deposit Bonus / Yield bucket</option>
+                    <option value="REFERRAL_BONUS">Referral Bonus — Spot only (locked, cannot transfer to Future)</option>
+                    <option value="PROFIT">Profit — Deposit Bonus / Yield bucket (transferable to Future)</option>
                     <option value="OTHER">Deposit Bonus / Promo — transferable to Future</option>
                   </select>
+                  <div id="adj-category-hint" style="font-size:11px;color:#4B5563;margin-top:4px;line-height:1.4;"></div>
                 </div>
 
                 <div class="form-group">
@@ -6203,13 +6198,13 @@ window.gtranslateSettings = {
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label">Amount (USDT)</label>
+                  <label class="form-label" for="adj-amount">Amount (USDT)</label>
                   <input type="number" id="adj-amount" step="0.01" placeholder="e.g. 500.00 or -50.00" style="width:100%;" oninput="App.syncAdjustmentSignFromInput()">
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label">Reason / Audit Note</label>
-                  <input type="text" id="adj-reason" placeholder="e.g. Approved deposit adjustment / ticket reference" style="width:100%;">
+                  <label class="form-label" for="adj-reason">Reason / Audit Note</label>
+                  <input type="text" id="adj-reason" placeholder="Approved deposit adjustment or audit reference..." style="width:100%;">
                 </div>
 
                 <button id="btn-financial-adjustment" class="btn-primary" style="padding:12px 18px; font-size:14px;" onclick="App.submitFinancialAdjustment()">Confirm Adjustment</button>
@@ -9538,21 +9533,22 @@ window.gtranslateSettings = {
       <div style="display:flex; flex-direction:column; gap:12px;">
         <div class="form-group">
           <label class="form-label" for="pop-adj-wallet">Select Wallet</label>
-          <select id="pop-adj-wallet" style="width:100%;">
-            <option value="funding">USDT Funding Wallet</option>
-            <option value="exchange">USDT Exchange Wallet</option>
-            <option value="trading">USDT Trading Wallet</option>
+          <select id="pop-adj-wallet" style="width:100%;" onchange="App.syncAdjustmentWalletForCategory('pop')">
+            <option value="funding">Spot — Funding Wallet (USDT)</option>
+            <option value="exchange">Spot — Exchange Sub-Ledger (USDT)</option>
+            <option value="trading">Future — Trading Wallet (USDT)</option>
           </select>
         </div>
 
         <div class="form-group">
           <label class="form-label" for="pop-adj-type">Ledger Category</label>
-          <select id="pop-adj-type" style="width:100%;">
-            <option value="DEPOSIT">Deposit — counts toward profit principal</option>
-            <option value="REFERRAL_BONUS">Referral Bonus</option>
-            <option value="PROFIT">Profit Adjustment</option>
-            <option value="OTHER">Other Administrative Adjustment</option>
+          <select id="pop-adj-type" style="width:100%;" onchange="App.syncAdjustmentWalletForCategory('pop')">
+            <option value="DEPOSIT">Deposit — counts toward profit principal &amp; Total Deposits</option>
+            <option value="REFERRAL_BONUS">Referral Bonus — Spot only (locked, cannot transfer to Future)</option>
+            <option value="PROFIT">Profit — Deposit Bonus / Yield bucket (transferable to Future)</option>
+            <option value="OTHER">Deposit Bonus / Promo — transferable to Future</option>
           </select>
+          <div id="pop-adj-category-hint" style="font-size:11px;color:#4B5563;margin-top:4px;line-height:1.4;"></div>
         </div>
 
         <div class="form-group">
@@ -9564,12 +9560,12 @@ window.gtranslateSettings = {
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="pop-adj-amount">Amount</label>
-          <input type="number" id="pop-adj-amount" step="0.01" placeholder="$500.00" style="width:100%;" oninput="App.syncPopAdjustmentSignFromInput()">
+          <label class="form-label" for="pop-adj-amount">Amount (USDT)</label>
+          <input type="number" id="pop-adj-amount" step="0.01" placeholder="e.g. 500.00 or -50.00" style="width:100%;" oninput="App.syncPopAdjustmentSignFromInput()">
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="pop-adj-reason">Reason/Audit Note</label>
+          <label class="form-label" for="pop-adj-reason">Reason / Audit Note</label>
           <textarea id="pop-adj-reason" rows="2" placeholder="Approved deposit adjustment or audit reference..." style="width:100%; resize:vertical;"></textarea>
         </div>
 
@@ -9810,7 +9806,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261123_v127_tx_emails_download";
+  const CACHE_VERSION = "20261123_v128_ux_fixes";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -9842,18 +9838,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261123_v127_tx_emails_download"></script>
-  <script defer src="/assets/js/chart.js?v=20261123_v127_tx_emails_download"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261123_v128_ux_fixes"></script>
+  <script defer src="/assets/js/chart.js?v=20261123_v128_ux_fixes"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261123_v127_tx_emails_download"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261123_v127_tx_emails_download"></script>
+  <script defer src="/assets/js/app.js?v=20261123_v128_ux_fixes"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261123_v128_ux_fixes"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261123_v127_tx_emails_download";
+      var SW_BUILD = "20261123_v128_ux_fixes";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

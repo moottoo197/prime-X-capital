@@ -117,7 +117,28 @@ if ($userId && $supabase->isConfigured()) {
         }
         $level3Count = count($uniqueL3);
 
-        $totalEarned = ($level1Count * 15.0) + ($level2Count * 7.5) + ($level3Count * 2.5);
+        // Compute actual referral earnings from immutable ledger records
+        $totalEarned = 0.0;
+        $ledgerRes = $supabase->select('ledger_entries', [
+            'user_id' => 'eq.' . $userId,
+            'asset' => 'eq.USDT',
+            'select' => 'entry_type,amount,description,reference_id',
+            'limit' => '1000'
+        ]);
+        if (!empty($ledgerRes['success']) && is_array($ledgerRes['data'] ?? null)) {
+            foreach ($ledgerRes['data'] as $entry) {
+                $et = strtoupper(trim((string)($entry['entry_type'] ?? '')));
+                $amt = (float)($entry['amount'] ?? 0);
+                $desc = strtoupper(trim((string)($entry['description'] ?? '')));
+                $ref = strtoupper(trim((string)($entry['reference_id'] ?? '')));
+                if ($et === 'REFERRAL_COMMISSION') {
+                    $totalEarned += $amt;
+                } elseif ($et === 'ADJUSTMENT' && (strpos($desc, '[REFERRAL_BONUS]') === 0 || strpos($ref, '[REFERRAL_BONUS]') === 0 || preg_match('/\bREFERRAL\b/i', $desc))) {
+                    $totalEarned += $amt;
+                }
+            }
+        }
+        $totalEarned = round(max(0.0, $totalEarned), 2);
     }
 }
 
@@ -134,6 +155,7 @@ sendSuccess([
     'level_2_count' => $level2Count,
     'level_3_count' => $level3Count,
     'total_earned_usdt' => $totalEarned,
+    'total_commissions' => number_format($totalEarned, 2, '.', ''),
     'active_directs' => $totalReferrals,
     'downline_count' => ($level1Count + $level2Count + $level3Count),
     'invitees' => $directInvitees,

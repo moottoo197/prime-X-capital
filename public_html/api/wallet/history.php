@@ -166,19 +166,99 @@ if ($type === 'ALL' || $type === 'SIGNALS') {
 
 $primary = array_merge($deposits, $withdrawals, $signals, $adjustments);
 $seen = [];
+$completedAmountsByType = [];
+
+$parseUtcTs = static function($raw): int {
+    $s = trim((string)$raw);
+    if ($s === '') return 0;
+    if (!preg_match('/(Z|GMT|UTC|[+-]\d{2}:?\d{2})$/i', $s)) {
+        $ts = strtotime($s . ' UTC');
+        if ($ts !== false) return (int)$ts;
+    }
+    $ts = strtotime($s);
+    return $ts !== false ? (int)$ts : 0;
+};
+
 foreach ($primary as $row) {
-    $key = strtoupper((string)($row['type'] ?? '')) . ':' . (string)($row['id'] ?? '');
-    if ($key !== ':') $seen[$key] = true;
-    if (!empty($row['reference_id'])) $seen[strtoupper((string)($row['type'] ?? '')) . ':REF:' . (string)$row['reference_id']] = true;
+    $rowType = strtoupper((string)($row['type'] ?? ''));
+    $rowId = trim((string)($row['id'] ?? ''));
+    $rowRef = trim((string)($row['reference_id'] ?? ''));
+    $rowTx = strtolower(trim((string)($row['tx_hash'] ?? '')));
+
+    if ($rowType !== '' && $rowId !== '') {
+        $seen[$rowType . ':' . $rowId] = true;
+        $seen[$rowType . ':REF:' . $rowId] = true;
+        if ($rowType === 'SIGNAL_PROFIT') {
+            $seen['SIGNAL_PROFIT:REF:sig_exec_' . $rowId] = true;
+            $sigId = trim((string)($row['signal_id'] ?? ''));
+            if ($sigId !== '') {
+                $seen['SIGNAL_PROFIT:REF:' . $sigId] = true;
+            }
+        }
+    }
+    if ($rowType !== '' && $rowRef !== '') {
+        $seen[$rowType . ':REF:' . $rowRef] = true;
+        $seen[$rowType . ':' . $rowRef] = true;
+    }
+    if ($rowType !== '' && $rowTx !== '') {
+        $seen[$rowType . ':TX:' . $rowTx] = true;
+    }
+
+    if (in_array($rowType, ['DEPOSIT', 'WITHDRAWAL'], true)) {
+        $rowStatus = strtoupper((string)($row['status'] ?? ''));
+        if (in_array($rowStatus, ['COMPLETED', 'APPROVED', 'CONFIRMED'], true)) {
+            $amtKey = number_format(abs((float)($row['amount'] ?? 0)), 2, '.', '');
+            $completedAmountsByType[$rowType][$amtKey][] = [
+                'created_ts' => $parseUtcTs($row['created_at'] ?? ''),
+                'updated_ts' => $parseUtcTs($row['updated_at'] ?? $row['created_at'] ?? '')
+            ];
+        }
+    }
 }
+
 foreach ($ledgerFinancial as $row) {
-    $key = strtoupper((string)($row['type'] ?? '')) . ':REF:' . (string)($row['reference_id'] ?? '');
-    $idKey = strtoupper((string)($row['type'] ?? '')) . ':' . (string)($row['id'] ?? '');
-    if (($row['reference_id'] ?? '') !== '' && isset($seen[$key])) continue;
-    if (isset($seen[$idKey])) continue;
+    $rowType = strtoupper((string)($row['type'] ?? ''));
+    $refId = trim((string)($row['reference_id'] ?? ''));
+    $rowId = trim((string)($row['id'] ?? ''));
+
+    $refKey = $rowType . ':REF:' . $refId;
+    $idKey = $rowType . ':' . $rowId;
+    if ($refId !== '' && (isset($seen[$refKey]) || isset($seen[$rowType . ':' . $refId]))) {
+        continue;
+    }
+    if ($rowType === 'SIGNAL_PROFIT' && $refId !== '') {
+        $stripped = preg_replace('/^sig_exec_/', '', $refId);
+        if (isset($seen['SIGNAL_PROFIT:REF:' . $stripped]) || isset($seen['SIGNAL_PROFIT:' . $stripped])) {
+            continue;
+        }
+    }
+    if (isset($seen[$idKey])) {
+        continue;
+    }
+
+    // Legacy safety guard: if a completed DEPOSIT/WITHDRAWAL row with the same
+    // asset amount already exists in deposits/withdrawals around the same approval
+    // window, skip emitting a duplicate LEDGER settlement row.
+    if (in_array($rowType, ['DEPOSIT', 'WITHDRAWAL'], true)) {
+        $amtKey = number_format(abs((float)($row['amount'] ?? 0)), 2, '.', '');
+        $ledgerTs = $parseUtcTs($row['created_at'] ?? '');
+        $candidates = $completedAmountsByType[$rowType][$amtKey] ?? [];
+        $matchedExisting = false;
+        foreach ($candidates as $cand) {
+            $baseTs = $cand['updated_ts'] > 0 ? $cand['updated_ts'] : $cand['created_ts'];
+            if ($baseTs === 0 || $ledgerTs === 0 || abs($ledgerTs - $baseTs) <= 172800) {
+                $matchedExisting = true;
+                break;
+            }
+        }
+        if ($matchedExisting) {
+            continue;
+        }
+    }
+
     $primary[] = $row;
-    $seen[$key] = true;
-    $seen[$idKey] = true;
+    if ($refId !== '') $seen[$refKey] = true;
+    if ($rowId !== '') $seen[$idKey] = true;
 }
 $combined = $primary;
 usort($combined, function ($a, $b) {

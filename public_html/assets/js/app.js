@@ -268,6 +268,7 @@ const App = {
   },
 
   readFastCache(name, maxAge = 10 * 60 * 1000) {
+    if (this.state.adminPreviewUserId) return null;
     try {
       const key = `alphavest_fast_${name}_${this.getFastCacheUserKey()}`;
       const raw = localStorage.getItem(key);
@@ -279,6 +280,7 @@ const App = {
   },
 
   writeFastCache(name, data) {
+    if (this.state.adminPreviewUserId) return;
     try {
       const key = `alphavest_fast_${name}_${this.getFastCacheUserKey()}`;
       localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
@@ -370,6 +372,8 @@ const App = {
     this.renderPublicMarketRows();
     this.updateHomeHeroBalance();
     this.syncSideDrawer();
+    this.syncAdjustmentWalletForCategory('adj');
+    this.syncAdjustmentWalletForCategory('pop');
     this.initSignalCountdown();
     this.initOptionsCountdown();
     this.initCarousel();
@@ -1186,15 +1190,34 @@ const App = {
     }
   },
 
+  getDisplayCurrency() {
+    try {
+      const code = (localStorage.getItem('alphavest_currency_code') || 'USD').toUpperCase();
+      const symbol = localStorage.getItem('alphavest_currency_symbol') || '$';
+      const rawRate = parseFloat(localStorage.getItem('alphavest_currency_rate') || '1');
+      const rate = Number.isFinite(rawRate) && rawRate > 0 ? rawRate : 1;
+      return { code, symbol, rate };
+    } catch (e) {
+      return { code: 'USD', symbol: '$', rate: 1 };
+    }
+  },
+
+  formatDisplayMoney(usdAmount, minDec = 2, maxDec = 2) {
+    const { symbol, rate } = this.getDisplayCurrency();
+    const converted = Number(usdAmount || 0) * rate;
+    return `${symbol}${converted.toLocaleString(undefined, { minimumFractionDigits: minDec, maximumFractionDigits: maxDec })}`;
+  },
+
   updateTopTickers() {
     if (!this.state.tickers || !this.state.tickers.length) return;
     const findTicker = (sym) => this.state.tickers.find(t => t.symbol === sym || t.symbol.startsWith(sym));
+    const { symbol } = this.getDisplayCurrency();
 
     const bindTopCard = (ticker, priceId, changeId) => {
       if (!ticker) return;
       const pEl = document.getElementById(priceId);
       const cEl = document.getElementById(changeId);
-      if (pEl) pEl.textContent = this.formatPrice(ticker.price);
+      if (pEl) pEl.textContent = `${symbol}${this.formatPrice(ticker.price)}`;
       if (cEl) {
         const isUp = Number(ticker.change_24h || 0) >= 0;
         cEl.className = `top-ticker-stats ${isUp ? 'positive' : 'negative'}`;
@@ -1212,8 +1235,9 @@ const App = {
     }
   },
 
-  formatPrice(price) {
-    const num = Number(price);
+  formatPrice(price, rawUsd = false) {
+    const { rate } = rawUsd ? { rate: 1 } : this.getDisplayCurrency();
+    const num = Number(price) * rate;
     if (isNaN(num)) return price;
     if (num >= 1000) {
       return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1269,13 +1293,14 @@ const App = {
   renderTickerBar() {
     const container = document.getElementById('ticker-bar');
     if (!container || !this.state.tickers.length) return;
+    const { symbol } = this.getDisplayCurrency();
 
     container.innerHTML = this.state.tickers.slice(0, 6).map(t => {
       const isUp = t.change_24h >= 0;
       return `
         <div class="ticker-card" onclick="App.selectMarket('${t.symbol}')">
           <div class="ticker-sym">${t.symbol}</div>
-          <div class="ticker-price">${this.formatPrice(t.price)}</div>
+          <div class="ticker-price">${symbol}${this.formatPrice(t.price)}</div>
           <div class="ticker-change ${isUp ? 'positive' : 'negative'}">
             ${isUp ? '+' : ''}${t.change_24h}%
           </div>
@@ -1348,6 +1373,9 @@ const App = {
       list = list.filter(t => t.symbol.toUpperCase().includes(query) || (t.base && t.base.toUpperCase().includes(query)));
     }
 
+    const currSym = this.getDisplayCurrency().symbol;
+    const currRate = this.getDisplayCurrency().rate;
+
     // Render Trending 3 Cards on Market Discover (Matches 003505)
     const trendingEl = document.getElementById('market-trending-3-cards');
     if (trendingEl) {
@@ -1365,7 +1393,7 @@ const App = {
               <span style="font-size:12px;font-weight:800;color:#111827;">${basePart}</span>
             </div>
             <div class="mono ${isUp ? 'positive' : 'negative'}" style="font-size:15px;font-weight:800;color:${isUp ? '#00B87C' : '#F6465D'};margin-bottom:2px;">${chgStr}</div>
-            <div class="mono" style="font-size:11.5px;font-weight:700;color:#4B5563;">$${formattedPrice}</div>
+            <div class="mono" style="font-size:11.5px;font-weight:700;color:#4B5563;">${currSym}${formattedPrice}</div>
           </div>
         `;
       }).join('');
@@ -1390,7 +1418,8 @@ const App = {
           const basePart = t.base || t.symbol.split('/')[0];
           const displayName = nameMap[basePart] || basePart;
           const formattedPrice = this.formatPrice(t.price);
-          const volStr = t.volume_24h ? `$${(Number(t.volume_24h) / 1000000).toFixed(1)}M` : '$84.2M';
+          const volUsd = t.volume_24h ? Number(t.volume_24h) : 84200000;
+          const volStr = `${currSym}${((volUsd * currRate) / 1000000).toFixed(1)}M`;
 
           return `
             <div class="av-trending-market-card" onclick="App.selectMarket('${t.symbol}')">
@@ -1406,7 +1435,7 @@ const App = {
                 </div>
               </div>
               <div style="text-align: right; flex-shrink:0;">
-                <div class="mono" style="font-size: 15px; font-weight: 800; color: #111827;">$${formattedPrice}</div>
+                <div class="mono" style="font-size: 15px; font-weight: 800; color: #111827;">${currSym}${formattedPrice}</div>
                 <div class="mono ${isUp ? 'positive' : 'negative'}" style="font-size: 12px; font-weight: 700; color: ${isHalt ? '#9CA3AF' : (isUp ? '#00B87C' : '#F6465D')}; margin-top:2px;">${chgStr}</div>
               </div>
             </div>
@@ -1436,6 +1465,7 @@ const App = {
           const iconSvg = this.getCoinIcon(t.base || t.symbol);
           const basePart = t.base || t.symbol.split('/')[0];
           const quotePart = t.quote || (t.symbol.includes('/') ? t.symbol.split('/')[1] : 'USDT');
+          const rawUsdtPrice = this.formatPrice(t.price, true);
           const formattedPrice = this.formatPrice(t.price);
           const isFav = favs.includes(t.symbol);
           const volStr = t.volume_24h ? `${(Number(t.volume_24h) / 1000000).toFixed(2)}M` : '24.50M';
@@ -1456,8 +1486,8 @@ const App = {
 
               <div style="display: flex; align-items: center; gap: 12px; flex-shrink:0;">
                 <div style="text-align: right;">
-                  <div class="mono" style="font-size: 15px; font-weight: 800; color: #111827;">${formattedPrice}</div>
-                  <div style="font-size: 11.5px; color: #6B7280;">$${formattedPrice} <span class="mono ${isUp ? 'positive' : 'negative'}" style="font-weight:700;color:${isUp ? '#00B87C' : '#F6465D'};">${chgStr}</span></div>
+                  <div class="mono" style="font-size: 15px; font-weight: 800; color: #111827;">${rawUsdtPrice}</div>
+                  <div style="font-size: 11.5px; color: #6B7280;">${currSym}${formattedPrice} <span class="mono ${isUp ? 'positive' : 'negative'}" style="font-weight:700;color:${isUp ? '#00B87C' : '#F6465D'};">${chgStr}</span></div>
                 </div>
                 <button type="button" onclick="App.toggleFavoritePair('${t.symbol}', event)" style="width:30px;height:30px;border-radius:50%;background:${isFav ? '#FEF3C7' : '#F3F4F6'};border:none;cursor:pointer;color:${isFav ? '#F59E0B' : '#9CA3AF'};font-size:15px;display:inline-flex;align-items:center;justify-content:center;" aria-label="Favorite ${t.symbol}">
                   ${isFav ? '★' : '☆'}
@@ -1650,19 +1680,20 @@ const App = {
     const lowEl = document.getElementById('mkt-preview-low');
     const tradeBtn = document.getElementById('mkt-preview-trade-btn');
 
+    const currSym = this.getDisplayCurrency().symbol;
     if (symEl) symEl.textContent = sym;
     if (badgeEl) {
       badgeEl.className = `badge ${isUp ? 'badge-positive' : 'badge-negative'}`;
       badgeEl.textContent = `${isUp ? '+' : ''}${Number(ticker.change_24h).toFixed(2)}%`;
     }
     if (priceEl) {
-      priceEl.textContent = `$${this.formatPrice(ticker.price)}`;
+      priceEl.textContent = `${currSym}${this.formatPrice(ticker.price)}`;
       priceEl.style.color = isUp ? '#00c087' : '#ff4d4f';
     }
     const highVal = (ticker.price * 1.025).toFixed(2);
     const lowVal = (ticker.price * 0.978).toFixed(2);
-    if (highEl) highEl.textContent = `$${this.formatPrice(highVal)}`;
-    if (lowEl) lowEl.textContent = `$${this.formatPrice(lowVal)}`;
+    if (highEl) highEl.textContent = `${currSym}${this.formatPrice(highVal)}`;
+    if (lowEl) lowEl.textContent = `${currSym}${this.formatPrice(lowVal)}`;
     if (tradeBtn) tradeBtn.textContent = `Trade ${sym} →`;
 
     // Highlight chip
@@ -1768,10 +1799,11 @@ const App = {
     const ticker = this.state.tickers.find(t => t.symbol === sym);
     if (!ticker) return;
 
-    const formattedPrice = `$${this.formatPrice(ticker.price)}`;
-    const rawPrice = this.formatPrice(ticker.price);
-    const highPrice = this.formatPrice(ticker.high_24h || ticker.price * 1.02);
-    const lowPrice = this.formatPrice(ticker.low_24h || ticker.price * 0.98);
+    const currSym = this.getDisplayCurrency().symbol;
+    const formattedPrice = `${currSym}${this.formatPrice(ticker.price)}`;
+    const rawPrice = this.formatPrice(ticker.price, true);
+    const highPrice = `${currSym}${this.formatPrice(ticker.high_24h || ticker.price * 1.02)}`;
+    const lowPrice = `${currSym}${this.formatPrice(ticker.low_24h || ticker.price * 0.98)}`;
     const volText = ticker.volume_24h ? Number(ticker.volume_24h).toLocaleString() : '1,030,705';
 
     const nameEl = document.getElementById('trade-pair-name');
@@ -2251,14 +2283,15 @@ const App = {
     const depositBonusUsdt = Number(data.deposit_bonus_usdt ?? data.breakdown?.deposit_bonus_usdt ?? 0);
     const referralBonusUsdt = Number(data.referral_bonus_usdt ?? data.breakdown?.referral_bonus_usdt ?? 0);
     const transferableSpotUsdt = Number(data.transferable_spot_usdt ?? data.breakdown?.transferable_spot_usdt ?? Math.max(0, spotUsdt - referralBonusUsdt));
-    const fmtMoney = v => '$' + Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtMoney = v => this.formatDisplayMoney(v);
+    const { code: currCode, symbol: currSym, rate: currRate } = this.getDisplayCurrency();
 
     const isHidden = this.state.hideBalance;
 
     // Total Wallet Card
     const totalBalEl = document.getElementById('wallet-total-balance') || document.getElementById('wallet-total-usdt');
     if (totalBalEl) {
-      totalBalEl.textContent = isHidden ? '******' : totalUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      totalBalEl.textContent = isHidden ? '******' : fmtMoney(totalUsdt);
     }
 
     const btcEquivEl = document.getElementById('wallet-total-btc-equiv') || document.getElementById('wallet-total-btc');
@@ -2336,12 +2369,12 @@ const App = {
     const btcAmtEl = document.getElementById('wallet-btc-amount');
     const btcUsdEl = document.getElementById('wallet-btc-usd');
     if (btcAmtEl) btcAmtEl.textContent = isHidden ? '******' : '0.0000';
-    if (btcUsdEl) btcUsdEl.textContent = isHidden ? '******' : '≈ 0.00 USDT';
+    if (btcUsdEl) btcUsdEl.textContent = isHidden ? '******' : `≈ ${currSym}0.00 ${currCode === 'USD' ? 'USDT' : currCode}`;
 
     const ethAmtEl = document.getElementById('wallet-eth-amount');
     const ethUsdEl = document.getElementById('wallet-eth-usd');
     if (ethAmtEl) ethAmtEl.textContent = isHidden ? '******' : '0.0000';
-    if (ethUsdEl) ethUsdEl.textContent = isHidden ? '******' : '≈ 0.00 USDT';
+    if (ethUsdEl) ethUsdEl.textContent = isHidden ? '******' : `≈ ${currSym}0.00 ${currCode === 'USD' ? 'USDT' : currCode}`;
 
     const usdtAmtEl = document.getElementById('wallet-usdt-amount');
     if (usdtAmtEl) {
@@ -2357,26 +2390,21 @@ const App = {
 
   updateHomeHeroBalance() {
     const homeValEl = document.getElementById('home-balance-val');
-    const homeSpotEl = document.getElementById('home-spot-bal');
-    const homeFutureEl = document.getElementById('home-future-bal');
+    const homeSymEl = document.getElementById('home-balance-currency-sym');
+    const homeCodeEl = document.getElementById('home-balance-currency-code');
     const uidEl = document.getElementById('home-user-uid');
     const balData = this.state.balances || {};
-    const fmt = v => '$' + Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const { code, symbol, rate } = this.getDisplayCurrency();
+    if (homeSymEl) homeSymEl.textContent = symbol;
+    if (homeCodeEl) homeCodeEl.textContent = code === 'USD' ? 'USDT' : code;
     if (homeValEl) {
       if (this.state.hideBalance) {
         homeValEl.textContent = '******';
       } else {
-        const total = balData.total_assets_usdt != null ? Number(balData.total_assets_usdt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-        homeValEl.textContent = total;
+        const rawUsd = Number(balData.total_assets_usdt || 0);
+        const converted = rawUsd * rate;
+        homeValEl.textContent = converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       }
-    }
-    if (homeSpotEl) {
-      const spotVal = balData.spot_total_usdt ?? balData.breakdown?.spot_total_usdt ?? (Number(balData.breakdown?.funding_total_usdt || 0) + Number(balData.breakdown?.exchange_total_usdt || 0));
-      homeSpotEl.textContent = this.state.hideBalance ? '******' : fmt(spotVal);
-    }
-    if (homeFutureEl) {
-      const futureVal = balData.future_total_usdt ?? balData.breakdown?.trading_total_usdt ?? 0;
-      homeFutureEl.textContent = this.state.hideBalance ? '******' : fmt(futureVal);
     }
     if (uidEl && this.state.user) {
       uidEl.textContent = this.getUserUID();
@@ -3797,7 +3825,8 @@ const App = {
       const teamEl = document.getElementById('ref-total-team');
       if (teamEl) teamEl.textContent = data.total_team_members ?? 0;
       const commEl = document.getElementById('ref-commissions');
-      if (commEl) commEl.textContent = `$${data.total_commissions ?? '0.00'}`;
+      const earnedUsd = Number(data.total_earned_usdt ?? data.total_commissions ?? 0);
+      if (commEl) commEl.textContent = this.formatDisplayMoney(earnedUsd);
       const l1 = document.getElementById('ref-level-1');
       if (l1) l1.textContent = data.level_1_count ?? 0;
       const l2 = document.getElementById('ref-level-2');
@@ -3949,7 +3978,10 @@ const App = {
     this.state.signals = data.signals || [];
     const signalProfitTotal = Number(data.signal_profit_total || 0);
     const signalProfitEls = document.querySelectorAll('[data-user-signal-profit-total]');
-    signalProfitEls.forEach(el => { el.textContent = `+$${signalProfitTotal.toFixed(2)} USDT`; });
+    const dispCurr = this.getDisplayCurrency();
+    signalProfitEls.forEach(el => {
+      el.textContent = `+${this.formatDisplayMoney(signalProfitTotal)} ${dispCurr.code === 'USD' ? 'USDT' : dispCurr.code}`;
+    });
     this.writeFastCache('signals', data);
 
     // Future Balance (trading wallet) is used for Trades & Signals.
@@ -5002,6 +5034,16 @@ const App = {
     localStorage.removeItem('alphavest_user');
     sessionStorage.clear();
     this.state.user = null;
+    this.state.adminPreviewUserId = null;
+    this.state.adminPreviewUser = null;
+    this.state.balances = null;
+    this.state.signalsData = null;
+    this.state.signals = [];
+    this.state.referralStats = null;
+    this.state.notifications = [];
+    this.state.unreadNotificationsCount = 0;
+    this.updateNotificationBell(0);
+    this.renderHomeNotificationBanner();
     this.updateHeaderAuth();
     this.closeModal('modal-profile');
     this.closeModal('modal-auth');
@@ -5612,17 +5654,27 @@ const App = {
 
   async startAdminUserView(userId) {
     try {
-      const res = await this.api(`/admin/users.php?user_id=${encodeURIComponent(userId)}`);
+      const res = await this.api(`/admin/users.php?user_id=${encodeURIComponent(userId)}&mode=summary`);
       if (!res.success || !res.data || !res.data.user) throw new Error(res.message || 'User account not found');
       this.state.adminPreviewUserId = String(userId);
       this.state.adminPreviewUser = res.data.user;
-      this.state.balances = null;
+      this.state.balances = res.data.wallet_breakdown || null;
       this.state.signalsData = null;
       this.state.signals = [];
+      this.state.referralStats = null;
       this.updateHeaderAuth();
       this.navigate('home');
+      this.updateHomeHeroBalance();
+      this.renderWalletView();
       setTimeout(() => this.ensureAdminUserDepositAction(), 0);
-      this.toast(`Viewing ${res.data.user.email || 'user'} in read-only mode.`, 'info');
+      Promise.allSettled([
+        this.loadBalances(true),
+        this.loadSignals(),
+        this.loadWalletHistoryPreview('ALL'),
+        this.loadReferrals(),
+        this.loadNotifications()
+      ]);
+      this.toast(`Viewing ${res.data.user.email || 'user'} live account data.`, 'info');
     } catch (e) {
       this.toast(e?.message || 'Unable to open user dashboard.', 'error');
     }
@@ -5655,7 +5707,7 @@ const App = {
     if (!id) { this.toast('User ID is missing.', 'warning'); return; }
     this.state.adminPreviewUserId = id;
     this.state.adminPreviewUser = { id };
-    this.api(`/admin/users.php?user_id=${encodeURIComponent(id)}`).then(res => {
+    this.api(`/admin/users.php?user_id=${encodeURIComponent(id)}&mode=summary`).then(res => {
       if (res?.success && res?.data?.user) this.state.adminPreviewUser = res.data.user;
       this.openAdminUserDepositModal();
     }).catch(() => this.openAdminUserDepositModal());
@@ -5737,8 +5789,11 @@ const App = {
     this.state.balances = null;
     this.state.signalsData = null;
     this.state.signals = [];
+    this.state.referralStats = null;
     this.updateHeaderAuth();
     this.navigate('admin');
+    this.loadBalances(true);
+    this.loadNotifications();
     this.toast('Returned to Admin Desk.', 'success');
   },
 
@@ -5746,32 +5801,36 @@ const App = {
     this.openModal('modal-user-dashboard');
     const body = document.getElementById('user-dashboard-body');
     if (!body) return;
-    body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);">Loading user dashboard...</div>';
+    body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted);">Loading live user dashboard...</div>';
     try {
-      const res = await this.api(`/admin/users.php?user_id=${encodeURIComponent(userId)}`);
+      const res = await this.api(`/admin/users.php?user_id=${encodeURIComponent(userId)}&mode=summary`);
       if (!res.success || !res.data) throw new Error(res.message || 'Unable to load user dashboard');
-      const d = res.data, u = d.user || {}, fs = d.financial_summary || {}, ss = d.signal_summary || {};
+      const d = res.data, u = d.user || {}, fs = d.financial_summary || {}, ss = d.signal_summary || {}, wb = d.wallet_breakdown || {};
       const money = v => `$${Number(v || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
       const esc = v => this.escapeHtml(v ?? '—');
+      const safeUidArg = String(userId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       const executions = Array.isArray(d.signal_executions) ? d.signal_executions : [];
+      const spotBal = wb.spot_total_usdt ?? fs.spot_total_usdt ?? 0;
+      const futureBal = wb.future_total_usdt ?? fs.future_total_usdt ?? 0;
+      const refBonus = wb.referral_bonus_usdt ?? fs.referral_bonus_usdt ?? 0;
       body.innerHTML = `
         <div class="user-dashboard-hero">
           <div><div class="user-dashboard-kicker">LIVE USER DASHBOARD VIEW</div><h3>${esc(u.email || 'User')}</h3><div class="user-dashboard-sub">UID ${esc(u.numeric_uid || u.id || '—')} • ${esc(u.country || 'Global')}</div></div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
             <div class="user-dashboard-balance">${money(d.total_balance_usdt)}<small>USDT Total Balance</small></div>
-            <button class="btn-primary" type="button" onclick="App.openAdminUserDepositModal()" style="padding:8px 12px;font-size:11px;font-weight:800;">＋ Submit Deposit</button>
+            <button class="btn-primary" type="button" onclick="App.closeModal('modal-user-dashboard');App.openAdminUserDepositFor('${safeUidArg}')" style="padding:8px 12px;font-size:11px;font-weight:800;">＋ Submit Deposit</button>
           </div>
         </div>
         <div class="user-dashboard-grid">
-          <div class="user-dashboard-stat"><span>Funded Capital</span><strong>${money(fs.funded_capital_principal)}</strong><small>Approved deposits + Deposit-type admin adjustments</small></div>
-          <div class="user-dashboard-stat"><span>Signal Profit</span><strong class="positive">+${money(ss.profit_credited_total).slice(1)}</strong><small>Credited TRADE_PNL</small></div>
-          <div class="user-dashboard-stat"><span>Signals Confirmed</span><strong>${ss.confirmed_count || 0}</strong><small>Recorded executions</small></div>
-          <div class="user-dashboard-stat"><span>Missed Signals</span><strong>${ss.missed_signal_count || 0}</strong><small>Expired recorded windows</small></div>
+          <div class="user-dashboard-stat"><span>Spot Balance</span><strong>${money(spotBal)}</strong><small>Referral Bonus: ${money(refBonus)} (Spot locked)</small></div>
+          <div class="user-dashboard-stat"><span>Future Balance</span><strong>${money(futureBal)}</strong><small>Active Trading &amp; Signals margin</small></div>
+          <div class="user-dashboard-stat"><span>Funded Capital</span><strong>${money(fs.funded_capital_principal)}</strong><small>Approved deposits + Deposit-type adjustments</small></div>
+          <div class="user-dashboard-stat"><span>Signal Profit</span><strong class="positive">+${money(ss.profit_credited_total).slice(1)}</strong><small>${ss.confirmed_count || 0} confirmed · ${ss.missed_signal_count || 0} missed</small></div>
         </div>
         <div class="user-dashboard-panel"><div class="user-dashboard-panel-title">Recent Signal Results</div>
           ${executions.length ? `<div class="user-dashboard-results">${executions.slice(0,12).map(ex => `<div class="user-dashboard-result"><div><strong>${esc(ex.symbol || 'SIGNAL')}</strong><span>${esc(ex.direction || '')}</span></div><div><b class="positive">+${money(ex.profit_amount)}</b><small>${esc(ex.status || 'COMPLETED')}</small></div></div>`).join('')}</div>` : '<div class="user-dashboard-empty">No signal executions recorded yet.</div>'}
         </div>
-        <div class="user-dashboard-actions" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;"><button class="btn-primary" onclick="App.closeModal('modal-user-dashboard');App.startAdminUserView('${String(userId)}')">📊 Open Full User Dashboard</button><button class="btn-secondary" onclick="App.closeModal('modal-user-dashboard');App.openAdminUserDepositFor('${String(userId)}')">➕ Submit Deposit</button><button class="btn-secondary" onclick="App.closeModal('modal-user-dashboard');App.viewUserDossier('${String(userId)}')">🔎 Open Complete Detail</button></div>`;
+        <div class="user-dashboard-actions" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;"><button class="btn-primary" onclick="App.closeModal('modal-user-dashboard');App.startAdminUserView('${safeUidArg}')">📊 Open Full User Dashboard</button><button class="btn-secondary" onclick="App.closeModal('modal-user-dashboard');App.openAdminUserDepositFor('${safeUidArg}')">➕ Submit Deposit</button><button class="btn-secondary" onclick="App.closeModal('modal-user-dashboard');App.viewUserDossier('${safeUidArg}')">🔎 Open Complete Detail</button></div>`;
     } catch (e) { body.innerHTML = `<div style="color:var(--negative);padding:20px;">Unable to load dashboard. ${this.escapeHtml(e.message || e)}</div>`; }
   },
 
@@ -6239,6 +6298,33 @@ const App = {
     }
   },
 
+  syncAdjustmentWalletForCategory(prefix = 'adj') {
+    const p = prefix === 'pop' ? 'pop-' : '';
+    const walletEl = document.getElementById(`${p}adj-wallet`);
+    const typeEl = document.getElementById(`${p}adj-type`);
+    const hintEl = document.getElementById(`${p}adj-category-hint`);
+    if (!walletEl || !typeEl) return;
+
+    const category = String(typeEl.value || 'DEPOSIT').toUpperCase();
+    const tradingOpt = Array.from(walletEl.options).find(o => o.value === 'trading');
+    if (category === 'REFERRAL_BONUS') {
+      if (walletEl.value === 'trading') walletEl.value = 'funding';
+      if (tradingOpt) tradingOpt.disabled = true;
+      if (hintEl) hintEl.textContent = 'Referral Bonus credits strictly to Spot Balance (locked in Spot, cannot be transferred to Future).';
+    } else {
+      if (tradingOpt) tradingOpt.disabled = false;
+      if (hintEl) {
+        if (category === 'DEPOSIT') {
+          hintEl.textContent = 'Counts toward Funded Capital principal & Signal eligibility.';
+        } else if (category === 'PROFIT' || category === 'OTHER') {
+          hintEl.textContent = 'Credits Deposit Bonus / Promo bucket (transferable from Spot to Future).';
+        } else {
+          hintEl.textContent = '';
+        }
+      }
+    }
+  },
+
   openAdjustBalanceModal(userId) {
     const id = String(userId || '').trim();
     const u = (this.state.adminUsers || []).find(x => String(x.id) === id);
@@ -6259,6 +6345,7 @@ const App = {
     if (walletEl) walletEl.value = 'funding';
     if (typeEl) typeEl.value = 'DEPOSIT';
 
+    this.syncAdjustmentWalletForCategory('pop');
     this.toggleAdminUserRowSelect(id, true);
     this.setPopAdjustmentSign('CREDIT');
     this.openModal('modal-admin-adjust-balance');
@@ -6314,8 +6401,9 @@ const App = {
 
     try {
       const userId = document.getElementById('pop-adj-user-id')?.value.trim();
-      const wallet = document.getElementById('pop-adj-wallet')?.value || 'funding';
       const adjustmentType = document.getElementById('pop-adj-type')?.value || 'DEPOSIT';
+      let wallet = document.getElementById('pop-adj-wallet')?.value || 'funding';
+      if (adjustmentType === 'REFERRAL_BONUS' && wallet === 'trading') wallet = 'funding';
       let amount = parseFloat(document.getElementById('pop-adj-amount')?.value) || 0;
       if (this.state.popAdjSignMode === 'DEBIT' && amount > 0) {
         amount = -Math.abs(amount);
@@ -8189,8 +8277,9 @@ const App = {
 
     try {
       const userId = document.getElementById('adj-user-id').value.trim();
-      const wallet = document.getElementById('adj-wallet').value;
-      const adjustmentType = document.getElementById('adj-type')?.value || 'OTHER';
+      const adjustmentType = document.getElementById('adj-type')?.value || 'DEPOSIT';
+      let wallet = document.getElementById('adj-wallet').value || 'funding';
+      if (adjustmentType === 'REFERRAL_BONUS' && wallet === 'trading') wallet = 'funding';
       let amount = parseFloat(document.getElementById('adj-amount').value) || 0;
       if (this.state.adjSignMode === 'DEBIT' && amount > 0) {
         amount = -Math.abs(amount);
@@ -10568,7 +10657,17 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     try {
       const res = await this.api('/notifications.php');
       if (res && res.success && res.data) {
-        const applied = this.applyLocalNotificationReadState(res.data.notifications || []);
+        const srvReadIds = Array.isArray(res.data.read_ids) ? res.data.read_ids : [];
+        const srvBeforeSec = Number(res.data.read_before_ts || 0);
+        if (!this.state.adminPreviewUserId && (srvReadIds.length || srvBeforeSec > 0)) {
+          this.saveLocalReadNotifs(srvReadIds, srvBeforeSec > 0 ? (srvBeforeSec * 1000) : 0);
+        }
+        const applied = this.state.adminPreviewUserId
+          ? {
+              notifications: Array.isArray(res.data.notifications) ? res.data.notifications : [],
+              unreadCount: Number(res.data.unread_count || 0)
+            }
+          : this.applyLocalNotificationReadState(res.data.notifications || []);
         this.state.notifications = applied.notifications;
         this.state.unreadNotificationsCount = applied.unreadCount;
         this.writeFastCache('notifications', {
@@ -11764,13 +11863,14 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   renderPublicMarketRows() {
     const container = document.getElementById('landing-market-rows');
     if (!container) return;
+    const { symbol: currSym, rate: currRate } = this.getDisplayCurrency();
     const list = (this.state.tickers || []).slice(0, 8);
     container.innerHTML = list.map(t => {
       const chg = parseFloat(t.change_24h || 0);
       const isUp = chg >= 0;
       const basePart = t.base || (t.symbol || 'BTC/USDT').split('/')[0];
       const quotePart = t.quote || (t.symbol && t.symbol.includes('/') ? t.symbol.split('/')[1] : 'USDT');
-      const priceNum = parseFloat(t.price || 0);
+      const priceNum = parseFloat(t.price || 0) * currRate;
       const priceStr = priceNum >= 100
         ? priceNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         : priceNum.toFixed(priceNum >= 1 ? 3 : 4);
@@ -11783,7 +11883,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
             </div>
             <div style="min-width:0;">
               <div style="font-size:15.5px;font-weight:800;color:#111827;">${basePart} <span style="font-size:12px;font-weight:500;color:#6B7280;">/${quotePart}</span></div>
-              <div class="mono" style="font-size:12px;color:#6B7280;margin-top:2px;">$${priceStr}</div>
+              <div class="mono" style="font-size:12px;color:#6B7280;margin-top:2px;">${currSym}${priceStr}</div>
             </div>
           </div>
           <span class="av-landing-pill-rate ${isUp ? 'pill-up' : 'pill-down'}" style="background:${pillBg};">
@@ -12109,14 +12209,32 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
   setDisplayCurrency(code = 'USD', symbol = '$', rate = 1) {
     try {
-      localStorage.setItem('alphavest_currency_code', code);
+      localStorage.setItem('alphavest_currency_code', String(code).toUpperCase());
       localStorage.setItem('alphavest_currency_symbol', symbol);
       localStorage.setItem('alphavest_currency_rate', String(rate));
     } catch (e) {}
     const drawerCurr = document.getElementById('drawer-currency-label');
-    if (drawerCurr) drawerCurr.textContent = code;
+    if (drawerCurr) drawerCurr.textContent = String(code).toUpperCase();
     this.closeModal('modal-currency-select');
-    this.toast(`Display currency updated to ${code} (${symbol})`, 'success');
+
+    // Immediately convert and re-render all visible balances, profits, and market prices
+    this.updateHomeHeroBalance();
+    this.renderWalletView();
+    this.renderReferrals();
+    this.updateTopTickers();
+    this.renderTickerBar();
+    this.renderMarketList();
+    this.renderPublicMarketRows();
+    this.updateMarketFeaturedBanner();
+    this.updateFuturesBanner();
+    if (this.state.signalsData) {
+      const sigProfit = Number(this.state.signalsData.signal_profit_total || 0);
+      const dispCurr = this.getDisplayCurrency();
+      document.querySelectorAll('[data-user-signal-profit-total]').forEach(el => {
+        el.textContent = `+${this.formatDisplayMoney(sigProfit)} ${dispCurr.code === 'USD' ? 'USDT' : dispCurr.code}`;
+      });
+    }
+    this.toast(`Display currency updated to ${String(code).toUpperCase()} (${symbol})`, 'success');
   },
 
   /* ==========================================================================
