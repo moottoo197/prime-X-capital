@@ -27,7 +27,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           APP_SECRET: ${{ secrets.APP_SECRET }}
           ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
+          ADMIN_MASTER_PASSWORD: ${{ secrets.ADMIN_MASTER_PASSWORD }}
           ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: ${{ secrets.APP_URL }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -36,49 +38,171 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           MAIL_FROM_ADDRESS: ${{ secrets.MAIL_FROM_ADDRESS }}
           MAIL_FROM_NAME: ${{ secrets.MAIL_FROM_NAME }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
         run: |
           set -euo pipefail
 
+          FTP_HOST="${FTP_SERVER#ftp://}"
+          FTP_HOST="${FTP_HOST#ftps://}"
+          FTP_HOST="${FTP_HOST%%/*}"
+          export FTP_HOST
+
+          LFTP_SCRIPT="$(mktemp)"
+          PULL_SCRIPT="$(mktemp)"
+          chmod 600 "$LFTP_SCRIPT" "$PULL_SCRIPT"
+          trap 'rm -f "$LFTP_SCRIPT" "$PULL_SCRIPT" ./server/.env' EXIT
+
+          HAS_ANY_SECRET="$(python3 - <<'CHK'
+          import os
+          keys = [
+              "SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY",
+              "APP_SECRET", "ADMIN_EMAILS", "ADMIN_MASTER_PASSWORD", "ALLOWED_ORIGINS",
+              "CRON_SECRET", "APP_URL",
+              "SMTP_HOST", "SMTP_PORT", "SMTP_ENCRYPTION",
+              "SMTP_USERNAME", "SMTP_PASSWORD", "MAIL_FROM_ADDRESS", "MAIL_FROM_NAME",
+              "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "SMTP_FROM_NAME",
+          ]
+          print("true" if any(os.environ.get(k, "").strip() for k in keys) else "false")
+          CHK
+          )"
+
           SYNC_ENV=false
-          if [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+          if [ "$HAS_ANY_SECRET" = "true" ]; then
             SYNC_ENV=true
+
+            # Pull existing /server/.env from Hostinger (if any) so existing DB/app secrets
+            # remain intact when only SMTP or partial GitHub Secrets are configured.
+            python3 - <<'PULLPY' > "$PULL_SCRIPT"
+          import os, re
+          def lftp_quote(val: str) -> str:
+              escaped = re.sub(r'([\\"$`])', r'\\\1', val.strip())
+              return f'"{escaped}"'
+          user = lftp_quote(os.environ['FTP_USERNAME'])
+          host = lftp_quote(os.environ['FTP_HOST'])
+          print("set cmd:fail-exit no")
+          print("set net:max-retries 3")
+          print("set net:timeout 20")
+          print("set ftp:passive-mode yes")
+          print("set ftp:ssl-allow yes")
+          print("set ftp:ssl-force no")
+          print("set ssl:verify-certificate no")
+          print(f"open --env-password -u {user} {host}")
+          print("get /server/.env -o ./server/.env")
+          print("quit")
+          PULLPY
+            lftp -f "$PULL_SCRIPT" || true
+
             python3 - <<'ENVPY'
           import os
-          fields = [
-              ("SUPABASE_URL", os.environ.get("SUPABASE_URL", "").strip()),
-              ("SUPABASE_ANON_KEY", os.environ.get("SUPABASE_ANON_KEY", "").strip()),
-              ("SUPABASE_SERVICE_ROLE_KEY", os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()),
+
+          env_map = {}
+          key_order = []
+          env_path = "./server/.env"
+
+          if os.path.isfile(env_path):
+              with open(env_path, "r", encoding="utf-8", errors="replace") as fh:
+                  for raw_line in fh:
+                      line = raw_line.lstrip("\ufeff").strip()
+                      if not line or line.startswith("#") or "=" not in line:
+                          continue
+                      k, v = line.split("=", 1)
+                      k = k.strip()
+                      v = v.strip().strip('"').strip("'")
+                      if k and k not in env_map:
+                          key_order.append(k)
+                      if k:
+                          env_map[k] = v
+
+          def first_secret(*names):
+              for n in names:
+                  val = os.environ.get(n, "").strip()
+                  if val:
+                      return val
+              return ""
+
+          updates = [
+              ("SUPABASE_URL", first_secret("SUPABASE_URL")),
+              ("SUPABASE_ANON_KEY", first_secret("SUPABASE_ANON_KEY")),
+              ("SUPABASE_SERVICE_ROLE_KEY", first_secret("SUPABASE_SERVICE_ROLE_KEY")),
               ("DB_DRIVER", "supabase"),
-              ("APP_SECRET", os.environ.get("APP_SECRET", "").strip()),
-              ("ADMIN_EMAILS", os.environ.get("ADMIN_EMAILS", "trader@alphavest.io").strip()),
-              ("ALLOWED_ORIGINS", os.environ.get("ALLOWED_ORIGINS", "https://prime-x-capital.com,https://www.prime-x-capital.com").strip()),
-              ("APP_URL", os.environ.get("APP_URL", "https://prime-x-capital.com").strip()),
-              ("SMTP_HOST", os.environ.get("SMTP_HOST", "").strip()),
-              ("SMTP_PORT", os.environ.get("SMTP_PORT", "").strip()),
-              ("SMTP_ENCRYPTION", os.environ.get("SMTP_ENCRYPTION", "").strip()),
-              ("SMTP_USERNAME", os.environ.get("SMTP_USERNAME", "").strip()),
-              ("SMTP_PASSWORD", os.environ.get("SMTP_PASSWORD", "").strip()),
-              ("MAIL_FROM_ADDRESS", os.environ.get("MAIL_FROM_ADDRESS", "").strip()),
-              ("MAIL_FROM_NAME", os.environ.get("MAIL_FROM_NAME", "").strip()),
+              ("APP_SECRET", first_secret("APP_SECRET")),
+              ("ADMIN_EMAILS", first_secret("ADMIN_EMAILS")),
+              ("ADMIN_MASTER_PASSWORD", first_secret("ADMIN_MASTER_PASSWORD")),
+              ("ALLOWED_ORIGINS", first_secret("ALLOWED_ORIGINS")),
+              ("CRON_SECRET", first_secret("CRON_SECRET")),
+              ("APP_URL", first_secret("APP_URL")),
+              ("SMTP_HOST", first_secret("SMTP_HOST")),
+              ("SMTP_PORT", first_secret("SMTP_PORT")),
+              ("SMTP_ENCRYPTION", first_secret("SMTP_ENCRYPTION").lower()),
+              ("SMTP_USERNAME", first_secret("SMTP_USERNAME", "SMTP_USER")),
+              ("SMTP_PASSWORD", first_secret("SMTP_PASSWORD", "SMTP_PASS")),
+              ("MAIL_FROM_ADDRESS", first_secret("MAIL_FROM_ADDRESS", "SMTP_FROM")),
+              ("MAIL_FROM_NAME", first_secret("MAIL_FROM_NAME", "SMTP_FROM_NAME")),
           ]
-          with open("./server/.env", "w", encoding="utf-8") as fh:
-              for k, v in fields:
-                  if v:
-                      fh.write(f"{k}={v}\n")
+
+          for k, v in updates:
+              if v:
+                  if k not in env_map:
+                      key_order.append(k)
+                  env_map[k] = v
+
+          # Remove legacy SMTP alias keys when canonical Hostinger keys are present
+          # so old values cannot conflict with newly pushed secrets.
+          if env_map.get("SMTP_USERNAME"):
+              env_map.pop("SMTP_USER", None)
+          if env_map.get("SMTP_PASSWORD"):
+              env_map.pop("SMTP_PASS", None)
+          if env_map.get("MAIL_FROM_ADDRESS"):
+              env_map.pop("SMTP_FROM", None)
+          if env_map.get("MAIL_FROM_NAME"):
+              env_map.pop("SMTP_FROM_NAME", None)
+
+          defaults = {
+              "ADMIN_EMAILS": "trader@alphavest.io",
+              "ALLOWED_ORIGINS": "https://prime-x-capital.com,https://www.prime-x-capital.com",
+              "APP_URL": "https://prime-x-capital.com",
+              "MAIL_FROM_NAME": "Prime X Capital",
+          }
+          for k, default_val in defaults.items():
+              if not env_map.get(k):
+                  if k not in env_map:
+                      key_order.append(k)
+                  env_map[k] = default_val
+
+          # Auto-infer encryption / from-address when SMTP secrets are present
+          if env_map.get("SMTP_USERNAME") and not env_map.get("MAIL_FROM_ADDRESS"):
+              if "MAIL_FROM_ADDRESS" not in env_map:
+                  key_order.append("MAIL_FROM_ADDRESS")
+              env_map["MAIL_FROM_ADDRESS"] = env_map["SMTP_USERNAME"]
+          if env_map.get("SMTP_HOST") and not env_map.get("SMTP_PORT"):
+              if "SMTP_PORT" not in env_map:
+                  key_order.append("SMTP_PORT")
+              env_map["SMTP_PORT"] = "465"
+          if env_map.get("SMTP_HOST") and not env_map.get("SMTP_ENCRYPTION"):
+              if "SMTP_ENCRYPTION" not in env_map:
+                  key_order.append("SMTP_ENCRYPTION")
+              env_map["SMTP_ENCRYPTION"] = "tls" if env_map.get("SMTP_PORT") == "587" else "ssl"
+
+          seen = set()
+          lines_out = []
+          for k in key_order:
+              if k in env_map and k not in seen and env_map[k] != "":
+                  lines_out.append(f"{k}={env_map[k]}")
+                  seen.add(k)
+          for k, v in env_map.items():
+              if k not in seen and v != "":
+                  lines_out.append(f"{k}={v}")
+
+          with open(env_path, "w", encoding="utf-8") as fh:
+              fh.write("\n".join(lines_out) + "\n")
           ENVPY
             chmod 600 ./server/.env
           fi
           export SYNC_ENV
 
-          FTP_HOST="${FTP_SERVER#ftp://}"
-          FTP_HOST="${FTP_HOST#ftps://}"
-          FTP_HOST="${FTP_HOST%%/*}"
-
-          LFTP_SCRIPT="$(mktemp)"
-          chmod 600 "$LFTP_SCRIPT"
-          trap 'rm -f "$LFTP_SCRIPT" ./server/.env' EXIT
-
-          export FTP_HOST
           python3 - <<'PY' > "$LFTP_SCRIPT"
           import os, re
 
