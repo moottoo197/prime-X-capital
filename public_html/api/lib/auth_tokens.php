@@ -360,3 +360,203 @@ if (!function_exists('primex_record_email_rate_attempt')) {
         }
     }
 }
+
+if (!function_exists('primex_signup_otp_secret')) {
+    function primex_signup_otp_secret(): string {
+        if (defined('APP_SECRET') && is_string(APP_SECRET) && APP_SECRET !== '') {
+            return APP_SECRET;
+        }
+        if (defined('SUPABASE_SERVICE_ROLE_KEY') && is_string(SUPABASE_SERVICE_ROLE_KEY) && SUPABASE_SERVICE_ROLE_KEY !== '') {
+            return SUPABASE_SERVICE_ROLE_KEY;
+        }
+        return hash('sha256', __FILE__);
+    }
+}
+
+if (!function_exists('primex_signup_otp_scope_id')) {
+    function primex_signup_otp_scope_id(string $email): string {
+        return 'signup:' . hash('sha256', strtolower(trim($email)));
+    }
+}
+
+if (!function_exists('primex_issue_signup_otp')) {
+    function primex_issue_signup_otp(SupabaseClient $supabase, string $email, int $ttlSeconds = 600): array {
+        $cleanEmail = strtolower(trim($email));
+        if ($cleanEmail === '' || !filter_var($cleanEmail, FILTER_VALIDATE_EMAIL)) {
+            return ['success' => false, 'code' => '', 'expires_at' => ''];
+        }
+
+        $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $scopeId = primex_signup_otp_scope_id($cleanEmail);
+        $otpDigest = hash_hmac('sha256', $cleanEmail . '|' . $code, primex_signup_otp_secret());
+        $storedHash = $otpDigest . ':' . bin2hex(random_bytes(8));
+        $nowIso = gmdate('Y-m-d\TH:i:s\Z');
+        $expiresIso = gmdate('Y-m-d\TH:i:s\Z', time() + max(120, $ttlSeconds));
+        $recordId = function_exists('primex_uuid_v4') ? primex_uuid_v4() : bin2hex(random_bytes(16));
+
+        $payload = [
+            'id'         => $recordId,
+            'user_id'    => $scopeId,
+            'email'      => $cleanEmail,
+            'token_hash' => $storedHash,
+            'expires_at' => $expiresIso,
+            'used_at'    => null,
+            'created_at' => $nowIso,
+        ];
+
+        $storedInDb = false;
+        if ($supabase->isConfigured()) {
+            @$supabase->update('email_verification_tokens', ['used_at' => $nowIso], [
+                'user_id' => 'eq.' . $scopeId,
+                'used_at' => 'is.null',
+            ]);
+            $ins = $supabase->insert('email_verification_tokens', [$payload]);
+            if (!empty($ins['success'])) {
+                $storedInDb = true;
+            }
+        }
+
+        if (!$storedInDb) {
+            primex_invalidate_file_tokens('signup_otp', $scopeId, $nowIso);
+            $fileHash = hash('sha256', $scopeId . '|' . $recordId);
+            $path = primex_file_token_path('signup_otp', $fileHash);
+            if ($path === null) {
+                return ['success' => false, 'code' => '', 'expires_at' => ''];
+            }
+            $encoded = json_encode($payload, JSON_UNESCAPED_SLASHES);
+            if ($encoded === false || @file_put_contents($path, $encoded, LOCK_EX) === false) {
+                return ['success' => false, 'code' => '', 'expires_at' => ''];
+            }
+            @chmod($path, 0600);
+        }
+
+        return [
+            'success'    => true,
+            'code'       => $code,
+            'expires_at' => $expiresIso,
+        ];
+    }
+}
+
+if (!function_exists('primex_consume_signup_otp')) {
+    function primex_consume_signup_otp(SupabaseClient $supabase, string $email, string $code): array {
+        $cleanEmail = strtolower(trim($email));
+        $cleanCode = preg_replace('/\s+/', '', trim($code));
+        if ($cleanEmail === '' || !preg_match('/^\d{6}$/', (string)$cleanCode)) {
+            return ['success' => false, 'error_code' => 'INVALID_VERIFICATION_CODE', 'message' => 'Please enter the 6-digit verification code sent to your email.'];
+        }
+
+        if (!primex_check_email_rate_limit('signup_otp_verify', $cleanEmail, 5, 600, 0)) {
+            return ['success' => false, 'error_code' => 'RATE_LIMITED', 'message' => 'Too many incorrect verification code attempts. Please request a new code.'];
+        }
+
+        $scopeId = primex_signup_otp_scope_id($cleanEmail);
+        $expectedDigest = hash_hmac('sha256', $cleanEmail . '|' . $cleanCode, primex_signup_otp_secret());
+        $nowIso = gmdate('Y-m-d\TH:i:s\Z');
+
+        $record = null;
+        $source = 'none';
+        $filePath = null;
+
+        if ($supabase->isConfigured()) {
+            $res = $supabase->select('email_verification_tokens', [
+                'user_id' => 'eq.' . $scopeId,
+                'used_at' => 'is.null',
+                'order'   => 'created_at.desc',
+                'limit'   => '1',
+            ]);
+            if (!empty($res['success']) && !empty($res['data'][0])) {
+                $record = $res['data'][0];
+                $source = 'db';
+            }
+        }
+
+        if ($record === null) {
+            $dir = primex_email_tokens_dir();
+            if ($dir !== null) {
+                $files = @glob($dir . '/signup_otp_*.json');
+                if (is_array($files)) {
+                    $latestTs = -1;
+                    foreach ($files as $file) {
+                        $row = json_decode((string)@file_get_contents($file), true);
+                        if (!is_array($row) || (string)($row['user_id'] ?? '') !== $scopeId || !empty($row['used_at'])) {
+                            continue;
+                        }
+                        $ts = strtotime((string)($row['created_at'] ?? '')) ?: 0;
+                        if ($ts >= $latestTs) {
+                            $latestTs = $ts;
+                            $record = $row;
+                            $filePath = $file;
+                            $source = 'file';
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!is_array($record)) {
+            return ['success' => false, 'error_code' => 'INVALID_VERIFICATION_CODE', 'message' => 'Verification code not found or expired. Click Send Code to receive a new one.'];
+        }
+
+        $expTs = strtotime((string)($record['expires_at'] ?? '')) ?: 0;
+        if ($expTs <= time()) {
+            return ['success' => false, 'error_code' => 'VERIFICATION_CODE_EXPIRED', 'message' => 'Your verification code has expired. Please click Send Code for a new one.'];
+        }
+
+        $storedParts = explode(':', (string)($record['token_hash'] ?? ''), 2);
+        $storedDigest = $storedParts[0] ?? '';
+        if ($storedDigest === '' || !hash_equals($storedDigest, $expectedDigest)) {
+            primex_record_email_rate_attempt('signup_otp_verify', $cleanEmail, 5, 600);
+            if (!primex_check_email_rate_limit('signup_otp_verify', $cleanEmail, 5, 600, 0)) {
+                if ($source === 'db') {
+                    @$supabase->update('email_verification_tokens', ['used_at' => $nowIso], [
+                        'user_id' => 'eq.' . $scopeId,
+                        'used_at' => 'is.null',
+                    ]);
+                } else {
+                    primex_invalidate_file_tokens('signup_otp', $scopeId, $nowIso);
+                }
+                return ['success' => false, 'error_code' => 'RATE_LIMITED', 'message' => 'Too many incorrect verification code attempts. Please request a new code.'];
+            }
+            return ['success' => false, 'error_code' => 'INVALID_VERIFICATION_CODE', 'message' => 'Incorrect email verification code. Please check your inbox and try again.'];
+        }
+
+        if ($source === 'db' && !empty($record['id'])) {
+            $upd = $supabase->update('email_verification_tokens', ['used_at' => $nowIso], [
+                'id'      => 'eq.' . (string)$record['id'],
+                'used_at' => 'is.null',
+            ]);
+            if (empty($upd['success']) || empty($upd['data'][0])) {
+                return ['success' => false, 'error_code' => 'INVALID_VERIFICATION_CODE', 'message' => 'This verification code has already been used. Please request a new code.'];
+            }
+            return ['success' => true];
+        }
+
+        if ($source === 'file' && $filePath !== null) {
+            $fp = @fopen($filePath, 'c+');
+            if (!$fp) {
+                return ['success' => false, 'error_code' => 'INVALID_VERIFICATION_CODE', 'message' => 'Verification failed. Please request a new code.'];
+            }
+            $ok = false;
+            if (@flock($fp, LOCK_EX)) {
+                $row = json_decode((string)stream_get_contents($fp), true);
+                if (is_array($row) && empty($row['used_at'])) {
+                    $row['used_at'] = $nowIso;
+                    ftruncate($fp, 0);
+                    rewind($fp);
+                    fwrite($fp, (string)json_encode($row, JSON_UNESCAPED_SLASHES));
+                    fflush($fp);
+                    $ok = true;
+                }
+                @flock($fp, LOCK_UN);
+            }
+            @fclose($fp);
+            if ($ok) {
+                return ['success' => true];
+            }
+        }
+
+        return ['success' => false, 'error_code' => 'INVALID_VERIFICATION_CODE', 'message' => 'Verification code is no longer valid. Please request a new code.'];
+    }
+}
+

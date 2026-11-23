@@ -3468,7 +3468,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261122_v125_smtp_auth_flows">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261123_v126_signup_otp">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -8288,6 +8288,14 @@ window.gtranslateSettings = {
 
           <input type="email" id="reg-email" class="av-auth-input-clean" placeholder="Email" onkeyup="if(event.key==='Enter') App.submitRegister()">
 
+          <div>
+            <div style="display:grid; grid-template-columns:1fr auto; gap:8px; align-items:stretch;">
+              <input type="text" id="reg-verification-code" class="av-auth-input-clean" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" placeholder="Email Verification Code (6 digits) *" style="letter-spacing:2px;" onkeyup="if(event.key==='Enter') App.submitRegister()">
+              <button type="button" id="btn-send-reg-code" onclick="App.sendSignupVerificationCode()" style="min-width:112px; padding:0 14px; border:none; border-radius:12px; background:#0052FF; color:#FFFFFF; font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap;">Send Code</button>
+            </div>
+            <span id="reg-code-status" style="font-size:11px; color:#6B7280; margin-top:4px; display:block;">Enter your email above and click Send Code to verify before signing up.</span>
+          </div>
+
           <input type="tel" id="reg-phone" name="whatsapp_number" class="av-auth-input-clean" placeholder="WhatsApp Number *" autocomplete="tel" inputmode="tel" aria-label="WhatsApp Number" onkeyup="if(event.key==='Enter') App.submitRegister()">
 
           <div class="password-input-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
@@ -9731,7 +9739,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261122_v125_smtp_auth_flows";
+  const CACHE_VERSION = "20261123_v126_signup_otp";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -9763,18 +9771,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261122_v125_smtp_auth_flows"></script>
-  <script defer src="/assets/js/chart.js?v=20261122_v125_smtp_auth_flows"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261123_v126_signup_otp"></script>
+  <script defer src="/assets/js/chart.js?v=20261123_v126_signup_otp"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261122_v125_smtp_auth_flows"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261122_v125_smtp_auth_flows"></script>
+  <script defer src="/assets/js/app.js?v=20261123_v126_signup_otp"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261123_v126_signup_otp"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261122_v125_smtp_auth_flows";
+      var SW_BUILD = "20261123_v126_signup_otp";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

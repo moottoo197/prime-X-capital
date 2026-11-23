@@ -131,6 +131,47 @@ if (!function_exists('primex_email_template_verify_email')) {
     }
 }
 
+if (!function_exists('primex_email_template_signup_code')) {
+    function primex_email_template_signup_code(string $recipientName, string $code, int $expiresMinutes = 10): array {
+        $greeting = $recipientName !== '' ? ('Hello ' . $recipientName . ',') : 'Hello,';
+        $safeGreeting = primex_email_escape($greeting);
+        $safeCode = primex_email_escape($code);
+        $subject = 'Your Prime X Capital verification code';
+
+        $bodyHtml = ''
+            . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+            . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">Use the 6-digit verification code below to confirm your email address and complete your <strong>Prime X Capital</strong> sign up.</p>'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:20px 0;background-color:#EFF4FF;border:1px solid #C7D8FF;border-radius:14px;">'
+            . '<tr><td align="center" style="padding:20px 16px;">'
+            . '<div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#0052FF;margin-bottom:8px;">SIGN-UP VERIFICATION CODE</div>'
+            . '<div style="font-family:\'Courier New\',Courier,monospace;font-size:32px;font-weight:800;letter-spacing:8px;color:#111827;line-height:1.2;">' . $safeCode . '</div>'
+            . '</td></tr></table>'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 18px;background-color:#F7F8FA;border:1px solid #EEF1F6;border-radius:12px;">'
+            . '<tr><td style="padding:14px 16px;font-size:12.5px;line-height:1.55;color:#4B5563;">'
+            . '<strong style="color:#111827;">Validity:</strong> This verification code expires in <strong>' . (int)$expiresMinutes . ' minutes</strong> and can only be used once.'
+            . '</td></tr></table>'
+            . '<p style="margin:0;font-size:12.5px;line-height:1.55;color:#6B7280;">If you did not try to create a Prime X Capital account, you can safely ignore this email and do not share this code with anyone.</p>';
+
+        $html = primex_email_layout(
+            'Your Verification Code',
+            'Enter this 6-digit verification code to complete your Prime X Capital sign up.',
+            $bodyHtml,
+            'Never share your verification code with anyone, including anyone claiming to represent Prime X Capital.',
+            'SIGN-UP CODE',
+            '#0052FF',
+            '#EFF4FF'
+        );
+
+        $text = "{$greeting}\n\n"
+            . "Your Prime X Capital sign-up verification code is: {$code}\n\n"
+            . "This code expires in {$expiresMinutes} minutes and can only be used once.\n\n"
+            . "If you did not request this code, ignore this email and never share it with anyone.\n\n"
+            . "Prime X Capital\nhttps://prime-x-capital.com";
+
+        return ['subject' => $subject, 'html' => $html, 'text' => $text];
+    }
+}
+
 if (!function_exists('primex_email_template_reset_password')) {
     function primex_email_template_reset_password(string $recipientName, string $resetUrl, int $expiresMinutes = 30): array {
         $greeting = $recipientName !== '' ? ('Hello ' . $recipientName . ',') : 'Hello,';

@@ -4714,10 +4714,91 @@ const App = {
     }
   },
 
+  async sendSignupVerificationCode() {
+    const emailInput = document.getElementById('reg-email');
+    const firstNameInput = document.getElementById('reg-first-name');
+    const codeInput = document.getElementById('reg-verification-code');
+    const btn = document.getElementById('btn-send-reg-code');
+    const statusEl = document.getElementById('reg-code-status');
+
+    const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+    const firstName = firstNameInput ? String(firstNameInput.value || '').trim() : '';
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      this.toast('Please enter a valid email address first.', 'warning');
+      if (emailInput) emailInput.focus();
+      return;
+    }
+
+    if (this._regOtpCooldownTimer) {
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      btn.style.opacity = '0.7';
+    }
+
+    try {
+      const res = await this.api('/auth/send-signup-code.php', 'POST', {
+        email,
+        first_name: firstName
+      });
+
+      if (res && res.success) {
+        if (statusEl) {
+          statusEl.style.color = '#059669';
+          statusEl.textContent = `Verification code sent to ${email}. Valid for 10 minutes.`;
+        }
+        this.toast(res.message || 'Verification code sent to your email.', 'success');
+        if (codeInput) codeInput.focus();
+
+        let remaining = 60;
+        const tick = () => {
+          if (!btn) return;
+          if (remaining > 0) {
+            btn.disabled = true;
+            btn.style.opacity = '0.65';
+            btn.textContent = `Resend (${remaining}s)`;
+            remaining -= 1;
+            this._regOtpCooldownTimer = setTimeout(tick, 1000);
+          } else {
+            this._regOtpCooldownTimer = null;
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.textContent = 'Resend Code';
+          }
+        };
+        tick();
+      } else {
+        const msg = (res && res.message) || 'Could not send verification code.';
+        if (statusEl) {
+          statusEl.style.color = '#DC2626';
+          statusEl.textContent = msg;
+        }
+        this.toast(msg, 'error');
+        if (btn) {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.textContent = 'Send Code';
+        }
+      }
+    } catch (e) {
+      this.toast('Network error while sending verification code.', 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.textContent = 'Send Code';
+      }
+    }
+  },
+
   async submitRegister() {
     const firstNameInput = document.getElementById('reg-first-name');
     const lastNameInput = document.getElementById('reg-last-name');
     const emailInput = document.getElementById('reg-email');
+    const codeInput = document.getElementById('reg-verification-code');
     const phoneInput = document.getElementById('reg-phone');
     const passInput = document.getElementById('reg-pass');
     const confirmInput = document.getElementById('reg-confirm');
@@ -4729,6 +4810,7 @@ const App = {
     const firstName = firstNameInput ? String(firstNameInput.value || '').trim() : '';
     const lastName = lastNameInput ? String(lastNameInput.value || '').trim() : '';
     const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+    const verificationCode = codeInput ? codeInput.value.replace(/\s+/g, '').trim() : '';
     const phone = phoneInput ? String(phoneInput.value || '').trim() : '';
     const normalizedPhoneDigits = phone.replace(/[\s\-().]/g, '');
     const password = passInput ? passInput.value : '';
@@ -4773,6 +4855,11 @@ const App = {
     if (!email) {
       this.toast('Please enter an email address', 'error');
       if (emailInput) emailInput.focus();
+      return;
+    }
+    if (!/^\d{6}$/.test(verificationCode)) {
+      this.toast('Please click Send Code and enter the 6-digit email verification code.', 'error');
+      if (codeInput) codeInput.focus();
       return;
     }
     if (!phone) {
@@ -4821,6 +4908,7 @@ const App = {
         firstName: firstName,
         lastName: lastName,
         email,
+        verification_code: verificationCode,
         whatsapp_number: phone,
         phone,
         phone_number: phone,
@@ -4835,6 +4923,11 @@ const App = {
       });
 
       if (res && res.success) {
+        if (this._regOtpCooldownTimer) {
+          clearTimeout(this._regOtpCooldownTimer);
+          this._regOtpCooldownTimer = null;
+        }
+        if (codeInput) codeInput.value = '';
         try { localStorage.setItem('alphavest_user_country', country); } catch (e) {}
         if (res.data && res.data.user) {
           this.state.user = res.data.user;
@@ -4847,7 +4940,7 @@ const App = {
         if (publicLanding) publicLanding.hidden = true;
         this.closeModal('modal-auth');
         try { this.updateHeaderAuth(); } catch (uiErr) { console.warn('[Register UI]', uiErr); }
-        this.toast(res.message || 'Account registered successfully! Please check your email to confirm your address.', 'success');
+        this.toast(res.message || 'Account created and email verified successfully!', 'success');
         this.navigate('home');
         Promise.allSettled([
           this.checkAuth(),

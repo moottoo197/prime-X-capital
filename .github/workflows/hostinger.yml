@@ -86,6 +86,7 @@ jobs:
           print("set net:max-retries 3")
           print("set net:timeout 20")
           print("set ftp:passive-mode yes")
+          print("set ftp:list-options -a")
           print("set ftp:ssl-allow yes")
           print("set ftp:ssl-force no")
           print("set ssl:verify-certificate no")
@@ -149,8 +150,6 @@ jobs:
                       key_order.append(k)
                   env_map[k] = v
 
-          # Remove legacy SMTP alias keys when canonical Hostinger keys are present
-          # so old values cannot conflict with newly pushed secrets.
           if env_map.get("SMTP_USERNAME"):
               env_map.pop("SMTP_USER", None)
           if env_map.get("SMTP_PASSWORD"):
@@ -172,7 +171,6 @@ jobs:
                       key_order.append(k)
                   env_map[k] = default_val
 
-          # Auto-infer encryption / from-address when SMTP secrets are present
           if env_map.get("SMTP_USERNAME") and not env_map.get("MAIL_FROM_ADDRESS"):
               if "MAIL_FROM_ADDRESS" not in env_map:
                   key_order.append("MAIL_FROM_ADDRESS")
@@ -220,6 +218,7 @@ jobs:
           print("set net:reconnect-interval-base 3")
           print("set net:reconnect-interval-multiplier 1")
           print("set ftp:passive-mode yes")
+          print("set ftp:list-options -a")
           print("set ftp:ssl-allow yes")
           print("set ftp:ssl-force no")
           print("set ssl:verify-certificate no")
@@ -228,6 +227,8 @@ jobs:
           print('mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --exclude "^\\.git" --exclude "^uploads/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./public_html /public_html')
           env_exclude = '' if sync_env else '--exclude "^\\.env" '
           print(f'mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --exclude "^\\.git" {env_exclude}--exclude "^storage/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./server /server')
+          if sync_env:
+              print("put ./server/.env -o /server/.env")
           print("quit")
           PY
 

@@ -20,6 +20,7 @@ $email = strtolower(trim($body['email'] ?? ''));
 $whatsappNumber = trim((string)($body['whatsapp_number'] ?? $body['whatsapp'] ?? $body['phone'] ?? $body['phone_number'] ?? $body['user']['whatsapp_number'] ?? $body['user']['phone'] ?? $body['user']['phone_number'] ?? ''));
 $normalizedPhoneDigits = preg_replace('/[\s\-().]/', '', $whatsappNumber);
 $password = $body['password'] ?? '';
+$verificationCode = trim((string)($body['verification_code'] ?? $body['email_code'] ?? $body['otp_code'] ?? ''));
 $referralCode = strtoupper(trim((string)($body['referral_code'] ?? $body['ref'] ?? $body['invite_code'] ?? ($_COOKIE['alphavest_ref'] ?? ''))));
 $withdrawalPin = trim($body['withdrawal_pin'] ?? $body['fund_password'] ?? $body['pin'] ?? '');
 
@@ -85,6 +86,17 @@ if (($existing['success'] && !empty($existing['data'][0])) || primex_find_profil
     sendError('EMAIL_EXISTS', 'An account with this email already exists. Please log in.', 409);
 }
 
+// 1B. Require & verify 6-digit email OTP before creating account
+if (!preg_match('/^\d{6}$/', $verificationCode)) {
+    sendError('VERIFICATION_CODE_REQUIRED', 'Please click Send Code and enter the 6-digit verification code sent to your email.', 422);
+}
+$otpVerify = primex_consume_signup_otp($supabase, $email, $verificationCode);
+if (empty($otpVerify['success'])) {
+    $errCode = (string)($otpVerify['error_code'] ?? 'INVALID_VERIFICATION_CODE');
+    $httpStatus = ($errCode === 'RATE_LIMITED') ? 429 : 422;
+    sendError($errCode, (string)($otpVerify['message'] ?? 'Invalid or expired email verification code.'), $httpStatus);
+}
+
 $userId = sprintf(
     '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
     mt_rand(0, 0xffff), mt_rand(0, 0xffff),
@@ -137,7 +149,8 @@ $profilePayload = [
     'withdrawal_pin_hash' => $pinHash,
     'country' => $country,
     'timezone' => $timezone,
-    'email_verified' => 0,
+    'email_verified' => 1,
+    'email_verified_at' => gmdate('Y-m-d\TH:i:s\Z'),
     'created_at' => gmdate('Y-m-d H:i:s'),
     'updated_at' => gmdate('Y-m-d H:i:s')
 ];
@@ -152,7 +165,7 @@ if (!$profileRes['success']) {
     $msg = strtolower((string)($profileRes['message'] ?? ''));
     $retry = $profilePayload;
     $changed = false;
-    foreach (['withdrawal_pin_hash', 'withdrawal_pin', 'timezone', 'whatsapp_number', 'phone', 'email_verified'] as $optionalColumn) {
+    foreach (['withdrawal_pin_hash', 'withdrawal_pin', 'timezone', 'whatsapp_number', 'phone', 'email_verified_at', 'email_verified'] as $optionalColumn) {
         if (strpos($msg, strtolower($optionalColumn)) !== false) {
             unset($retry[$optionalColumn]);
             $changed = true;
@@ -166,9 +179,9 @@ if (!$profileRes['success']) {
     // Final compatibility path: preserve the account and selected country using
     // only columns required by all PRIME X CAPITAL profile schemas.
     $msg = strtolower((string)($profileRes['message'] ?? ''));
-    if (preg_match('/(withdrawal_pin_hash|withdrawal_pin|timezone|whatsapp_number|phone|email_verified)/', $msg)) {
+    if (preg_match('/(withdrawal_pin_hash|withdrawal_pin|timezone|whatsapp_number|phone|email_verified|email_verified_at)/', $msg)) {
         $minimal = $profilePayload;
-        unset($minimal['withdrawal_pin_hash'], $minimal['withdrawal_pin'], $minimal['timezone'], $minimal['whatsapp_number'], $minimal['phone'], $minimal['email_verified']);
+        unset($minimal['withdrawal_pin_hash'], $minimal['withdrawal_pin'], $minimal['timezone'], $minimal['whatsapp_number'], $minimal['phone'], $minimal['email_verified'], $minimal['email_verified_at']);
         $profileRes = $supabase->upsert('profiles', [$minimal], 'id');
     }
 }
@@ -212,30 +225,12 @@ if (!headers_sent()) {
     ]);
 }
 
-// 6. Issue single-use email verification token and dispatch confirmation email
-$emailVerificationSent = false;
-$tokenRes = primex_issue_auth_token($supabase, 'email_verification', $userId, $email, 86400);
-if (!empty($tokenRes['success']) && !empty($tokenRes['token'])) {
-    $verifyUrl = primex_app_url() . '/?verify_token=' . rawurlencode($tokenRes['token']);
-    $tpl = primex_email_template_verify_email($firstName, $verifyUrl, 24);
-    $mailRes = primex_send_templated_email($email, $tpl);
-    $emailVerificationSent = !empty($mailRes['success']);
-    primex_record_log(
-        'EMAIL',
-        $emailVerificationSent ? 'VERIFICATION_EMAIL_SENT' : 'VERIFICATION_EMAIL_FAILED',
-        $emailVerificationSent ? 'Registration verification email sent' : 'Registration verification email could not be delivered',
-        ['email_verified' => false],
-        $emailVerificationSent ? 'INFO' : 'WARNING',
-        $userId,
-        $email
-    );
-}
-
-primex_record_log('AUTH', 'REGISTER_SUCCESS', 'New account registered', [
+// 6. Email verified via single-use 6-digit OTP during sign up
+primex_record_log('AUTH', 'REGISTER_SUCCESS', 'New account registered with verified email OTP', [
     'country' => $country,
     'referred_by' => $validReferredBy,
     'whatsapp_number' => $whatsappNumber,
-    'verification_email_sent' => $emailVerificationSent
+    'email_verified' => true
 ], 'INFO', $userId, $email);
 
 sendSuccess([
@@ -255,8 +250,8 @@ sendSuccess([
         'timezone' => $timezone,
         'two_factor_enabled' => false,
         'has_withdrawal_pin' => true,
-        'email_verified' => false,
+        'email_verified' => true,
         'is_admin' => in_array($role, ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'])
     ],
-    'email_verification_sent' => $emailVerificationSent
-], $emailVerificationSent ? 'Account created! Please check your email to confirm your address.' : 'Account created successfully');
+    'email_verification_sent' => false
+], 'Account created and email verified successfully!');

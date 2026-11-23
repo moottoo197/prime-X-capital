@@ -15,6 +15,7 @@ $apiPath = trim($apiPath, '/');
 $routes = [
     'auth/login' => 'auth/login.php', 'auth/register' => 'auth/register.php',
     'auth/me' => 'auth/me.php', 'auth/logout' => 'auth/logout.php', 'auth/csrf' => 'auth/csrf.php',
+    'auth/send-signup-code' => 'auth/send-signup-code.php',
     'auth/verify-email' => 'auth/verify-email.php', 'auth/resend-verification' => 'auth/resend-verification.php',
     'auth/forgot-password' => 'auth/forgot-password.php', 'auth/reset-password' => 'auth/reset-password.php',
     'auth/change-password' => 'auth/change-password.php',
