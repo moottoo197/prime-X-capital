@@ -8,14 +8,19 @@ declare(strict_types=1);
 
 $envPaths = [
     __DIR__ . '/.env',
+    __DIR__ . '/storage/.env.preserved',
     dirname(__DIR__) . '/.env',
+    dirname(__DIR__, 2) . '/server/.env',
 ];
 
 foreach ($envPaths as $envFile) {
-    if (!is_file($envFile) || !is_readable($envFile)) {
+    if (!@is_file($envFile) || !@is_readable($envFile)) {
         continue;
     }
-    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    $lines = @file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines)) {
+        continue;
+    }
     foreach ($lines as $line) {
         $line = preg_replace('/^\xEF\xBB\xBF/', '', (string)$line);
         $line = trim((string)$line);
@@ -24,14 +29,16 @@ foreach ($envPaths as $envFile) {
         [$key, $val] = explode('=', $line, 2);
         $key = trim($key);
         $val = trim($val, " \t\n\r\0\x0B\"'");
+        if ($key === '' || $val === '' || preg_match('/^(?:REPLACE_WITH_|YOUR_|your-project-ref)/i', $val)) {
+            continue;
+        }
         $existingEnv = getenv($key);
-        if ($key !== '' && ($existingEnv === false || $existingEnv === '')) {
+        if ($existingEnv === false || $existingEnv === '') {
             putenv("{$key}={$val}");
             $_ENV[$key] = $val;
             $_SERVER[$key] = $val;
         }
     }
-    break;
 }
 
 function alphavest_env(string $key, ?string $default = null): ?string {

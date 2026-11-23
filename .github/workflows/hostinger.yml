@@ -23,8 +23,18 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PGHOST: ${{ secrets.PGHOST }}
+          PGPORT: ${{ secrets.PGPORT }}
+          PGDATABASE: ${{ secrets.PGDATABASE }}
+          PGUSER: ${{ secrets.PGUSER }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD }}
+          DB_DRIVER: ${{ secrets.DB_DRIVER }}
           APP_SECRET: ${{ secrets.APP_SECRET }}
           ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
           ADMIN_MASTER_PASSWORD: ${{ secrets.ADMIN_MASTER_PASSWORD }}
@@ -42,6 +52,9 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           SMTP_FROM_NAME: ${{ secrets.SMTP_FROM_NAME }}
+          STORAGE_BUCKET_KYC: ${{ secrets.STORAGE_BUCKET_KYC }}
+          STORAGE_BUCKET_PRIVATE: ${{ secrets.STORAGE_BUCKET_PRIVATE }}
+          STORAGE_BUCKET_MARKETING: ${{ secrets.STORAGE_BUCKET_MARKETING }}
         run: |
           set -euo pipefail
 
@@ -53,8 +66,11 @@ jobs:
           LFTP_SCRIPT="$(mktemp)"
           PULL_SCRIPT="$(mktemp)"
           PROBE_SCRIPT="$(mktemp)"
+          PULL_DIR="$(mktemp -d)"
           chmod 600 "$LFTP_SCRIPT" "$PULL_SCRIPT" "$PROBE_SCRIPT"
-          trap 'rm -f "$LFTP_SCRIPT" "$PULL_SCRIPT" "$PROBE_SCRIPT" ./server/.env' EXIT
+          chmod 700 "$PULL_DIR"
+          export PULL_DIR
+          trap 'rm -rf "$LFTP_SCRIPT" "$PULL_SCRIPT" "$PROBE_SCRIPT" "$PULL_DIR" ./server/.env' EXIT
 
           # Detect exact Hostinger FTP root layout before pulling .env or mirroring
           python3 - <<'PROBEPY' > "$PROBE_SCRIPT"
@@ -120,37 +136,43 @@ jobs:
 
           REMOTE_PUBLIC="${DETECTED_PATHS%%|*}"
           REMOTE_SERVER="${DETECTED_PATHS##*|}"
+          REMOTE_PARENT="$(dirname "$REMOTE_SERVER")"
+          if [ "$REMOTE_PARENT" = "/" ] || [ "$REMOTE_PARENT" = "." ]; then
+            REMOTE_PARENT=""
+          fi
           echo "Detected Hostinger target paths: PUBLIC=$REMOTE_PUBLIC SERVER=$REMOTE_SERVER"
-          export REMOTE_PUBLIC REMOTE_SERVER
+          export REMOTE_PUBLIC REMOTE_SERVER REMOTE_PARENT
 
-          HAS_ANY_SECRET="$(python3 - <<'CHK'
-          import os
-          keys = [
-              "SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY",
-              "APP_SECRET", "ADMIN_EMAILS", "ADMIN_MASTER_PASSWORD", "ALLOWED_ORIGINS",
-              "CRON_SECRET", "APP_URL",
-              "SMTP_HOST", "SMTP_PORT", "SMTP_ENCRYPTION",
-              "SMTP_USERNAME", "SMTP_PASSWORD", "MAIL_FROM_ADDRESS", "MAIL_FROM_NAME",
-              "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "SMTP_FROM_NAME",
-          ]
-          print("true" if any(os.environ.get(k, "").strip() for k in keys) else "false")
-          CHK
-          )"
-
-          SYNC_ENV=false
-          if [ "$HAS_ANY_SECRET" = "true" ]; then
-            SYNC_ENV=true
-
-            # Pull existing remote server/.env from Hostinger (if any) so existing DB/app secrets
-            # remain intact when only SMTP or partial GitHub Secrets are configured.
-            python3 - <<'PULLPY' > "$PULL_SCRIPT"
+          # Pull all candidate remote .env files into separate files so a missing or partial
+          # file on one path never overwrites valid credentials stored on another path.
+          python3 - <<'PULLPY' > "$PULL_SCRIPT"
           import os, re
           def lftp_quote(val: str) -> str:
               escaped = re.sub(r'([\\"$`])', r'\\\1', val.strip())
               return f'"{escaped}"'
           user = lftp_quote(os.environ['FTP_USERNAME'])
           host = lftp_quote(os.environ['FTP_HOST'])
+          pull_dir = os.environ['PULL_DIR']
           remote_server = os.environ['REMOTE_SERVER'].rstrip('/')
+          remote_public = os.environ['REMOTE_PUBLIC'].rstrip('/')
+          remote_parent = os.environ.get('REMOTE_PARENT', '').rstrip('/')
+
+          # Ordered lowest -> highest priority when merging
+          candidates = [
+              f"{remote_public}/api/.env",
+              "/server/.env",
+              "/domains/prime-x-capital.com/server/.env",
+              f"{remote_parent}/.env" if remote_parent else "/.env",
+              f"{remote_server}/storage/.env.preserved",
+              f"{remote_server}/.env",
+          ]
+          seen = set()
+          unique_candidates = []
+          for c in candidates:
+              if c not in seen:
+                  seen.add(c)
+                  unique_candidates.append(c)
+
           print("set cmd:fail-exit no")
           print("set net:max-retries 3")
           print("set net:timeout 20")
@@ -159,23 +181,33 @@ jobs:
           print("set ftp:ssl-allow yes")
           print("set ftp:ssl-force no")
           print("set ssl:verify-certificate no")
+          print("set xfer:clobber yes")
           print(f"open --env-password -u {user} {host}")
-          if remote_server != "/server":
-              print("get /server/.env -o ./server/.env")
-          print(f"get {remote_server}/.env -o ./server/.env")
+          for idx, remote_path in enumerate(unique_candidates):
+              local_file = os.path.join(pull_dir, f"env_{idx:02d}.env")
+              print(f"get {lftp_quote(remote_path)} -o {lftp_quote(local_file)}")
           print("quit")
           PULLPY
-            lftp -f "$PULL_SCRIPT" || true
+          lftp -f "$PULL_SCRIPT" || true
 
-            python3 - <<'ENVPY'
-          import os
+          ENV_STATUS="$(python3 - <<'ENVPY'
+          import glob, os, re
 
           env_map = {}
           key_order = []
+          pull_dir = os.environ["PULL_DIR"]
           env_path = "./server/.env"
 
-          if os.path.isfile(env_path):
-              with open(env_path, "r", encoding="utf-8", errors="replace") as fh:
+          def is_placeholder(val: str) -> bool:
+              v = val.strip()
+              if not v:
+                  return True
+              return bool(re.match(r'^(?:REPLACE_WITH_|YOUR_|your-project-ref)', v, re.I))
+
+          for pulled in sorted(glob.glob(os.path.join(pull_dir, "env_*.env"))):
+              if not os.path.isfile(pulled) or os.path.getsize(pulled) == 0:
+                  continue
+              with open(pulled, "r", encoding="utf-8", errors="replace") as fh:
                   for raw_line in fh:
                       line = raw_line.lstrip("\ufeff").strip()
                       if not line or line.startswith("#") or "=" not in line:
@@ -183,23 +215,30 @@ jobs:
                       k, v = line.split("=", 1)
                       k = k.strip()
                       v = v.strip().strip('"').strip("'")
-                      if k and k not in env_map:
+                      if not k or is_placeholder(v):
+                          continue
+                      if k not in env_map:
                           key_order.append(k)
-                      if k:
-                          env_map[k] = v
+                      env_map[k] = v
 
           def first_secret(*names):
               for n in names:
                   val = os.environ.get(n, "").strip()
-                  if val:
+                  if val and not is_placeholder(val):
                       return val
               return ""
 
           updates = [
-              ("SUPABASE_URL", first_secret("SUPABASE_URL")),
-              ("SUPABASE_ANON_KEY", first_secret("SUPABASE_ANON_KEY")),
-              ("SUPABASE_SERVICE_ROLE_KEY", first_secret("SUPABASE_SERVICE_ROLE_KEY")),
-              ("DB_DRIVER", "supabase"),
+              ("SUPABASE_URL", first_secret("SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL")),
+              ("SUPABASE_ANON_KEY", first_secret("SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY")),
+              ("SUPABASE_SERVICE_ROLE_KEY", first_secret("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY")),
+              ("DATABASE_URL", first_secret("DATABASE_URL")),
+              ("PGHOST", first_secret("PGHOST")),
+              ("PGPORT", first_secret("PGPORT")),
+              ("PGDATABASE", first_secret("PGDATABASE")),
+              ("PGUSER", first_secret("PGUSER")),
+              ("PGPASSWORD", first_secret("PGPASSWORD")),
+              ("DB_DRIVER", first_secret("DB_DRIVER") or "supabase"),
               ("APP_SECRET", first_secret("APP_SECRET")),
               ("ADMIN_EMAILS", first_secret("ADMIN_EMAILS")),
               ("ADMIN_MASTER_PASSWORD", first_secret("ADMIN_MASTER_PASSWORD")),
@@ -213,7 +252,24 @@ jobs:
               ("SMTP_PASSWORD", first_secret("SMTP_PASSWORD", "SMTP_PASS")),
               ("MAIL_FROM_ADDRESS", first_secret("MAIL_FROM_ADDRESS", "SMTP_FROM")),
               ("MAIL_FROM_NAME", first_secret("MAIL_FROM_NAME", "SMTP_FROM_NAME")),
+              ("STORAGE_BUCKET_KYC", first_secret("STORAGE_BUCKET_KYC")),
+              ("STORAGE_BUCKET_PRIVATE", first_secret("STORAGE_BUCKET_PRIVATE")),
+              ("STORAGE_BUCKET_MARKETING", first_secret("STORAGE_BUCKET_MARKETING")),
           ]
+
+          any_secret_set = any(
+              first_secret(name) != "" for name in [
+                  "SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL",
+                  "SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY",
+                  "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY",
+                  "DATABASE_URL", "PGHOST", "PGPASSWORD",
+                  "APP_SECRET", "ADMIN_EMAILS", "ADMIN_MASTER_PASSWORD",
+                  "ALLOWED_ORIGINS", "CRON_SECRET", "APP_URL",
+                  "SMTP_HOST", "SMTP_PORT", "SMTP_ENCRYPTION",
+                  "SMTP_USERNAME", "SMTP_PASSWORD", "MAIL_FROM_ADDRESS", "MAIL_FROM_NAME",
+                  "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "SMTP_FROM_NAME",
+              ]
+          )
 
           for k, v in updates:
               if v:
@@ -255,20 +311,38 @@ jobs:
                   key_order.append("SMTP_ENCRYPTION")
               env_map["SMTP_ENCRYPTION"] = "tls" if env_map.get("SMTP_PORT") == "587" else "ssl"
 
-          seen = set()
-          lines_out = []
-          for k in key_order:
-              if k in env_map and k not in seen and env_map[k] != "":
-                  lines_out.append(f"{k}={env_map[k]}")
-                  seen.add(k)
-          for k, v in env_map.items():
-              if k not in seen and v != "":
-                  lines_out.append(f"{k}={v}")
+          has_supabase = bool(env_map.get("SUPABASE_URL") and env_map.get("SUPABASE_SERVICE_ROLE_KEY"))
 
-          with open(env_path, "w", encoding="utf-8") as fh:
-              fh.write("\n".join(lines_out) + "\n")
+          if has_supabase and (any_secret_set or env_map):
+              seen_keys = set()
+              lines_out = []
+              for k in key_order:
+                  if k in env_map and k not in seen_keys and env_map[k] != "":
+                      lines_out.append(f"{k}={env_map[k]}")
+                      seen_keys.add(k)
+              for k, v in env_map.items():
+                  if k not in seen_keys and v != "":
+                      lines_out.append(f"{k}={v}")
+              with open(env_path, "w", encoding="utf-8") as fh:
+                  fh.write("\n".join(lines_out) + "\n")
+              print("READY")
+          else:
+              missing = []
+              if not env_map.get("SUPABASE_URL"):
+                  missing.append("SUPABASE_URL")
+              if not env_map.get("SUPABASE_SERVICE_ROLE_KEY"):
+                  missing.append("SUPABASE_SERVICE_ROLE_KEY")
+              print("MISSING:" + ",".join(missing))
           ENVPY
+          )"
+
+          SYNC_ENV=false
+          if [ "$ENV_STATUS" = "READY" ] && [ -f ./server/.env ]; then
             chmod 600 ./server/.env
+            SYNC_ENV=true
+            echo "server/.env assembled cleanly with Supabase configuration intact; will sync and preserve backup in storage/.env.preserved."
+          else
+            echo "::warning::Skipping server/.env upload ($ENV_STATUS) so existing Hostinger server/.env is NOT overwritten with incomplete credentials. Add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, and APP_SECRET to GitHub Repository Secrets for full automated .env provisioning."
           fi
           export SYNC_ENV
 
@@ -302,6 +376,10 @@ jobs:
           print(f'mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --overwrite --exclude "^\\.git" {env_exclude}--exclude "^storage/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./server {remote_server}')
           if sync_env:
               print(f"put ./server/.env -o {remote_server}/.env")
+              print("set cmd:fail-exit no")
+              print(f"mkdir -p {remote_server}/storage")
+              print(f"put ./server/.env -o {remote_server}/storage/.env.preserved")
+              print("set cmd:fail-exit yes")
           print("quit")
           PY
 

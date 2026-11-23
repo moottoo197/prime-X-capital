@@ -9,12 +9,16 @@
 $configPaths = [
     __DIR__ . '/config.php',
     dirname(__DIR__, 2) . '/server/config.php',
+    dirname(__DIR__, 3) . '/server/config.php',
+    dirname(__DIR__, 4) . '/server/config.php',
     dirname(__DIR__, 2) . '/config.php'
 ];
 foreach ($configPaths as $cp) {
-    if (is_file($cp)) {
+    if (@is_file($cp) && @is_readable($cp)) {
         require_once $cp;
-        break;
+        if (defined('SUPABASE_URL') && SUPABASE_URL && defined('SUPABASE_SERVICE_ROLE_KEY') && SUPABASE_SERVICE_ROLE_KEY) {
+            break;
+        }
     }
 }
 
