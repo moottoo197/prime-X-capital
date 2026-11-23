@@ -52,8 +52,76 @@ jobs:
 
           LFTP_SCRIPT="$(mktemp)"
           PULL_SCRIPT="$(mktemp)"
-          chmod 600 "$LFTP_SCRIPT" "$PULL_SCRIPT"
-          trap 'rm -f "$LFTP_SCRIPT" "$PULL_SCRIPT" ./server/.env' EXIT
+          PROBE_SCRIPT="$(mktemp)"
+          chmod 600 "$LFTP_SCRIPT" "$PULL_SCRIPT" "$PROBE_SCRIPT"
+          trap 'rm -f "$LFTP_SCRIPT" "$PULL_SCRIPT" "$PROBE_SCRIPT" ./server/.env' EXIT
+
+          # Detect exact Hostinger FTP root layout before pulling .env or mirroring
+          python3 - <<'PROBEPY' > "$PROBE_SCRIPT"
+          import os, re
+          def lftp_quote(val: str) -> str:
+              escaped = re.sub(r'([\\"$`])', r'\\\1', val.strip())
+              return f'"{escaped}"'
+          user = lftp_quote(os.environ['FTP_USERNAME'])
+          host = lftp_quote(os.environ['FTP_HOST'])
+          print("set cmd:fail-exit no")
+          print("set net:max-retries 4")
+          print("set net:timeout 20")
+          print("set ftp:passive-mode yes")
+          print("set ftp:list-options -a")
+          print("set ftp:ssl-allow yes")
+          print("set ftp:ssl-force no")
+          print("set ssl:verify-certificate no")
+          print(f"open --env-password -u {user} {host}")
+          print("echo ===ROOT===")
+          print("cls -1 /")
+          print("echo ===DOMAIN===")
+          print("cls -1 /domains/prime-x-capital.com")
+          print("quit")
+          PROBEPY
+
+          PROBE_OUT="$(lftp -f "$PROBE_SCRIPT" 2>&1 || true)"
+          DETECTED_PATHS="$(PROBE_OUT="$PROBE_OUT" python3 - <<'DETPY'
+          import os
+          raw = os.environ.get("PROBE_OUT", "")
+          section = None
+          root_entries = set()
+          domain_entries = set()
+          for line in raw.splitlines():
+              s = line.strip()
+              if s == "===ROOT===":
+                  section = "root"
+                  continue
+              if s == "===DOMAIN===":
+                  section = "domain"
+                  continue
+              if not s or s.startswith("cls:") or s.startswith("cd "):
+                  continue
+              name = s.rstrip("/").split("/")[-1]
+              if section == "root":
+                  root_entries.add(name)
+              elif section == "domain":
+                  domain_entries.add(name)
+
+          if "index.html" in root_entries and "public_html" not in root_entries and "domains" not in root_entries:
+              print("ERROR_SCOPED_PUBLIC_HTML")
+          elif "public_html" in domain_entries:
+              print("/domains/prime-x-capital.com/public_html|/domains/prime-x-capital.com/server")
+          else:
+              print("/public_html|/server")
+          DETPY
+          )"
+
+          if [ "$DETECTED_PATHS" = "ERROR_SCOPED_PUBLIC_HTML" ]; then
+            echo "ERROR: Your FTP_USERNAME logs directly inside public_html instead of the parent home directory (/), so /server and /server/.env cannot be deployed outside public_html."
+            echo "In Hostinger -> Files -> FTP Accounts, create/use an FTP account whose directory is / (root), not /public_html."
+            exit 1
+          fi
+
+          REMOTE_PUBLIC="${DETECTED_PATHS%%|*}"
+          REMOTE_SERVER="${DETECTED_PATHS##*|}"
+          echo "Detected Hostinger target paths: PUBLIC=$REMOTE_PUBLIC SERVER=$REMOTE_SERVER"
+          export REMOTE_PUBLIC REMOTE_SERVER
 
           HAS_ANY_SECRET="$(python3 - <<'CHK'
           import os
@@ -73,7 +141,7 @@ jobs:
           if [ "$HAS_ANY_SECRET" = "true" ]; then
             SYNC_ENV=true
 
-            # Pull existing /server/.env from Hostinger (if any) so existing DB/app secrets
+            # Pull existing remote server/.env from Hostinger (if any) so existing DB/app secrets
             # remain intact when only SMTP or partial GitHub Secrets are configured.
             python3 - <<'PULLPY' > "$PULL_SCRIPT"
           import os, re
@@ -82,6 +150,7 @@ jobs:
               return f'"{escaped}"'
           user = lftp_quote(os.environ['FTP_USERNAME'])
           host = lftp_quote(os.environ['FTP_HOST'])
+          remote_server = os.environ['REMOTE_SERVER'].rstrip('/')
           print("set cmd:fail-exit no")
           print("set net:max-retries 3")
           print("set net:timeout 20")
@@ -91,7 +160,9 @@ jobs:
           print("set ftp:ssl-force no")
           print("set ssl:verify-certificate no")
           print(f"open --env-password -u {user} {host}")
-          print("get /server/.env -o ./server/.env")
+          if remote_server != "/server":
+              print("get /server/.env -o ./server/.env")
+          print(f"get {remote_server}/.env -o ./server/.env")
           print("quit")
           PULLPY
             lftp -f "$PULL_SCRIPT" || true
@@ -211,6 +282,8 @@ jobs:
           user = lftp_quote(os.environ['FTP_USERNAME'])
           host = lftp_quote(os.environ['FTP_HOST'])
           sync_env = os.environ.get('SYNC_ENV') == 'true'
+          remote_public = os.environ['REMOTE_PUBLIC'].rstrip('/')
+          remote_server = os.environ['REMOTE_SERVER'].rstrip('/')
 
           print("set cmd:fail-exit yes")
           print("set net:max-retries 8")
@@ -224,11 +297,11 @@ jobs:
           print("set ssl:verify-certificate no")
           print("set xfer:clobber yes")
           print(f"open --env-password -u {user} {host}")
-          print('mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --exclude "^\\.git" --exclude "^uploads/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./public_html /public_html')
+          print(f'mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --overwrite --exclude "^\\.git" --exclude "^uploads/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./public_html {remote_public}')
           env_exclude = '' if sync_env else '--exclude "^\\.env" '
-          print(f'mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --exclude "^\\.git" {env_exclude}--exclude "^storage/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./server /server')
+          print(f'mirror -R --no-perms --no-umask --parallel=1 --verbose=1 --overwrite --exclude "^\\.git" {env_exclude}--exclude "^storage/" --exclude "^\\.ftp-deploy-sync-state\\.json$" ./server {remote_server}')
           if sync_env:
-              print("put ./server/.env -o /server/.env")
+              print(f"put ./server/.env -o {remote_server}/.env")
           print("quit")
           PY
 
