@@ -709,7 +709,8 @@ function primex_create_session(array $userProfile, int $ttlSeconds = 31536000): 
         'country' => (string)($userProfile['country'] ?? ''),
         'timezone' => (string)($userProfile['timezone'] ?? 'Asia/Karachi'),
         'two_factor_enabled' => !empty($userProfile['two_factor_enabled']),
-        'has_withdrawal_pin' => !empty($userProfile['has_withdrawal_pin']) || !empty($userProfile['withdrawal_pin']) || !empty($userProfile['withdrawal_pin_hash'])
+        'has_withdrawal_pin' => !empty($userProfile['has_withdrawal_pin']) || !empty($userProfile['withdrawal_pin']) || !empty($userProfile['withdrawal_pin_hash']),
+        'email_verified' => !empty($userProfile['email_verified'])
     ];
     $fileSaved = primex_file_session_write($tokenHash, [
         'id' => $sessionId,

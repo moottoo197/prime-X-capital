@@ -75,3 +75,10 @@ define('ADMIN_MASTER_PASSWORD', alphavest_env('ADMIN_MASTER_PASSWORD', ''));
 
 $allowedOrigins = alphavest_env('ALLOWED_ORIGINS', 'https://prime-x-capital.com,https://www.prime-x-capital.com');
 define('ALLOWED_ORIGINS', array_values(array_filter(array_map('trim', explode(',', $allowedOrigins)))));
+
+$rawAppUrl = rtrim((string)alphavest_env('APP_URL', 'https://prime-x-capital.com'), '/');
+$parsedAppUrl = parse_url($rawAppUrl);
+if (!is_array($parsedAppUrl) || empty($parsedAppUrl['scheme']) || empty($parsedAppUrl['host']) || !in_array(strtolower((string)$parsedAppUrl['scheme']), ['http', 'https'], true)) {
+    $rawAppUrl = 'https://prime-x-capital.com';
+}
+define('APP_URL', $rawAppUrl);

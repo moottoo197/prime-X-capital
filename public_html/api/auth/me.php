@@ -35,6 +35,7 @@ sendSuccess([
         'referred_by' => $user['referred_by'] ?? null,
         'two_factor_enabled' => !empty($user['two_factor_enabled']),
         'has_withdrawal_pin' => !empty($user['has_withdrawal_pin']) || !empty($user['withdrawal_pin']) || !empty($user['withdrawal_pin_hash']),
+        'email_verified' => !empty($user['email_verified']),
         'country' => $country,
         'timezone' => $timezone,
         'is_admin' => $isAdmin

@@ -3468,7 +3468,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261122_v124_domain_prime_x_capital">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261122_v125_smtp_auth_flows">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -7617,7 +7617,7 @@ window.gtranslateSettings = {
             <input type="password" id="chpwd-new" class="av-auth-input-clean" placeholder="Please enter new password" style="padding-right:44px !important;">
             <button type="button" onclick="App.togglePasswordVisibility('chpwd-new', this)" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:#9CA3AF; cursor:pointer;">👁</button>
           </div>
-          <div style="font-size:11.5px; color:#9CA3AF; margin-top:4px;">6-12 characters, letters or numbers</div>
+          <div style="font-size:11.5px; color:#9CA3AF; margin-top:4px;">8 to 128 characters</div>
         </div>
 
         <div>
@@ -7626,10 +7626,10 @@ window.gtranslateSettings = {
             <input type="password" id="chpwd-confirm" class="av-auth-input-clean" placeholder="Confirm New Password" style="padding-right:44px !important;">
             <button type="button" onclick="App.togglePasswordVisibility('chpwd-confirm', this)" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:#9CA3AF; cursor:pointer;">👁</button>
           </div>
-          <div style="font-size:11.5px; color:#9CA3AF; margin-top:4px;">6-12 characters, letters or numbers</div>
+          <div style="font-size:11.5px; color:#9CA3AF; margin-top:4px;">8 to 128 characters</div>
         </div>
 
-        <button type="button" class="av-auth-submit-pill" style="margin-top:8px;" onclick="App.submitChangeLoginPassword()">Confirm</button>
+        <button type="button" id="btn-submit-chpwd" class="av-auth-submit-pill" style="margin-top:8px;" onclick="App.submitChangeLoginPassword()">Confirm</button>
       </div>
     </main>
 
@@ -8345,10 +8345,14 @@ window.gtranslateSettings = {
         <div class="card">
           <span style="font-size:12px; color:var(--text-muted);">Account Identity</span>
           <h4 id="prof-email-label" style="margin-top:2px;">User Account</h4>
-          <div style="margin-top:8px;">
+          <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
             <span class="badge badge-positive">Active</span>
             <span class="badge badge-warning" id="prof-kyc-badge">KYC: Pending</span>
+            <span class="badge badge-warning" id="prof-email-verify-badge" style="display:none;">Email: Unverified</span>
           </div>
+          <button type="button" id="prof-btn-resend-verify" class="btn-secondary" style="display:none; margin-top:10px; width:100%; font-size:12px; padding:7px 12px;" onclick="App.resendVerificationEmail()">
+            Resend Confirmation Email
+          </button>
         </div>
 
         <!-- Fund Security & Withdrawal PIN Status -->
@@ -9595,6 +9599,80 @@ window.gtranslateSettings = {
     </div>
   </div>
 
+  <!-- MODAL: FORGOT PASSWORD -->
+  <div id="modal-forgot-password" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px; padding-bottom: 28px;">
+      <div class="modal-header">
+        <h3>Forgot Password</h3>
+        <button class="modal-close" onclick="App.closeModal('modal-forgot-password')">✕</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <p style="font-size:13px; color:var(--text-muted); line-height:1.5; margin:0;">
+          Enter your registered email address and we will send you a secure, single-use link to reset your password.
+        </p>
+        <div class="form-group">
+          <label class="form-label" for="forgot-pwd-email">Email Address</label>
+          <input type="email" id="forgot-pwd-email" class="av-auth-input-clean" placeholder="Enter your account email" onkeyup="if(event.key==='Enter') App.submitForgotPassword()">
+        </div>
+        <button type="button" class="btn-primary" id="btn-submit-forgot-pwd" style="padding:12px; font-weight:700;" onclick="App.submitForgotPassword()">
+          Send Reset Link
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: RESET PASSWORD FROM EMAIL TOKEN -->
+  <div id="modal-reset-password" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px; padding-bottom: 28px;">
+      <div class="modal-header">
+        <h3>Set New Password</h3>
+        <button class="modal-close" onclick="App.closeModal('modal-reset-password')">✕</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <p id="reset-pwd-status-note" style="font-size:13px; color:var(--text-muted); line-height:1.5; margin:0;">
+          Choose a strong new password (8 to 128 characters) for your Prime X Capital account.
+        </p>
+        <input type="hidden" id="reset-pwd-token">
+        <div class="form-group">
+          <label class="form-label" for="reset-pwd-new">New Password</label>
+          <div class="password-input-wrapper" style="position:relative; display:flex; align-items:center; width:100%;">
+            <input type="password" id="reset-pwd-new" class="av-auth-input-clean" placeholder="New password (min 8 chars)" style="padding-right:44px !important;">
+            <button type="button" class="password-toggle-btn" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:#9CA3AF; padding:6px; cursor:pointer;" onclick="App.togglePasswordVisibility('reset-pwd-new', this)" aria-label="Toggle password visibility">👁</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reset-pwd-confirm">Confirm New Password</label>
+          <div class="password-input-wrapper" style="position:relative; display:flex; align-items:center; width:100%;">
+            <input type="password" id="reset-pwd-confirm" class="av-auth-input-clean" placeholder="Confirm new password" style="padding-right:44px !important;" onkeyup="if(event.key==='Enter') App.submitResetPassword()">
+            <button type="button" class="password-toggle-btn" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:#9CA3AF; padding:6px; cursor:pointer;" onclick="App.togglePasswordVisibility('reset-pwd-confirm', this)" aria-label="Toggle password visibility">👁</button>
+          </div>
+        </div>
+        <button type="button" class="btn-primary" id="btn-submit-reset-pwd" style="padding:12px; font-weight:700;" onclick="App.submitResetPassword()">
+          Update Password
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EMAIL VERIFICATION RESULT -->
+  <div id="modal-email-verify" class="modal-overlay">
+    <div class="modal-content" style="max-width: 420px; padding-bottom: 28px; text-align:center;">
+      <div class="modal-header">
+        <h3>Email Verification</h3>
+        <button class="modal-close" onclick="App.closeModal('modal-email-verify')">✕</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:14px; padding-top:6px;">
+        <div id="email-verify-modal-title" style="font-size:17px; font-weight:800; color:#111827;">Verifying your email...</div>
+        <p id="email-verify-modal-message" style="font-size:13px; color:var(--text-muted); line-height:1.5; margin:0;">
+          Please wait while we confirm your Prime X Capital email verification token.
+        </p>
+        <button type="button" class="btn-primary" style="padding:12px; font-weight:700;" onclick="App.closeModal('modal-email-verify')">
+          Continue
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: TRANSACTION HISTORY (DEPOSITS, WITHDRAWALS, SIGNALS) -->
   <div id="modal-transaction-history" class="modal-overlay">
     <div class="modal-content" style="max-width: 580px; padding-bottom: 30px;">
@@ -9653,7 +9731,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261122_v124_domain_prime_x_capital";
+  const CACHE_VERSION = "20261122_v125_smtp_auth_flows";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -9685,18 +9763,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261122_v124_domain_prime_x_capital"></script>
-  <script defer src="/assets/js/chart.js?v=20261122_v124_domain_prime_x_capital"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261122_v125_smtp_auth_flows"></script>
+  <script defer src="/assets/js/chart.js?v=20261122_v125_smtp_auth_flows"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261122_v124_domain_prime_x_capital"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261122_v124_domain_prime_x_capital"></script>
+  <script defer src="/assets/js/app.js?v=20261122_v125_smtp_auth_flows"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261122_v125_smtp_auth_flows"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261122_v124_domain_prime_x_capital";
+      var SW_BUILD = "20261122_v125_smtp_auth_flows";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

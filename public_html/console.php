@@ -276,13 +276,13 @@ $loadAllSettings = static function () use ($supabase): array {
     $map = [
         'FEATURE_LANGUAGE_ENABLED' => '1',
         'MAINTENANCE_MODE'         => '0',
-        'SMTP_HOST'                => (string)(getenv('SMTP_HOST') ?: ''),
-        'SMTP_PORT'                => (string)(getenv('SMTP_PORT') ?: '587'),
-        'SMTP_ENCRYPTION'          => strtolower((string)(getenv('SMTP_ENCRYPTION') ?: 'tls')),
-        'SMTP_USER'                => (string)(getenv('SMTP_USER') ?: ''),
-        'SMTP_PASS'                => (string)(getenv('SMTP_PASS') ?: ''),
-        'SMTP_FROM'                => (string)(getenv('SMTP_FROM') ?: ''),
-        'SMTP_FROM_NAME'           => (string)(getenv('SMTP_FROM_NAME') ?: 'PRIME X CAPITAL'),
+        'SMTP_HOST'                => primex_env_first(['SMTP_HOST'], 'smtp.hostinger.com'),
+        'SMTP_PORT'                => primex_env_first(['SMTP_PORT'], '465'),
+        'SMTP_ENCRYPTION'          => strtolower(primex_env_first(['SMTP_ENCRYPTION'], 'ssl')),
+        'SMTP_USER'                => primex_env_first(['SMTP_USERNAME', 'SMTP_USER'], ''),
+        'SMTP_PASS'                => primex_env_first(['SMTP_PASSWORD', 'SMTP_PASS'], ''),
+        'SMTP_FROM'                => primex_env_first(['MAIL_FROM_ADDRESS', 'SMTP_FROM'], ''),
+        'SMTP_FROM_NAME'           => primex_env_first(['MAIL_FROM_NAME', 'SMTP_FROM_NAME'], 'Prime X Capital'),
     ];
     if ($supabase->isConfigured()) {
         $res = $supabase->select('system_settings', [
@@ -291,8 +291,12 @@ $loadAllSettings = static function () use ($supabase): array {
         if (!empty($res['success']) && is_array($res['data'])) {
             foreach ($res['data'] as $row) {
                 $k = strtoupper(trim((string)($row['setting_key'] ?? '')));
-                if ($k !== '' && isset($map[$k])) {
-                    $map[$k] = (string)($row['setting_value'] ?? '');
+                $v = (string)($row['setting_value'] ?? '');
+                if ($k === '' || !isset($map[$k])) {
+                    continue;
+                }
+                if (in_array($k, ['FEATURE_LANGUAGE_ENABLED', 'MAINTENANCE_MODE'], true) || trim($v) !== '') {
+                    $map[$k] = $v;
                 }
             }
         }
@@ -341,13 +345,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             }
         } elseif ($action === 'save_smtp') {
             $smtpHost = trim((string)($_POST['smtp_host'] ?? ''));
-            $smtpPort = (int)($_POST['smtp_port'] ?? 587);
-            $smtpEnc  = strtolower(trim((string)($_POST['smtp_encryption'] ?? 'tls')));
+            $smtpPort = (int)($_POST['smtp_port'] ?? 465);
+            $smtpEnc  = strtolower(trim((string)($_POST['smtp_encryption'] ?? 'ssl')));
             $smtpUser = trim((string)($_POST['smtp_user'] ?? ''));
             $smtpPass = (string)($_POST['smtp_pass'] ?? '');
             $clearPass = !empty($_POST['clear_smtp_pass']);
             $smtpFrom = trim((string)($_POST['smtp_from'] ?? ''));
-            $smtpFromName = trim((string)($_POST['smtp_from_name'] ?? 'PRIME X CAPITAL'));
+            $smtpFromName = trim((string)($_POST['smtp_from_name'] ?? 'Prime X Capital'));
 
             if ($smtpHost !== '' && !preg_match('/^[A-Za-z0-9.\-]+$/', $smtpHost)) {
                 $flashErr = 'SMTP host contains invalid characters.';
@@ -400,9 +404,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                       . '</div></div>';
                 $mailRes = primex_send_smtp_email($testTo, $subject, $html);
                 if (!empty($mailRes['success'])) {
-                    $flashOk = $mailRes['message'] ?? 'Test email sent successfully.';
+                    $flashOk = 'Test email sent successfully.';
                 } else {
-                    $flashErr = 'SMTP test failed: ' . ($mailRes['error'] ?? 'Unknown delivery error');
+                    $flashErr = 'SMTP test delivery failed. Check server logs (/logs) for diagnostics.';
                 }
             }
         }
@@ -572,7 +576,7 @@ $hasSmtpPass = ($cfg['SMTP_PASS'] !== '');
             </div>
             <div class="field">
               <label for="smtp-port">SMTP Port</label>
-              <input id="smtp-port" name="smtp_port" type="number" min="1" max="65535" value="<?= primex_console_h($cfg['SMTP_PORT'] ?: '587') ?>" placeholder="587">
+              <input id="smtp-port" name="smtp_port" type="number" min="1" max="65535" value="<?= primex_console_h($cfg['SMTP_PORT'] ?: '465') ?>" placeholder="465">
             </div>
           </div>
 
@@ -580,14 +584,14 @@ $hasSmtpPass = ($cfg['SMTP_PASS'] !== '');
             <div class="field">
               <label for="smtp-enc">Encryption</label>
               <select id="smtp-enc" name="smtp_encryption">
-                <option value="tls" <?= $cfg['SMTP_ENCRYPTION'] === 'tls' ? 'selected' : '' ?>>STARTTLS (Port 587)</option>
-                <option value="ssl" <?= $cfg['SMTP_ENCRYPTION'] === 'ssl' ? 'selected' : '' ?>>SSL / TLS (Port 465)</option>
+                <option value="ssl" <?= $cfg['SMTP_ENCRYPTION'] === 'ssl' ? 'selected' : '' ?>>SSL / TLS (Port 465 - Recommended)</option>
+                <option value="tls" <?= $cfg['SMTP_ENCRYPTION'] === 'tls' ? 'selected' : '' ?>>STARTTLS (Port 587 - Fallback)</option>
                 <option value="none" <?= $cfg['SMTP_ENCRYPTION'] === 'none' ? 'selected' : '' ?>>None (Unencrypted)</option>
               </select>
             </div>
             <div class="field">
               <label for="smtp-user">SMTP Username</label>
-              <input id="smtp-user" name="smtp_user" type="text" value="<?= primex_console_h($cfg['SMTP_USER']) ?>" placeholder="noreply@prime-x-capital.com" autocomplete="off">
+              <input id="smtp-user" name="smtp_user" type="text" value="<?= primex_console_h($cfg['SMTP_USER']) ?>" placeholder="no-reply@prime-x-capital.com" autocomplete="off">
             </div>
           </div>
 
@@ -605,11 +609,11 @@ $hasSmtpPass = ($cfg['SMTP_PASS'] !== '');
           <div class="form-grid">
             <div class="field">
               <label for="smtp-from">From Email</label>
-              <input id="smtp-from" name="smtp_from" type="email" value="<?= primex_console_h($cfg['SMTP_FROM']) ?>" placeholder="noreply@prime-x-capital.com">
+              <input id="smtp-from" name="smtp_from" type="email" value="<?= primex_console_h($cfg['SMTP_FROM']) ?>" placeholder="no-reply@prime-x-capital.com">
             </div>
             <div class="field">
               <label for="smtp-from-name">From Display Name</label>
-              <input id="smtp-from-name" name="smtp_from_name" type="text" value="<?= primex_console_h($cfg['SMTP_FROM_NAME']) ?>" placeholder="PRIME X CAPITAL">
+              <input id="smtp-from-name" name="smtp_from_name" type="text" value="<?= primex_console_h($cfg['SMTP_FROM_NAME']) ?>" placeholder="Prime X Capital">
             </div>
           </div>
 

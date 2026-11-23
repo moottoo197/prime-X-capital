@@ -379,6 +379,21 @@ class SupabaseClient {
     }
 
     /**
+     * Supabase Auth Admin API: update user password, email_confirm, or metadata
+     */
+    public function authAdminUpdateUser(string $userId, array $attributes): array {
+        if (!$this->isConfigured()) {
+            return ['success' => false, 'error' => 'SUPABASE_CONFIG_MISSING', 'message' => 'Supabase not configured'];
+        }
+        $userId = trim($userId);
+        if ($userId === '') {
+            return ['success' => false, 'error' => 'INVALID_USER_ID', 'message' => 'User ID is required'];
+        }
+        $endpoint = "{$this->url}/auth/v1/admin/users/" . rawurlencode($userId);
+        return $this->request('PUT', $endpoint, $attributes);
+    }
+
+    /**
      * Supabase Auth API: Get user from JWT
      */
     public function authGetUser(string $jwt): array {

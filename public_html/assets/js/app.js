@@ -393,8 +393,28 @@ const App = {
       try {
         const params = new URLSearchParams(window.location.search || '');
         const requestedView = (params.get('view') || '').trim().toLowerCase();
+        const verifyToken = (params.get('verify_token') || '').trim();
+        const resetToken = (params.get('reset_token') || '').trim();
+        const authPrompt = (params.get('auth') || '').trim().toLowerCase();
         const hashRaw = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
-        if (requestedView === 'admin' || hashRaw === 'admin') {
+
+        if (verifyToken || resetToken || authPrompt) {
+          params.delete('verify_token');
+          params.delete('reset_token');
+          params.delete('auth');
+          const remaining = params.toString();
+          const cleanUrl = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash || ''}`;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+
+        if (verifyToken) {
+          this.handleVerifyEmailToken(verifyToken);
+        } else if (resetToken) {
+          this.openResetPasswordFromToken(resetToken);
+        } else if (authPrompt === 'login' && !this.state.user) {
+          this.openModal('modal-auth');
+          this.switchAuthBox('login');
+        } else if (requestedView === 'admin' || hashRaw === 'admin') {
           this.navigate('admin');
         }
       } catch (e) {}
@@ -967,6 +987,7 @@ const App = {
         uidVal.textContent = `UID:${this.getUserUID()}`;
         uidPill.style.display = 'inline-flex';
       }
+      this.syncProfileEmailBadge(displayUser);
       this.syncSideDrawer();
     } else {
       if (adminBtn) adminBtn.style.display = 'none';
@@ -985,6 +1006,7 @@ const App = {
           </button>
         `;
       }
+      this.syncProfileEmailBadge(null);
       this.syncSideDrawer();
     }
   },
@@ -2471,6 +2493,7 @@ const App = {
           kycBadge.textContent = 'KYC: Not Submitted';
         }
       }
+      this.syncProfileEmailBadge(user);
     }
 
     if (modalId === 'modal-auth') {
@@ -4824,7 +4847,7 @@ const App = {
         if (publicLanding) publicLanding.hidden = true;
         this.closeModal('modal-auth');
         try { this.updateHeaderAuth(); } catch (uiErr) { console.warn('[Register UI]', uiErr); }
-        this.toast('Account registered successfully! 6-digit withdrawal PIN configured.', 'success');
+        this.toast(res.message || 'Account registered successfully! Please check your email to confirm your address.', 'success');
         this.navigate('home');
         Promise.allSettled([
           this.checkAuth(),
@@ -9573,12 +9596,18 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       const res = await this.api('/user/update-email.php', 'POST', { email: newEmail });
       if (res.success) {
         if (this.state.user) {
-          this.state.user.email = res.data?.email || newEmail;
+          this.state.user = res.data?.user || {
+            ...this.state.user,
+            email: res.data?.email || newEmail,
+            email_verified: false
+          };
           localStorage.setItem('alphavest_local_user', JSON.stringify(this.state.user));
         }
+        this.updateHeaderAuth();
+        this.syncProfileEmailBadge(this.state.user);
         this.loadSettingsView();
         this.closeModal('modal-update-email');
-        this.toast(res.message || 'Account email updated successfully!', 'success');
+        this.toast(res.message || 'Account email updated! Please check your inbox to confirm your new email.', 'success');
       } else {
         this.toast(res.message || 'Failed to update email address', 'error');
       }
@@ -10110,8 +10139,17 @@ STORAGE_BUCKET_MARKETING=marketing-assets
         return;
       }
     }
-    this.navigate('security');
-    this.toast('Password updates are protected via Security Center verification.', 'info');
+    if (!this.state.user) {
+      const loginEmail = (document.getElementById('auth-email')?.value || '').trim();
+      const forgotInput = document.getElementById('forgot-pwd-email');
+      if (forgotInput) {
+        forgotInput.value = loginEmail && loginEmail.includes('@') ? loginEmail : '';
+      }
+      this.closeModal('modal-auth');
+      this.openModal('modal-forgot-password');
+      return;
+    }
+    this.openChangePasswordView();
   },
 
   showContactModal(type) {
@@ -12336,21 +12374,278 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     this.openAppView('change-password');
   },
 
-  submitChangeLoginPassword() {
-    const oldPwd = document.getElementById('chpwd-old')?.value || '';
-    const newPwd = document.getElementById('chpwd-new')?.value || '';
-    const confPwd = document.getElementById('chpwd-confirm')?.value || '';
-    if (!oldPwd || !newPwd || newPwd.length < 6) {
-      this.toast('Please enter valid old and new passwords (min 6 characters)', 'warning');
+  syncProfileEmailBadge(userObj) {
+    const verifyBadge = document.getElementById('prof-email-verify-badge');
+    const resendBtn = document.getElementById('prof-btn-resend-verify');
+    const previewUser = this.state.adminPreviewUser;
+    const target = userObj || previewUser || this.state.user;
+    if (!verifyBadge || !resendBtn) return;
+
+    if (!target || previewUser) {
+      verifyBadge.style.display = 'none';
+      resendBtn.style.display = 'none';
+      return;
+    }
+
+    const verified = Boolean(target.email_verified);
+    verifyBadge.style.display = 'inline-flex';
+    if (verified) {
+      verifyBadge.className = 'badge badge-positive';
+      verifyBadge.textContent = 'Email: Verified';
+      resendBtn.style.display = 'none';
+    } else {
+      verifyBadge.className = 'badge badge-warning';
+      verifyBadge.textContent = 'Email: Unverified';
+      resendBtn.style.display = 'block';
+    }
+  },
+
+  async resendVerificationEmail() {
+    if (!this.state.user) {
+      this.openModal('modal-auth');
+      return;
+    }
+    const btn = document.getElementById('prof-btn-resend-verify');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Sending confirmation email...';
+    }
+    try {
+      const res = await this.api('/auth/resend-verification.php', 'POST', {});
+      if (res && res.success) {
+        if (res.data?.email_verified && this.state.user) {
+          this.state.user.email_verified = true;
+          try { localStorage.setItem('alphavest_local_user', JSON.stringify(this.state.user)); } catch (e) {}
+          this.syncProfileEmailBadge(this.state.user);
+        }
+        this.toast(res.message || 'Verification email sent. Please check your inbox.', 'success');
+      } else {
+        this.toast((res && res.message) || 'Could not send verification email right now.', 'error');
+      }
+    } catch (e) {
+      this.toast('Network error while sending verification email.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Resend Confirmation Email';
+      }
+    }
+  },
+
+  async handleVerifyEmailToken(token) {
+    const cleanToken = String(token || '').trim();
+    const titleEl = document.getElementById('email-verify-modal-title');
+    const msgEl = document.getElementById('email-verify-modal-message');
+
+    if (titleEl) titleEl.textContent = 'Verifying your email...';
+    if (msgEl) msgEl.textContent = 'Please wait while we confirm your Prime X Capital email verification token.';
+    this.openModal('modal-email-verify');
+
+    if (!cleanToken) {
+      if (titleEl) titleEl.textContent = 'Invalid Verification Link';
+      if (msgEl) msgEl.textContent = 'This verification link is incomplete. Please request a new confirmation email from your profile.';
+      return;
+    }
+
+    try {
+      const res = await this.api('/auth/verify-email.php', 'POST', { token: cleanToken });
+      if (res && res.success) {
+        if (titleEl) titleEl.textContent = 'Email Confirmed';
+        if (msgEl) msgEl.textContent = res.message || 'Your Prime X Capital email address is now verified.';
+        if (this.state.user) {
+          this.state.user.email_verified = true;
+          try { localStorage.setItem('alphavest_local_user', JSON.stringify(this.state.user)); } catch (e) {}
+          this.updateHeaderAuth();
+          this.syncProfileEmailBadge(this.state.user);
+        }
+        this.toast(res.message || 'Email verified successfully.', 'success');
+      } else {
+        if (titleEl) titleEl.textContent = 'Verification Link Unavailable';
+        if (msgEl) msgEl.textContent = (res && res.message) || 'This verification link is invalid or has expired.';
+      }
+    } catch (e) {
+      if (titleEl) titleEl.textContent = 'Verification Error';
+      if (msgEl) msgEl.textContent = 'Unable to verify your email right now. Please try again.';
+    }
+  },
+
+  async submitForgotPassword() {
+    const emailInput = document.getElementById('forgot-pwd-email');
+    const btn = document.getElementById('btn-submit-forgot-pwd');
+    const email = (emailInput?.value || '').trim();
+
+    if (!email || !email.includes('@')) {
+      this.toast('Please enter a valid registered email address.', 'warning');
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Sending Reset Link...';
+    }
+
+    try {
+      const res = await this.api('/auth/forgot-password.php', 'POST', { email });
+      if (res && res.success) {
+        if (emailInput) emailInput.value = '';
+        this.closeModal('modal-forgot-password');
+        this.toast(res.message || 'If an account matches that email, a password reset link has been sent.', 'success');
+      } else {
+        this.toast((res && res.message) || 'Unable to process password reset request.', 'error');
+      }
+    } catch (e) {
+      this.toast('Network error while requesting password reset.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Send Reset Link';
+      }
+    }
+  },
+
+  async openResetPasswordFromToken(token) {
+    const cleanToken = String(token || '').trim();
+    const tokenInput = document.getElementById('reset-pwd-token');
+    const newInput = document.getElementById('reset-pwd-new');
+    const confirmInput = document.getElementById('reset-pwd-confirm');
+    const noteEl = document.getElementById('reset-pwd-status-note');
+    const submitBtn = document.getElementById('btn-submit-reset-pwd');
+
+    if (tokenInput) tokenInput.value = cleanToken;
+    if (newInput) newInput.value = '';
+    if (confirmInput) confirmInput.value = '';
+    if (submitBtn) submitBtn.disabled = false;
+    if (noteEl) {
+      noteEl.style.color = 'var(--text-muted)';
+      noteEl.textContent = 'Checking your password reset link...';
+    }
+    this.openModal('modal-reset-password');
+
+    try {
+      const res = await this.api(`/auth/reset-password.php?token=${encodeURIComponent(cleanToken)}`, 'GET');
+      if (res && res.success && res.data?.valid) {
+        if (noteEl) {
+          noteEl.style.color = 'var(--text-muted)';
+          noteEl.textContent = 'Choose a strong new password (8 to 128 characters) for your Prime X Capital account.';
+        }
+      } else {
+        if (submitBtn) submitBtn.disabled = true;
+        if (noteEl) {
+          noteEl.style.color = 'var(--negative)';
+          noteEl.textContent = (res && res.message) || 'This password reset link is invalid or has expired. Please request a new reset email.';
+        }
+      }
+    } catch (e) {
+      if (noteEl) {
+        noteEl.style.color = 'var(--text-muted)';
+        noteEl.textContent = 'Choose a strong new password (8 to 128 characters) for your Prime X Capital account.';
+      }
+    }
+  },
+
+  async submitResetPassword() {
+    const token = (document.getElementById('reset-pwd-token')?.value || '').trim();
+    const newPwd = document.getElementById('reset-pwd-new')?.value || '';
+    const confPwd = document.getElementById('reset-pwd-confirm')?.value || '';
+    const btn = document.getElementById('btn-submit-reset-pwd');
+
+    if (!token) {
+      this.toast('Reset token missing. Please request a new password reset email.', 'error');
+      return;
+    }
+    if (!newPwd || newPwd.length < 8 || newPwd.length > 128) {
+      this.toast('Password must be between 8 and 128 characters.', 'warning');
       return;
     }
     if (newPwd !== confPwd) {
-      this.toast('New passwords do not match', 'warning');
+      this.toast('New passwords do not match.', 'warning');
       return;
     }
-    if (typeof this.showResetPasswordModal === 'function') {
-      this.toast('Login password update submitted for security verification', 'success');
-      this.openSecurityCenter();
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Updating Password...';
+    }
+
+    try {
+      const res = await this.api('/auth/reset-password.php', 'POST', {
+        token,
+        password: newPwd,
+        confirm_password: confPwd
+      });
+      if (res && res.success) {
+        this.state.user = null;
+        this.state.adminPreviewUser = null;
+        this.state.adminPreviewUserId = null;
+        try { localStorage.removeItem('alphavest_local_user'); } catch (e) {}
+        this.updateHeaderAuth();
+        this.closeModal('modal-reset-password');
+        this.toast(res.message || 'Password updated. Please sign in with your new password.', 'success');
+        this.openModal('modal-auth');
+        this.switchAuthBox('login');
+      } else {
+        this.toast((res && res.message) || 'Unable to reset password.', 'error');
+      }
+    } catch (e) {
+      this.toast('Network error while resetting password.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Update Password';
+      }
+    }
+  },
+
+  async submitChangeLoginPassword() {
+    if (!this.state.user) {
+      this.openModal('modal-auth');
+      return;
+    }
+    const oldEl = document.getElementById('chpwd-old');
+    const newEl = document.getElementById('chpwd-new');
+    const confEl = document.getElementById('chpwd-confirm');
+    const btn = document.getElementById('btn-submit-chpwd');
+
+    const oldPwd = oldEl?.value || '';
+    const newPwd = newEl?.value || '';
+    const confPwd = confEl?.value || '';
+
+    if (!oldPwd || !newPwd || newPwd.length < 8 || newPwd.length > 128) {
+      this.toast('Enter your current password and a new password (8 to 128 characters).', 'warning');
+      return;
+    }
+    if (newPwd !== confPwd) {
+      this.toast('New passwords do not match.', 'warning');
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+    }
+
+    try {
+      const res = await this.api('/auth/change-password.php', 'POST', {
+        old_password: oldPwd,
+        new_password: newPwd,
+        confirm_password: confPwd
+      });
+      if (res && res.success) {
+        if (oldEl) oldEl.value = '';
+        if (newEl) newEl.value = '';
+        if (confEl) confEl.value = '';
+        this.toast(res.message || 'Password updated successfully. A confirmation email has been sent.', 'success');
+        this.openSecurityCenter();
+      } else {
+        this.toast((res && res.message) || 'Failed to update password.', 'error');
+      }
+    } catch (e) {
+      this.toast('Network error while updating password.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Confirm';
+      }
     }
   },
 

@@ -3,6 +3,7 @@
  * Admin Reset User Password - Direct Supabase Profiles & Auth
  */
 require_once dirname(dirname(__DIR__)) . '/bootstrap.php';
+require_once dirname(dirname(__DIR__)) . '/lib/auth_tokens.php';
 
 $admin = requireAdmin();
 
@@ -24,8 +25,9 @@ if (empty($userId)) {
     sendError('VALIDATION_ERROR', 'User ID is required');
 }
 
-$hash = password_hash($newPassword, PASSWORD_BCRYPT);
+$hash = primex_hash_password($newPassword);
 primex_delete_sessions_by_user($userId);
+@$supabase->authAdminUpdateUser($userId, ['password' => $newPassword]);
 
 $supabase->update('profiles', [
     'password_hash' => $hash,

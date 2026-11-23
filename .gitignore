@@ -6,3 +6,6 @@ server/storage/system_logs.jsonl
 server/storage/kyc/
 public_html/uploads/
 *.log
+.env
+.env.local
+server/storage/email_tokens/

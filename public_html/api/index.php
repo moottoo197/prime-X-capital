@@ -15,6 +15,9 @@ $apiPath = trim($apiPath, '/');
 $routes = [
     'auth/login' => 'auth/login.php', 'auth/register' => 'auth/register.php',
     'auth/me' => 'auth/me.php', 'auth/logout' => 'auth/logout.php', 'auth/csrf' => 'auth/csrf.php',
+    'auth/verify-email' => 'auth/verify-email.php', 'auth/resend-verification' => 'auth/resend-verification.php',
+    'auth/forgot-password' => 'auth/forgot-password.php', 'auth/reset-password' => 'auth/reset-password.php',
+    'auth/change-password' => 'auth/change-password.php',
     'markets/tickers' => 'markets/tickers.php', 'markets/klines' => 'markets/klines.php',
     'markets/orderbook' => 'markets/orderbook.php',
     'wallet/balances' => 'wallet/balances.php', 'wallet/deposit' => 'wallet/deposit.php',
@@ -40,6 +43,7 @@ $routes = [
     'admin/withdrawals' => 'admin/withdrawals.php', 'admin/adjustments' => 'admin/adjustments.php',
     'admin/signals' => 'admin/signals.php', 'admin/kyc' => 'admin/kyc.php',
     'admin/users' => 'admin/users.php', 'admin/users/reset-password' => 'admin/users/reset-password.php',
+    'admin/test-email' => 'admin/test-email.php',
     'support/chat' => 'support/chat.php', 'admin/support' => 'admin/support.php'
 ];
 

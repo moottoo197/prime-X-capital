@@ -3,6 +3,9 @@
  * User Registration - Direct Supabase Auth, Profiles, & Wallets
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/mailer.php';
+require_once dirname(__DIR__) . '/lib/email_templates.php';
+require_once dirname(__DIR__) . '/lib/auth_tokens.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);
@@ -92,7 +95,7 @@ $userId = sprintf(
 );
 
 $myRefCode = 'REF' . strtoupper(bin2hex(random_bytes(4)));
-$hash = password_hash($password, PASSWORD_BCRYPT);
+$hash = primex_hash_password($password);
 $pinHash = password_hash($withdrawalPin, PASSWORD_BCRYPT);
 $role = 'USER';
 $kycStatus = 'NOT_SUBMITTED';
@@ -134,13 +137,14 @@ $profilePayload = [
     'withdrawal_pin_hash' => $pinHash,
     'country' => $country,
     'timezone' => $timezone,
+    'email_verified' => 0,
     'created_at' => gmdate('Y-m-d H:i:s'),
     'updated_at' => gmdate('Y-m-d H:i:s')
 ];
 
 $profileRes = $supabase->upsert('profiles', [$profilePayload], 'id');
 
-// Legacy Supabase schemas may not expose optional PIN/timezone/phone/whatsapp columns in PostgREST.
+// Legacy Supabase schemas may not expose optional PIN/timezone/phone/whatsapp/email_verified columns in PostgREST.
 // Never allow an optional security/profile column to prevent the required country
 // and account profile from being created. Retry progressively with only columns
 // that are required by the application.
@@ -148,7 +152,7 @@ if (!$profileRes['success']) {
     $msg = strtolower((string)($profileRes['message'] ?? ''));
     $retry = $profilePayload;
     $changed = false;
-    foreach (['withdrawal_pin_hash', 'withdrawal_pin', 'timezone', 'whatsapp_number', 'phone'] as $optionalColumn) {
+    foreach (['withdrawal_pin_hash', 'withdrawal_pin', 'timezone', 'whatsapp_number', 'phone', 'email_verified'] as $optionalColumn) {
         if (strpos($msg, strtolower($optionalColumn)) !== false) {
             unset($retry[$optionalColumn]);
             $changed = true;
@@ -162,9 +166,9 @@ if (!$profileRes['success']) {
     // Final compatibility path: preserve the account and selected country using
     // only columns required by all PRIME X CAPITAL profile schemas.
     $msg = strtolower((string)($profileRes['message'] ?? ''));
-    if (preg_match('/(withdrawal_pin_hash|withdrawal_pin|timezone|whatsapp_number|phone)/', $msg)) {
+    if (preg_match('/(withdrawal_pin_hash|withdrawal_pin|timezone|whatsapp_number|phone|email_verified)/', $msg)) {
         $minimal = $profilePayload;
-        unset($minimal['withdrawal_pin_hash'], $minimal['withdrawal_pin'], $minimal['timezone'], $minimal['whatsapp_number'], $minimal['phone']);
+        unset($minimal['withdrawal_pin_hash'], $minimal['withdrawal_pin'], $minimal['timezone'], $minimal['whatsapp_number'], $minimal['phone'], $minimal['email_verified']);
         $profileRes = $supabase->upsert('profiles', [$minimal], 'id');
     }
 }
@@ -208,10 +212,30 @@ if (!headers_sent()) {
     ]);
 }
 
+// 6. Issue single-use email verification token and dispatch confirmation email
+$emailVerificationSent = false;
+$tokenRes = primex_issue_auth_token($supabase, 'email_verification', $userId, $email, 86400);
+if (!empty($tokenRes['success']) && !empty($tokenRes['token'])) {
+    $verifyUrl = primex_app_url() . '/?verify_token=' . rawurlencode($tokenRes['token']);
+    $tpl = primex_email_template_verify_email($firstName, $verifyUrl, 24);
+    $mailRes = primex_send_templated_email($email, $tpl);
+    $emailVerificationSent = !empty($mailRes['success']);
+    primex_record_log(
+        'EMAIL',
+        $emailVerificationSent ? 'VERIFICATION_EMAIL_SENT' : 'VERIFICATION_EMAIL_FAILED',
+        $emailVerificationSent ? 'Registration verification email sent' : 'Registration verification email could not be delivered',
+        ['email_verified' => false],
+        $emailVerificationSent ? 'INFO' : 'WARNING',
+        $userId,
+        $email
+    );
+}
+
 primex_record_log('AUTH', 'REGISTER_SUCCESS', 'New account registered', [
     'country' => $country,
     'referred_by' => $validReferredBy,
-    'whatsapp_number' => $whatsappNumber
+    'whatsapp_number' => $whatsappNumber,
+    'verification_email_sent' => $emailVerificationSent
 ], 'INFO', $userId, $email);
 
 sendSuccess([
@@ -231,6 +255,8 @@ sendSuccess([
         'timezone' => $timezone,
         'two_factor_enabled' => false,
         'has_withdrawal_pin' => true,
+        'email_verified' => false,
         'is_admin' => in_array($role, ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'])
-    ]
-], 'Account created successfully');
+    ],
+    'email_verification_sent' => $emailVerificationSent
+], $emailVerificationSent ? 'Account created! Please check your email to confirm your address.' : 'Account created successfully');

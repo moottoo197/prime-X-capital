@@ -151,6 +151,7 @@ sendSuccess([
         'country' => $userProfile['country'] ?? '',
         'two_factor_enabled' => !empty($userProfile['two_factor_enabled']),
         'has_withdrawal_pin' => !empty($userProfile['has_withdrawal_pin']) || !empty($userProfile['withdrawal_pin']) || !empty($userProfile['withdrawal_pin_hash']),
+        'email_verified' => !empty($userProfile['email_verified']),
         'is_admin' => $isAdmin
     ]
 ], 'Login successful');
