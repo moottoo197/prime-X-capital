@@ -261,3 +261,375 @@ if (!function_exists('primex_email_template_password_changed')) {
         return ['subject' => $subject, 'html' => $html, 'text' => $text];
     }
 }
+
+if (!function_exists('primex_email_template_deposit_requested')) {
+    function primex_email_template_deposit_requested(
+        string $recipientName,
+        float $amount,
+        string $asset,
+        string $network,
+        string $depositId,
+        string $submittedAtUtc,
+        string $historyUrl
+    ): array {
+        $greeting = $recipientName !== '' ? ('Hello ' . $recipientName . ',') : 'Hello,';
+        $safeGreeting = primex_email_escape($greeting);
+        $formattedAmount = number_format($amount, 2) . ' ' . strtoupper(trim($asset ?: 'USDT'));
+        $safeAmount = primex_email_escape($formattedAmount);
+        $safeNetwork = primex_email_escape(strtoupper(trim($network ?: 'TRC20')));
+        $safeId = primex_email_escape($depositId);
+        $safeTime = primex_email_escape($submittedAtUtc);
+        $safeUrl = primex_email_escape($historyUrl);
+        $subject = "Deposit request received ({$formattedAmount}) — Prime X Capital";
+
+        $bodyHtml = ''
+            . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+            . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">We have received your deposit confirmation request on <strong>Prime X Capital</strong>. Our compliance and settlement team is reviewing your transaction.</p>'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#F7F8FA;border:1px solid #EEF1F6;border-radius:12px;">'
+            . '<tr><td style="padding:16px;font-size:13px;line-height:1.75;color:#374151;">'
+            . '<strong>Amount:</strong> <span style="color:#0052FF;font-weight:800;">' . $safeAmount . '</span><br>'
+            . '<strong>Network:</strong> ' . $safeNetwork . '<br>'
+            . '<strong>Reference ID:</strong> <span style="font-family:monospace;">' . $safeId . '</span><br>'
+            . '<strong>Status:</strong> Pending Verification<br>'
+            . '<strong>Submitted At:</strong> ' . $safeTime
+            . '</td></tr></table>'
+            . '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;"><tr><td>'
+            . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 26px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">View Wallet Activity</a>'
+            . '</td></tr></table>'
+            . '<p style="margin:0;font-size:12.5px;line-height:1.55;color:#6B7280;">You will receive another email confirmation as soon as your deposit is credited to your account.</p>';
+
+        $html = primex_email_layout(
+            'Deposit Request Received',
+            'Your deposit confirmation is queued for verification.',
+            $bodyHtml,
+            'If you did not submit this deposit request, please contact Prime X Capital support immediately.',
+            'DEPOSIT PENDING',
+            '#0052FF',
+            '#EFF4FF'
+        );
+
+        $text = "{$greeting}\n\n"
+            . "We have received your Prime X Capital deposit request.\n"
+            . "Amount: {$formattedAmount}\n"
+            . "Network: " . strtoupper(trim($network ?: 'TRC20')) . "\n"
+            . "Reference ID: {$depositId}\n"
+            . "Status: Pending Verification\n"
+            . "Submitted At: {$submittedAtUtc}\n\n"
+            . "View activity: {$historyUrl}\n\n"
+            . "Prime X Capital\nhttps://prime-x-capital.com";
+
+        return ['subject' => $subject, 'html' => $html, 'text' => $text];
+    }
+}
+
+if (!function_exists('primex_email_template_deposit_status')) {
+    function primex_email_template_deposit_status(
+        string $recipientName,
+        string $decision,
+        float $amount,
+        string $asset,
+        string $network,
+        string $depositId,
+        string $reason,
+        string $processedAtUtc,
+        string $walletUrl
+    ): array {
+        $isApproved = in_array(strtoupper(trim($decision)), ['APPROVE', 'APPROVED', 'COMPLETED', 'CONFIRMED'], true);
+        $greeting = $recipientName !== '' ? ('Hello ' . $recipientName . ',') : 'Hello,';
+        $safeGreeting = primex_email_escape($greeting);
+        $formattedAmount = number_format($amount, 2) . ' ' . strtoupper(trim($asset ?: 'USDT'));
+        $safeAmount = primex_email_escape($formattedAmount);
+        $safeNetwork = primex_email_escape(strtoupper(trim($network ?: 'TRC20')));
+        $safeId = primex_email_escape($depositId);
+        $safeTime = primex_email_escape($processedAtUtc);
+        $safeReason = primex_email_escape($reason !== '' ? $reason : 'Please contact support for details.');
+        $safeUrl = primex_email_escape($walletUrl);
+
+        if ($isApproved) {
+            $subject = "Deposit confirmed & credited ({$formattedAmount}) — Prime X Capital";
+            $bodyHtml = ''
+                . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+                . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">Great news — your deposit has been <strong>confirmed and credited</strong> to your Prime X Capital Funding Wallet.</p>'
+                . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#F7F8FA;border:1px solid #EEF1F6;border-radius:12px;">'
+                . '<tr><td style="padding:16px;font-size:13px;line-height:1.75;color:#374151;">'
+                . '<strong>Credited Amount:</strong> <span style="color:#00B87C;font-weight:800;">' . $safeAmount . '</span><br>'
+                . '<strong>Network:</strong> ' . $safeNetwork . '<br>'
+                . '<strong>Reference ID:</strong> <span style="font-family:monospace;">' . $safeId . '</span><br>'
+                . '<strong>Status:</strong> Confirmed &amp; Credited<br>'
+                . '<strong>Processed At:</strong> ' . $safeTime
+                . '</td></tr></table>'
+                . '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px;"><tr><td>'
+                . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 26px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Open Wallet</a>'
+                . '</td></tr></table>';
+            $html = primex_email_layout(
+                'Deposit Confirmed',
+                'Your funds have been credited to your Prime X Capital account.',
+                $bodyHtml,
+                'Thank you for trading with Prime X Capital.',
+                'DEPOSIT CREDITED',
+                '#00B87C',
+                '#ECFDF5'
+            );
+            $text = "{$greeting}\n\nYour deposit of {$formattedAmount} ({$network}) has been confirmed and credited to your Prime X Capital account.\nReference ID: {$depositId}\nProcessed At: {$processedAtUtc}\n\nOpen Wallet: {$walletUrl}\n\nPrime X Capital\nhttps://prime-x-capital.com";
+        } else {
+            $subject = "Deposit request update ({$formattedAmount}) — Prime X Capital";
+            $bodyHtml = ''
+                . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+                . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">Your deposit request could not be confirmed by compliance review.</p>'
+                . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#FEF2F2;border:1px solid #FECACA;border-radius:12px;">'
+                . '<tr><td style="padding:16px;font-size:13px;line-height:1.75;color:#7F1D1D;">'
+                . '<strong>Amount:</strong> ' . $safeAmount . ' (' . $safeNetwork . ')<br>'
+                . '<strong>Reference ID:</strong> <span style="font-family:monospace;">' . $safeId . '</span><br>'
+                . '<strong>Reason:</strong> ' . $safeReason . '<br>'
+                . '<strong>Reviewed At:</strong> ' . $safeTime
+                . '</td></tr></table>'
+                . '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td>'
+                . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 26px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Open Prime X Capital</a>'
+                . '</td></tr></table>';
+            $html = primex_email_layout(
+                'Deposit Request Declined',
+                'Please review the compliance note regarding your deposit submission.',
+                $bodyHtml,
+                'Need assistance? Reach out via Live Support inside your dashboard.',
+                'ACTION REQUIRED',
+                '#DC2626',
+                '#FEF2F2'
+            );
+            $text = "{$greeting}\n\nYour deposit request of {$formattedAmount} ({$network}) was not approved.\nReference ID: {$depositId}\nReason: " . ($reason ?: 'Please contact support for details.') . "\nReviewed At: {$processedAtUtc}\n\nPrime X Capital\nhttps://prime-x-capital.com";
+        }
+
+        return ['subject' => $subject, 'html' => $html, 'text' => $text];
+    }
+}
+
+if (!function_exists('primex_email_template_withdrawal_requested')) {
+    function primex_email_template_withdrawal_requested(
+        string $recipientName,
+        float $amount,
+        float $fee,
+        float $netAmount,
+        string $asset,
+        string $network,
+        string $destination,
+        string $withdrawalId,
+        string $submittedAtUtc,
+        string $historyUrl
+    ): array {
+        $greeting = $recipientName !== '' ? ('Hello ' . $recipientName . ',') : 'Hello,';
+        $safeGreeting = primex_email_escape($greeting);
+        $unit = strtoupper(trim($asset ?: 'USDT'));
+        $formattedAmount = number_format($amount, 2) . ' ' . $unit;
+        $formattedNet = number_format($netAmount, 2) . ' ' . $unit;
+        $formattedFee = number_format($fee, 2) . ' ' . $unit;
+        $safeAmount = primex_email_escape($formattedAmount);
+        $safeNet = primex_email_escape($formattedNet);
+        $safeFee = primex_email_escape($formattedFee);
+        $safeNetwork = primex_email_escape(strtoupper(trim($network ?: 'TRC20')));
+        $safeDest = primex_email_escape($destination);
+        $safeId = primex_email_escape($withdrawalId);
+        $safeTime = primex_email_escape($submittedAtUtc);
+        $safeUrl = primex_email_escape($historyUrl);
+        $subject = "Withdrawal request received ({$formattedAmount}) — Prime X Capital";
+
+        $bodyHtml = ''
+            . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+            . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">Your withdrawal request on <strong>Prime X Capital</strong> has been confirmed and queued for security review.</p>'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#F7F8FA;border:1px solid #EEF1F6;border-radius:12px;">'
+            . '<tr><td style="padding:16px;font-size:13px;line-height:1.75;color:#374151;">'
+            . '<strong>Requested Amount:</strong> <span style="color:#0052FF;font-weight:800;">' . $safeAmount . '</span><br>'
+            . '<strong>Network Fee:</strong> ' . $safeFee . '<br>'
+            . '<strong>Net Payout:</strong> <strong>' . $safeNet . '</strong><br>'
+            . '<strong>Network:</strong> ' . $safeNetwork . '<br>'
+            . '<strong>Destination Address:</strong> <span style="font-family:monospace;word-break:break-all;">' . $safeDest . '</span><br>'
+            . '<strong>Reference ID:</strong> <span style="font-family:monospace;">' . $safeId . '</span><br>'
+            . '<strong>Submitted At:</strong> ' . $safeTime
+            . '</td></tr></table>'
+            . '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 18px;"><tr><td>'
+            . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 26px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Track Withdrawal</a>'
+            . '</td></tr></table>'
+            . '<p style="margin:0;font-size:12.5px;line-height:1.55;color:#6B7280;">If you did not authorize this withdrawal request, contact Prime X Capital support immediately to freeze your account.</p>';
+
+        $html = primex_email_layout(
+            'Withdrawal Request Received',
+            'Your withdrawal has been submitted for compliance clearance.',
+            $bodyHtml,
+            'Security notice: never share your withdrawal PIN or password with anyone.',
+            'WITHDRAWAL QUEUED',
+            '#0052FF',
+            '#EFF4FF'
+        );
+
+        $text = "{$greeting}\n\n"
+            . "Your Prime X Capital withdrawal request has been received.\n"
+            . "Requested Amount: {$formattedAmount}\n"
+            . "Network Fee: {$formattedFee}\n"
+            . "Net Payout: {$formattedNet}\n"
+            . "Network: " . strtoupper(trim($network ?: 'TRC20')) . "\n"
+            . "Destination: {$destination}\n"
+            . "Reference ID: {$withdrawalId}\n"
+            . "Submitted At: {$submittedAtUtc}\n\n"
+            . "If you did not request this withdrawal, contact Prime X Capital support immediately.\n\n"
+            . "Prime X Capital\nhttps://prime-x-capital.com";
+
+        return ['subject' => $subject, 'html' => $html, 'text' => $text];
+    }
+}
+
+if (!function_exists('primex_email_template_withdrawal_status')) {
+    function primex_email_template_withdrawal_status(
+        string $recipientName,
+        string $decision,
+        float $amount,
+        float $netAmount,
+        string $asset,
+        string $network,
+        string $destination,
+        string $withdrawalId,
+        string $txHash,
+        string $reason,
+        string $processedAtUtc,
+        string $walletUrl
+    ): array {
+        $isApproved = in_array(strtoupper(trim($decision)), ['APPROVE', 'APPROVED', 'COMPLETED', 'CONFIRMED'], true);
+        $greeting = $recipientName !== '' ? ('Hello ' . $recipientName . ',') : 'Hello,';
+        $safeGreeting = primex_email_escape($greeting);
+        $unit = strtoupper(trim($asset ?: 'USDT'));
+        $formattedAmount = number_format($amount, 2) . ' ' . $unit;
+        $formattedNet = number_format($netAmount > 0 ? $netAmount : $amount, 2) . ' ' . $unit;
+        $safeNet = primex_email_escape($formattedNet);
+        $safeAmount = primex_email_escape($formattedAmount);
+        $safeNetwork = primex_email_escape(strtoupper(trim($network ?: 'TRC20')));
+        $safeDest = primex_email_escape($destination);
+        $safeId = primex_email_escape($withdrawalId);
+        $safeTx = primex_email_escape($txHash);
+        $safeTime = primex_email_escape($processedAtUtc);
+        $safeReason = primex_email_escape($reason !== '' ? $reason : 'Please contact support for details.');
+        $safeUrl = primex_email_escape($walletUrl);
+
+        if ($isApproved) {
+            $subject = "Withdrawal approved & processed ({$formattedNet}) — Prime X Capital";
+            $bodyHtml = ''
+                . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+                . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">Your withdrawal request has been <strong>approved and dispatched</strong> to your designated wallet address.</p>'
+                . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#F7F8FA;border:1px solid #EEF1F6;border-radius:12px;">'
+                . '<tr><td style="padding:16px;font-size:13px;line-height:1.75;color:#374151;">'
+                . '<strong>Net Sent:</strong> <span style="color:#00B87C;font-weight:800;">' . $safeNet . '</span><br>'
+                . '<strong>Network:</strong> ' . $safeNetwork . '<br>'
+                . ($safeDest !== '' ? '<strong>Destination:</strong> <span style="font-family:monospace;word-break:break-all;">' . $safeDest . '</span><br>' : '')
+                . ($safeTx !== '' ? '<strong>TX Hash:</strong> <span style="font-family:monospace;word-break:break-all;">' . $safeTx . '</span><br>' : '')
+                . '<strong>Reference ID:</strong> <span style="font-family:monospace;">' . $safeId . '</span><br>'
+                . '<strong>Processed At:</strong> ' . $safeTime
+                . '</td></tr></table>'
+                . '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td>'
+                . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 26px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">View Wallet</a>'
+                . '</td></tr></table>';
+            $html = primex_email_layout(
+                'Withdrawal Approved',
+                'Your funds have been released on the blockchain.',
+                $bodyHtml,
+                'Thank you for choosing Prime X Capital.',
+                'WITHDRAWAL SENT',
+                '#00B87C',
+                '#ECFDF5'
+            );
+            $text = "{$greeting}\n\nYour withdrawal of {$formattedNet} ({$network}) has been approved and processed.\nReference ID: {$withdrawalId}\nTX Hash: {$txHash}\nProcessed At: {$processedAtUtc}\n\nPrime X Capital\nhttps://prime-x-capital.com";
+        } else {
+            $subject = "Withdrawal request update ({$formattedAmount}) — Prime X Capital";
+            $bodyHtml = ''
+                . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+                . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">Your withdrawal request could not be completed and the funds have been <strong>returned to your wallet balance</strong>.</p>'
+                . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#FEF2F2;border:1px solid #FECACA;border-radius:12px;">'
+                . '<tr><td style="padding:16px;font-size:13px;line-height:1.75;color:#7F1D1D;">'
+                . '<strong>Amount Refunded:</strong> ' . $safeAmount . ' (' . $safeNetwork . ')<br>'
+                . '<strong>Reference ID:</strong> <span style="font-family:monospace;">' . $safeId . '</span><br>'
+                . '<strong>Reason:</strong> ' . $safeReason . '<br>'
+                . '<strong>Reviewed At:</strong> ' . $safeTime
+                . '</td></tr></table>'
+                . '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td>'
+                . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 26px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Check Wallet Balance</a>'
+                . '</td></tr></table>';
+            $html = primex_email_layout(
+                'Withdrawal Returned to Wallet',
+                'Your requested withdrawal was declined and your balance was restored.',
+                $bodyHtml,
+                'Contact Live Support inside Prime X Capital for compliance assistance.',
+                'REFUNDED TO WALLET',
+                '#DC2626',
+                '#FEF2F2'
+            );
+            $text = "{$greeting}\n\nYour withdrawal request of {$formattedAmount} ({$network}) was not approved and has been refunded to your wallet.\nReference ID: {$withdrawalId}\nReason: " . ($reason ?: 'Please contact support.') . "\nReviewed At: {$processedAtUtc}\n\nPrime X Capital\nhttps://prime-x-capital.com";
+        }
+
+        return ['subject' => $subject, 'html' => $html, 'text' => $text];
+    }
+}
+
+if (!function_exists('primex_email_template_kyc_status')) {
+    function primex_email_template_kyc_status(
+        string $recipientName,
+        string $decision,
+        string $reason,
+        string $reviewedAtUtc,
+        string $platformUrl
+    ): array {
+        $isApproved = in_array(strtoupper(trim($decision)), ['APPROVE', 'APPROVED', 'VERIFIED'], true);
+        $greeting = $recipientName !== '' ? ('Hello ' . $recipientName . ',') : 'Hello,';
+        $safeGreeting = primex_email_escape($greeting);
+        $safeTime = primex_email_escape($reviewedAtUtc);
+        $safeReason = primex_email_escape($reason !== '' ? $reason : 'Please submit clearer identity documents.');
+        $safeUrl = primex_email_escape($platformUrl);
+
+        if ($isApproved) {
+            $subject = 'Identity verification (KYC) approved — Prime X Capital';
+            $bodyHtml = ''
+                . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+                . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">Congratulations — your <strong>Real-Name Identity Verification (KYC)</strong> has been approved by our compliance team.</p>'
+                . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#F7F8FA;border:1px solid #EEF1F6;border-radius:12px;">'
+                . '<tr><td style="padding:16px;font-size:13px;line-height:1.75;color:#374151;">'
+                . '<strong>Verification Status:</strong> <span style="color:#00B87C;font-weight:800;">KYC Approved</span><br>'
+                . '<strong>Account Privileges:</strong> Full trading, signals, and higher withdrawal limits unlocked<br>'
+                . '<strong>Approved At:</strong> ' . $safeTime
+                . '</td></tr></table>'
+                . '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td>'
+                . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 26px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Open Prime X Capital</a>'
+                . '</td></tr></table>';
+            $html = primex_email_layout(
+                'KYC Verification Approved',
+                'Your Prime X Capital account is now fully verified.',
+                $bodyHtml,
+                'Thank you for completing verification with Prime X Capital.',
+                'KYC APPROVED',
+                '#00B87C',
+                '#ECFDF5'
+            );
+            $text = "{$greeting}\n\nYour Prime X Capital identity verification (KYC) has been approved.\nAll trading and withdrawal features are now active.\nApproved At: {$reviewedAtUtc}\n\nOpen platform: {$platformUrl}\n\nPrime X Capital\nhttps://prime-x-capital.com";
+        } else {
+            $subject = 'Identity verification (KYC) update — Prime X Capital';
+            $bodyHtml = ''
+                . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+                . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">We were unable to approve your recent KYC identity submission. Please review the reason below and resubmit your documents.</p>'
+                . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#FEF2F2;border:1px solid #FECACA;border-radius:12px;">'
+                . '<tr><td style="padding:16px;font-size:13px;line-height:1.75;color:#7F1D1D;">'
+                . '<strong>Status:</strong> Declined<br>'
+                . '<strong>Reason:</strong> ' . $safeReason . '<br>'
+                . '<strong>Reviewed At:</strong> ' . $safeTime
+                . '</td></tr></table>'
+                . '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td>'
+                . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 26px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Resubmit KYC</a>'
+                . '</td></tr></table>';
+            $html = primex_email_layout(
+                'KYC Verification Update',
+                'Additional action is needed to complete your identity verification.',
+                $bodyHtml,
+                'Need help? Contact Prime X Capital support inside the app.',
+                'RESUBMISSION NEEDED',
+                '#DC2626',
+                '#FEF2F2'
+            );
+            $text = "{$greeting}\n\nYour Prime X Capital KYC submission requires resubmission.\nReason: " . ($reason ?: 'Please submit clearer identity documents.') . "\nReviewed At: {$reviewedAtUtc}\n\nResubmit at: {$platformUrl}\n\nPrime X Capital\nhttps://prime-x-capital.com";
+        }
+
+        return ['subject' => $subject, 'html' => $html, 'text' => $text];
+    }
+}
+

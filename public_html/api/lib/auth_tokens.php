@@ -560,3 +560,130 @@ if (!function_exists('primex_consume_signup_otp')) {
     }
 }
 
+if (!function_exists('primex_verified_marker_path')) {
+    function primex_verified_marker_path(string $scope, string $value): ?string {
+        $clean = strtolower(trim($value));
+        if ($clean === '') {
+            return null;
+        }
+        $dir = primex_email_tokens_dir();
+        if ($dir === null) {
+            return null;
+        }
+        $safeScope = preg_replace('/[^a-z]/', '', $scope);
+        return $dir . '/verified_' . $safeScope . '_' . hash('sha256', $clean) . '.json';
+    }
+}
+
+if (!function_exists('primex_mark_email_verified_local')) {
+    function primex_mark_email_verified_local(string $userId, string $email): void {
+        $nowIso = gmdate('Y-m-d\TH:i:s\Z');
+        $cleanId = trim($userId);
+        $cleanEmail = strtolower(trim($email));
+        $payload = json_encode([
+            'user_id'     => $cleanId,
+            'email'       => $cleanEmail,
+            'verified_at' => $nowIso,
+        ], JSON_UNESCAPED_SLASHES);
+        if ($payload === false) {
+            return;
+        }
+        if ($cleanId !== '') {
+            $idPath = primex_verified_marker_path('uid', $cleanId);
+            if ($idPath !== null) {
+                @file_put_contents($idPath, $payload, LOCK_EX);
+                @chmod($idPath, 0600);
+            }
+        }
+        if ($cleanEmail !== '' && filter_var($cleanEmail, FILTER_VALIDATE_EMAIL)) {
+            $emPath = primex_verified_marker_path('email', $cleanEmail);
+            if ($emPath !== null) {
+                @file_put_contents($emPath, $payload, LOCK_EX);
+                @chmod($emPath, 0600);
+            }
+        }
+    }
+}
+
+if (!function_exists('primex_clear_email_verified_local')) {
+    function primex_clear_email_verified_local(string $userId, string $email = ''): void {
+        $cleanId = trim($userId);
+        $cleanEmail = strtolower(trim($email));
+        if ($cleanId !== '') {
+            $idPath = primex_verified_marker_path('uid', $cleanId);
+            if ($idPath !== null && is_file($idPath)) {
+                @unlink($idPath);
+            }
+        }
+        if ($cleanEmail !== '') {
+            $emPath = primex_verified_marker_path('email', $cleanEmail);
+            if ($emPath !== null && is_file($emPath)) {
+                @unlink($emPath);
+            }
+        }
+    }
+}
+
+if (!function_exists('primex_is_email_verified_resolved')) {
+    function primex_is_email_verified_resolved(array $user, ?SupabaseClient $supabase = null): bool {
+        if (!empty($user['email_verified']) || !empty($user['email_verified_at'])) {
+            return true;
+        }
+        $userId = trim((string)($user['id'] ?? ''));
+        $email = strtolower(trim((string)($user['email'] ?? '')));
+
+        if ($userId !== '') {
+            $idPath = primex_verified_marker_path('uid', $userId);
+            if ($idPath !== null && is_file($idPath)) {
+                $marker = json_decode((string)@file_get_contents($idPath), true);
+                if (is_array($marker)) {
+                    $markerEmail = strtolower(trim((string)($marker['email'] ?? '')));
+                    if ($markerEmail === '' || $email === '' || $markerEmail === $email) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $emPath = primex_verified_marker_path('email', $email);
+            if ($emPath !== null && is_file($emPath)) {
+                return true;
+            }
+
+            // Check DB tokens (covers accounts verified via OTP or verify link even if profiles.email_verified column was missing)
+            if ($supabase !== null && $supabase->isConfigured()) {
+                $tokRes = $supabase->select('email_verification_tokens', [
+                    'email'   => 'eq.' . $email,
+                    'used_at' => 'not.is.null',
+                    'select'  => 'id,user_id,used_at',
+                    'limit'   => '1',
+                ]);
+                if (!empty($tokRes['success']) && !empty($tokRes['data'][0])) {
+                    primex_mark_email_verified_local($userId, $email);
+                    return true;
+                }
+            }
+
+            // Check file-backed consumed OTP records
+            $dir = primex_email_tokens_dir();
+            if ($dir !== null) {
+                $scopeId = primex_signup_otp_scope_id($email);
+                $files = @glob($dir . '/signup_otp_*.json');
+                if (is_array($files)) {
+                    foreach ($files as $file) {
+                        $row = json_decode((string)@file_get_contents($file), true);
+                        if (is_array($row) && (string)($row['user_id'] ?? '') === $scopeId && !empty($row['used_at'])) {
+                            primex_mark_email_verified_local($userId, $email);
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+}
+
+

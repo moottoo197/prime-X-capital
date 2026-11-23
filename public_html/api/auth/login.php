@@ -3,6 +3,7 @@
  * User Authentication - Direct Supabase Auth & Profiles
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/auth_tokens.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);
@@ -125,6 +126,9 @@ if (isset($userProfile['is_active']) && !$userProfile['is_active']) {
 
 clearLoginFailures($email);
 
+$resolvedEmailVerified = primex_is_email_verified_resolved($userProfile, $supabase);
+$userProfile['email_verified'] = $resolvedEmailVerified;
+
 // Create an opaque server session with DB + server-side fallback persistence.
 $sessionMeta = primex_create_session($userProfile);
 
@@ -151,7 +155,7 @@ sendSuccess([
         'country' => $userProfile['country'] ?? '',
         'two_factor_enabled' => !empty($userProfile['two_factor_enabled']),
         'has_withdrawal_pin' => !empty($userProfile['has_withdrawal_pin']) || !empty($userProfile['withdrawal_pin']) || !empty($userProfile['withdrawal_pin_hash']),
-        'email_verified' => !empty($userProfile['email_verified']),
+        'email_verified' => $resolvedEmailVerified,
         'is_admin' => $isAdmin
     ]
 ], 'Login successful');

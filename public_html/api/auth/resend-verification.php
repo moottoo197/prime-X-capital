@@ -23,8 +23,8 @@ $requestedEmail = strtolower(trim((string)($body['email'] ?? '')));
 
 if ($currentUser && empty($currentUser['_admin_preview'])) {
     $targetEmail = strtolower(trim((string)($currentUser['email'] ?? '')));
-    if (!empty($currentUser['email_verified'])) {
-        sendSuccess(['already_verified' => true, 'sent' => false], 'Your email address is already verified.');
+    if (primex_is_email_verified_resolved($currentUser, $supabase)) {
+        sendSuccess(['already_verified' => true, 'email_verified' => true, 'sent' => false], 'Your email address is already verified.');
     }
     $rateKey = 'user:' . (string)$currentUser['id'];
     if (!primex_check_email_rate_limit('resend_verification', $rateKey, 3, 900, 60)) {
@@ -60,7 +60,7 @@ if (!primex_check_email_rate_limit('resend_verification', $requestedEmail, 3, 90
 primex_record_email_rate_attempt('resend_verification', $requestedEmail, 3, 900);
 
 $profile = primex_find_profile_by_email($supabase, $requestedEmail);
-if ($profile && (!isset($profile['is_active']) || (bool)$profile['is_active']) && empty($profile['email_verified'])) {
+if ($profile && (!isset($profile['is_active']) || (bool)$profile['is_active']) && !primex_is_email_verified_resolved($profile, $supabase)) {
     $userId = (string)$profile['id'];
     $firstName = trim((string)($profile['first_name'] ?? ''));
     $tokenRes = primex_issue_auth_token($supabase, 'email_verification', $userId, $requestedEmail, 86400);

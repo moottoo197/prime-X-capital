@@ -62,6 +62,7 @@ if (empty($res['success'])) {
 
 $verificationSent = false;
 if ($emailChanged) {
+    primex_clear_email_verified_local((string)$userId, $oldEmail);
     $tokenRes = primex_issue_auth_token($supabase, 'email_verification', (string)$userId, $email, 86400);
     if (!empty($tokenRes['success']) && !empty($tokenRes['token'])) {
         $verifyUrl = primex_app_url() . '/?verify_token=' . rawurlencode($tokenRes['token']);
@@ -74,7 +75,7 @@ if ($emailChanged) {
 $profRes = $supabase->select('profiles', ['id' => "eq.{$userId}", 'limit' => '1']);
 $updatedUser = ($profRes['success'] && !empty($profRes['data'][0])) ? $profRes['data'][0] : array_merge($user, ['email' => $email, 'email_verified' => $emailChanged ? 0 : ($user['email_verified'] ?? 0)]);
 $updatedUser['has_withdrawal_pin'] = !empty($updatedUser['withdrawal_pin']) || !empty($updatedUser['withdrawal_pin_hash']);
-$updatedUser['email_verified'] = !empty($updatedUser['email_verified']);
+$updatedUser['email_verified'] = $emailChanged ? false : primex_is_email_verified_resolved($updatedUser, $supabase);
 unset($updatedUser['withdrawal_pin'], $updatedUser['withdrawal_pin_hash'], $updatedUser['password_hash']);
 
 sendSuccess([

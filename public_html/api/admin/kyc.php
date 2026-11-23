@@ -4,6 +4,8 @@
  * Handles Complete Document Inspection & User Synchronization
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/mailer.php';
+require_once dirname(__DIR__) . '/lib/email_templates.php';
 
 $admin = requireAdmin();
 
@@ -219,6 +221,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'is_read' => 0,
             'created_at' => gmdate('Y-m-d H:i:s')
         ]]);
+
+        if (in_array($decision, ['APPROVED', 'REJECTED'], true)) {
+            try {
+                $profLookup = $supabase->select('profiles', [
+                    'id' => 'eq.' . (string)$userId,
+                    'select' => 'id,email,first_name',
+                    'limit' => '1'
+                ]);
+                $profRow = (!empty($profLookup['success']) && !empty($profLookup['data'][0])) ? $profLookup['data'][0] : [];
+                $recipientEmail = trim((string)($profRow['email'] ?? ''));
+                if ($recipientEmail !== '' && filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+                    $recipientName = trim((string)($profRow['first_name'] ?? ''));
+                    $tpl = primex_email_template_kyc_status(
+                        $recipientName,
+                        $decision,
+                        $reason,
+                        gmdate('Y-m-d H:i:s') . ' UTC',
+                        primex_app_url()
+                    );
+                    $mailRes = primex_send_templated_email($recipientEmail, $tpl);
+                    if (empty($mailRes['success'])) {
+                        primex_record_log('EMAIL', 'ADMIN_KYC_MAIL_FAILED', (string)($mailRes['message'] ?? 'Mail delivery failed'), [
+                            'submission_id' => $submissionId,
+                            'decision' => $decision
+                        ], 'WARN', (string)$userId, $recipientEmail);
+                    }
+                }
+            } catch (Throwable $mailErr) {
+                primex_record_log('EMAIL', 'ADMIN_KYC_MAIL_EXCEPTION', $mailErr->getMessage(), [
+                    'submission_id' => $submissionId
+                ], 'WARN', (string)$userId, (string)($admin['email'] ?? ''));
+            }
+        }
     }
 
     sendSuccess([

@@ -3,6 +3,7 @@
  * Auth Me Profile Check - Direct Supabase
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/auth_tokens.php';
 
 $user = getCurrentUser();
 if (!$user) {
@@ -15,10 +16,12 @@ if (!$user) {
     sendError('UNAUTHORIZED', 'Not authenticated', 401);
 }
 
+$supabase = getSupabaseClient();
 $user = primex_normalize_effective_user($user);
 $isAdmin = in_array(strtoupper((string)($user['role'] ?? '')), ['SUPER_ADMIN', 'ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'], true);
 $country = !empty($user['country']) ? trim((string)$user['country']) : (!empty($_COOKIE['alphavest_country']) ? trim((string)$_COOKIE['alphavest_country']) : '');
 $timezone = !empty($user['timezone']) ? trim((string)$user['timezone']) : (!empty($_COOKIE['alphavest_timezone']) ? trim((string)$_COOKIE['alphavest_timezone']) : 'Asia/Karachi');
+$emailVerified = primex_is_email_verified_resolved($user, $supabase);
 
 sendSuccess([
     'user' => [
@@ -35,7 +38,7 @@ sendSuccess([
         'referred_by' => $user['referred_by'] ?? null,
         'two_factor_enabled' => !empty($user['two_factor_enabled']),
         'has_withdrawal_pin' => !empty($user['has_withdrawal_pin']) || !empty($user['withdrawal_pin']) || !empty($user['withdrawal_pin_hash']),
-        'email_verified' => !empty($user['email_verified']),
+        'email_verified' => $emailVerified,
         'country' => $country,
         'timezone' => $timezone,
         'is_admin' => $isAdmin

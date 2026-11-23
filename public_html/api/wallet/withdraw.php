@@ -3,6 +3,8 @@
  * User Withdrawal Request - Direct Supabase REST
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/mailer.php';
+require_once dirname(__DIR__) . '/lib/email_templates.php';
 
 $user = requireAuth();
 
@@ -113,12 +115,49 @@ if (($result['success'] ?? false) === false) {
     sendError((string)($result['error_code'] ?? 'WITHDRAWAL_SUBMIT_FAILED'), (string)($result['message'] ?? 'Withdrawal request failed.'), 400);
 }
 
+$alreadyProcessed = !empty($result['already_processed']);
+$finalWithdrawalId = (string)($result['withdrawal_id'] ?? $withId);
+$finalAmount = (float)($result['amount'] ?? $amount);
+$finalFee = (float)($result['fee'] ?? $fee);
+$finalNet = (float)($result['net_amount'] ?? max(0, $amount - $fee));
+
+if (!$alreadyProcessed) {
+    $recipientEmail = trim((string)($prof['email'] ?? $user['email'] ?? ''));
+    if ($recipientEmail !== '' && filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+        try {
+            $recipientName = trim((string)($prof['first_name'] ?? $user['first_name'] ?? ''));
+            $tpl = primex_email_template_withdrawal_requested(
+                $recipientName,
+                $finalAmount,
+                $finalFee,
+                $finalNet,
+                $asset,
+                $network,
+                $destination,
+                $finalWithdrawalId,
+                gmdate('Y-m-d H:i:s') . ' UTC',
+                primex_app_url() . '/?view=wallet'
+            );
+            $mailRes = primex_send_templated_email($recipientEmail, $tpl);
+            if (empty($mailRes['success'])) {
+                primex_record_log('EMAIL', 'WITHDRAWAL_REQUEST_MAIL_FAILED', (string)($mailRes['message'] ?? 'Mail delivery failed'), [
+                    'withdrawal_id' => $finalWithdrawalId
+                ], 'WARN', (string)$user['id'], $recipientEmail);
+            }
+        } catch (Throwable $mailErr) {
+            primex_record_log('EMAIL', 'WITHDRAWAL_REQUEST_MAIL_EXCEPTION', $mailErr->getMessage(), [
+                'withdrawal_id' => $finalWithdrawalId
+            ], 'WARN', (string)$user['id'], $recipientEmail);
+        }
+    }
+}
+
 sendSuccess([
-    'withdrawal_id' => $result['withdrawal_id'] ?? $withId,
-    'amount' => (float)($result['amount'] ?? $amount),
-    'fee' => (float)($result['fee'] ?? $fee),
-    'net_amount' => (float)($result['net_amount'] ?? max(0, $amount - $fee)),
+    'withdrawal_id' => $finalWithdrawalId,
+    'amount' => $finalAmount,
+    'fee' => $finalFee,
+    'net_amount' => $finalNet,
     'status' => $result['status'] ?? 'REQUESTED',
     'new_balance' => (float)($result['new_balance'] ?? 0),
-    'already_processed' => !empty($result['already_processed'])
-], !empty($result['already_processed']) ? 'This withdrawal request was already submitted once.' : 'Withdrawal request submitted for compliance verification');
+    'already_processed' => $alreadyProcessed
+], $alreadyProcessed ? 'This withdrawal request was already submitted once.' : 'Withdrawal request submitted for compliance verification');

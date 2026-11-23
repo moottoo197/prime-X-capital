@@ -3,6 +3,8 @@
  * Admin Deposits Management - Direct Supabase REST
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/mailer.php';
+require_once dirname(__DIR__) . '/lib/email_templates.php';
 
 $admin = requireAdmin();
 $adminId = (string)($admin['id'] ?? '');
@@ -158,6 +160,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $already = !empty($result['already_processed']);
     $status = (string)($result['status'] ?? ($decision === 'APPROVE' ? 'COMPLETED' : 'REJECTED'));
+
+    if (!$already) {
+        try {
+            $depLookup = $supabase->select('deposits', [
+                'id' => 'eq.' . $depId,
+                'select' => 'id,user_id,amount,asset,network',
+                'limit' => '1'
+            ]);
+            $depRow = (!empty($depLookup['success']) && !empty($depLookup['data'][0])) ? $depLookup['data'][0] : null;
+            $depUserId = trim((string)($depRow['user_id'] ?? ''));
+            if ($depUserId !== '') {
+                $profLookup = $supabase->select('profiles', [
+                    'id' => 'eq.' . $depUserId,
+                    'select' => 'id,email,first_name',
+                    'limit' => '1'
+                ]);
+                $profRow = (!empty($profLookup['success']) && !empty($profLookup['data'][0])) ? $profLookup['data'][0] : [];
+                $recipientEmail = trim((string)($profRow['email'] ?? ''));
+                if ($recipientEmail !== '' && filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+                    $recipientName = trim((string)($profRow['first_name'] ?? ''));
+                    $tpl = primex_email_template_deposit_status(
+                        $recipientName,
+                        $decision,
+                        (float)($depRow['amount'] ?? 0),
+                        (string)($depRow['asset'] ?? 'USDT'),
+                        (string)($depRow['network'] ?? 'TRC20'),
+                        $depId,
+                        $reason,
+                        gmdate('Y-m-d H:i:s') . ' UTC',
+                        primex_app_url() . '/?view=wallet'
+                    );
+                    $mailRes = primex_send_templated_email($recipientEmail, $tpl);
+                    if (empty($mailRes['success'])) {
+                        primex_record_log('EMAIL', 'ADMIN_DEPOSIT_MAIL_FAILED', (string)($mailRes['message'] ?? 'Mail delivery failed'), [
+                            'deposit_id' => $depId,
+                            'decision' => $decision
+                        ], 'WARN', $depUserId, $recipientEmail);
+                    }
+                }
+            }
+        } catch (Throwable $mailErr) {
+            primex_record_log('EMAIL', 'ADMIN_DEPOSIT_MAIL_EXCEPTION', $mailErr->getMessage(), [
+                'deposit_id' => $depId
+            ], 'WARN', $adminId, (string)($admin['email'] ?? ''));
+        }
+    }
+
     sendSuccess([
         'deposit_id' => $depId,
         'status' => $status,

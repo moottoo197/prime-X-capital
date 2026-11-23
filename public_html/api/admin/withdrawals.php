@@ -3,6 +3,8 @@
  * Admin Withdrawals Management - Direct Supabase REST
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/mailer.php';
+require_once dirname(__DIR__) . '/lib/email_templates.php';
 
 $admin = requireAdmin();
 $adminId = (string)($admin['id'] ?? '');
@@ -189,10 +191,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $already = !empty($result['already_processed']);
     $status = (string)($result['status'] ?? ($decision === 'APPROVE' ? 'COMPLETED' : 'REJECTED'));
+    $finalTxHash = (string)($result['tx_hash'] ?? $txHash);
+
+    if (!$already) {
+        try {
+            $withLookup = $supabase->select('withdrawals', [
+                'id' => 'eq.' . $withId,
+                'select' => 'id,user_id,amount,net_amount,asset,network,destination_address,tx_hash',
+                'limit' => '1'
+            ]);
+            $withRow = (!empty($withLookup['success']) && !empty($withLookup['data'][0])) ? $withLookup['data'][0] : null;
+            $withUserId = trim((string)($withRow['user_id'] ?? ''));
+            if ($withUserId !== '') {
+                $profLookup = $supabase->select('profiles', [
+                    'id' => 'eq.' . $withUserId,
+                    'select' => 'id,email,first_name',
+                    'limit' => '1'
+                ]);
+                $profRow = (!empty($profLookup['success']) && !empty($profLookup['data'][0])) ? $profLookup['data'][0] : [];
+                $recipientEmail = trim((string)($profRow['email'] ?? ''));
+                if ($recipientEmail !== '' && filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+                    $recipientName = trim((string)($profRow['first_name'] ?? ''));
+                    $tpl = primex_email_template_withdrawal_status(
+                        $recipientName,
+                        $decision,
+                        (float)($withRow['amount'] ?? 0),
+                        (float)($withRow['net_amount'] ?? ($withRow['amount'] ?? 0)),
+                        (string)($withRow['asset'] ?? 'USDT'),
+                        (string)($withRow['network'] ?? 'TRC20'),
+                        (string)($withRow['destination_address'] ?? ''),
+                        $withId,
+                        (string)($withRow['tx_hash'] ?? $finalTxHash),
+                        $reason,
+                        gmdate('Y-m-d H:i:s') . ' UTC',
+                        primex_app_url() . '/?view=wallet'
+                    );
+                    $mailRes = primex_send_templated_email($recipientEmail, $tpl);
+                    if (empty($mailRes['success'])) {
+                        primex_record_log('EMAIL', 'ADMIN_WITHDRAWAL_MAIL_FAILED', (string)($mailRes['message'] ?? 'Mail delivery failed'), [
+                            'withdrawal_id' => $withId,
+                            'decision' => $decision
+                        ], 'WARN', $withUserId, $recipientEmail);
+                    }
+                }
+            }
+        } catch (Throwable $mailErr) {
+            primex_record_log('EMAIL', 'ADMIN_WITHDRAWAL_MAIL_EXCEPTION', $mailErr->getMessage(), [
+                'withdrawal_id' => $withId
+            ], 'WARN', $adminId, (string)($admin['email'] ?? ''));
+        }
+    }
+
     sendSuccess([
         'withdrawal_id' => $withId,
         'status' => $status,
-        'tx_hash' => $result['tx_hash'] ?? $txHash,
+        'tx_hash' => $finalTxHash,
         'already_processed' => $already
     ], $already ? 'This withdrawal was already processed once.' : ($decision === 'APPROVE' ? 'Withdrawal approved and dispatched' : 'Withdrawal rejected and refunded'));
 }

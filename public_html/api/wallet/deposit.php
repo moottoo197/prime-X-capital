@@ -4,6 +4,8 @@
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/deposit_addresses.php';
+require_once dirname(__DIR__) . '/lib/mailer.php';
+require_once dirname(__DIR__) . '/lib/email_templates.php';
 
 $supabase = getSupabaseClient();
 $configFilePath = dirname(__DIR__, 3) . '/server/storage/deposit_config_store.json';
@@ -260,12 +262,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         sendError((string)($result['error_code'] ?? 'DEPOSIT_SUBMIT_FAILED'), (string)($result['message'] ?? 'Deposit submission failed.'), 400);
     }
 
+    $alreadyProcessed = !empty($result['already_processed']);
+    $finalAmount = (float)($result['amount'] ?? $amount);
+    $finalAsset = (string)($result['asset'] ?? $asset);
+    $finalNetwork = (string)($result['network'] ?? $network);
+
+    if (!$alreadyProcessed) {
+        $recipientEmail = trim((string)($user['email'] ?? ''));
+        if ($recipientEmail !== '' && filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
+            try {
+                $recipientName = trim((string)($user['first_name'] ?? ''));
+                $tpl = primex_email_template_deposit_requested(
+                    $recipientName,
+                    $finalAmount,
+                    $finalAsset,
+                    $finalNetwork,
+                    $recordedDepositId,
+                    gmdate('Y-m-d H:i:s') . ' UTC',
+                    primex_app_url() . '/?view=wallet'
+                );
+                $mailRes = primex_send_templated_email($recipientEmail, $tpl);
+                if (empty($mailRes['success'])) {
+                    primex_record_log('EMAIL', 'DEPOSIT_REQUEST_MAIL_FAILED', (string)($mailRes['message'] ?? 'Mail delivery failed'), [
+                        'deposit_id' => $recordedDepositId
+                    ], 'WARN', (string)$user['id'], $recipientEmail);
+                }
+            } catch (Throwable $mailErr) {
+                primex_record_log('EMAIL', 'DEPOSIT_REQUEST_MAIL_EXCEPTION', $mailErr->getMessage(), [
+                    'deposit_id' => $recordedDepositId
+                ], 'WARN', (string)$user['id'], $recipientEmail);
+            }
+        }
+    }
+
     sendSuccess([
         'deposit_id' => $recordedDepositId,
         'status' => $result['status'] ?? 'PENDING',
-        'amount' => (float)($result['amount'] ?? $amount),
-        'asset' => $result['asset'] ?? $asset,
-        'network' => $result['network'] ?? $network,
-        'already_processed' => !empty($result['already_processed'])
+        'amount' => $finalAmount,
+        'asset' => $finalAsset,
+        'network' => $finalNetwork,
+        'already_processed' => $alreadyProcessed
     ], 'Deposit proof submitted successfully. Awaiting compliance review.');
 }

@@ -377,11 +377,56 @@ const App = {
     // Render immediately so mobile displays view in milliseconds without network blocking
     this.render();
 
+    // Parse deep-link parameters synchronously before async auth check so reset/verify
+    // links open their target modal immediately without Sign-Up or landing-page hijack.
+    let initialRouteState = {
+      requestedView: '',
+      verifyToken: '',
+      resetToken: '',
+      authPrompt: '',
+      hashRaw: '',
+      hasDirectTokenOrRoute: false
+    };
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      const requestedView = (params.get('view') || '').trim().toLowerCase();
+      const verifyToken = (params.get('verify_token') || '').trim();
+      const resetToken = (params.get('reset_token') || '').trim();
+      const authPrompt = (params.get('auth') || '').trim().toLowerCase();
+      const hashRaw = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
+
+      initialRouteState = {
+        requestedView,
+        verifyToken,
+        resetToken,
+        authPrompt,
+        hashRaw,
+        hasDirectTokenOrRoute: Boolean(verifyToken || resetToken || authPrompt || requestedView === 'admin' || hashRaw === 'admin')
+      };
+
+      if (verifyToken || resetToken || authPrompt) {
+        params.delete('verify_token');
+        params.delete('reset_token');
+        params.delete('auth');
+        const remaining = params.toString();
+        const cleanUrl = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash || ''}`;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+
+      if (verifyToken) {
+        this.handleVerifyEmailToken(verifyToken);
+      } else if (resetToken) {
+        this.openResetPasswordFromToken(resetToken);
+      }
+    } catch (e) {}
+
     // Check invite / referral link parameter (?ref=... or #register?ref=... or #ref=...)
     try {
-      const refCode = this.getPendingReferralCode();
-      if (refCode) {
-        localStorage.setItem('alphavest_pending_ref', refCode);
+      if (!initialRouteState.verifyToken && !initialRouteState.resetToken) {
+        const refCode = this.getPendingReferralCode();
+        if (refCode) {
+          localStorage.setItem('alphavest_pending_ref', refCode);
+        }
       }
     } catch (e) {}
 
@@ -391,37 +436,19 @@ const App = {
     // Stagger startup API requests so shared-hosting PHP workers are never saturated by 503s.
     this.checkAuth().then(async () => {
       try {
-        const params = new URLSearchParams(window.location.search || '');
-        const requestedView = (params.get('view') || '').trim().toLowerCase();
-        const verifyToken = (params.get('verify_token') || '').trim();
-        const resetToken = (params.get('reset_token') || '').trim();
-        const authPrompt = (params.get('auth') || '').trim().toLowerCase();
-        const hashRaw = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
-
-        if (verifyToken || resetToken || authPrompt) {
-          params.delete('verify_token');
-          params.delete('reset_token');
-          params.delete('auth');
-          const remaining = params.toString();
-          const cleanUrl = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash || ''}`;
-          window.history.replaceState({}, document.title, cleanUrl);
-        }
-
-        if (verifyToken) {
-          this.handleVerifyEmailToken(verifyToken);
-        } else if (resetToken) {
-          this.openResetPasswordFromToken(resetToken);
-        } else if (authPrompt === 'login' && !this.state.user) {
-          this.openModal('modal-auth');
-          this.switchAuthBox('login');
-        } else if (requestedView === 'admin' || hashRaw === 'admin') {
-          this.navigate('admin');
+        if (!initialRouteState.verifyToken && !initialRouteState.resetToken) {
+          if (initialRouteState.authPrompt === 'login' && !this.state.user) {
+            this.openModal('modal-auth');
+            this.switchAuthBox('login');
+          } else if (initialRouteState.requestedView === 'admin' || initialRouteState.hashRaw === 'admin') {
+            this.navigate('admin');
+          }
         }
       } catch (e) {}
 
       try {
         const pendingRef = this.getPendingReferralCode();
-        if (pendingRef && !this.state.user) {
+        if (!initialRouteState.hasDirectTokenOrRoute && pendingRef && !this.state.user) {
           this.openModal('modal-auth');
           this.switchAuthBox('register');
           this.toast(`Referral partner code ${pendingRef} applied to your registration!`, 'success');
@@ -4928,7 +4955,11 @@ const App = {
           this._regOtpCooldownTimer = null;
         }
         if (codeInput) codeInput.value = '';
-        try { localStorage.setItem('alphavest_user_country', country); } catch (e) {}
+        try {
+          localStorage.setItem('alphavest_user_country', country);
+          localStorage.removeItem('alphavest_pending_ref');
+          sessionStorage.removeItem('alphavest_pending_ref');
+        } catch (e) {}
         if (res.data && res.data.user) {
           this.state.user = res.data.user;
           try { localStorage.setItem('alphavest_local_user', JSON.stringify(res.data.user)); } catch (e) {}
@@ -12532,6 +12563,13 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     const titleEl = document.getElementById('email-verify-modal-title');
     const msgEl = document.getElementById('email-verify-modal-message');
 
+    if (window.AlphaLanding && typeof window.AlphaLanding.hide === 'function') {
+      window.AlphaLanding.hide();
+    }
+    const landingEl = document.getElementById('av-public-landing');
+    if (landingEl) landingEl.hidden = true;
+    this.closeModal('modal-auth');
+
     if (titleEl) titleEl.textContent = 'Verifying your email...';
     if (msgEl) msgEl.textContent = 'Please wait while we confirm your Prime X Capital email verification token.';
     this.openModal('modal-email-verify');
@@ -12605,6 +12643,14 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     const confirmInput = document.getElementById('reset-pwd-confirm');
     const noteEl = document.getElementById('reset-pwd-status-note');
     const submitBtn = document.getElementById('btn-submit-reset-pwd');
+
+    if (window.AlphaLanding && typeof window.AlphaLanding.hide === 'function') {
+      window.AlphaLanding.hide();
+    }
+    const landingEl = document.getElementById('av-public-landing');
+    if (landingEl) landingEl.hidden = true;
+    this.closeModal('modal-auth');
+    this.closeModal('modal-forgot-password');
 
     if (tokenInput) tokenInput.value = cleanToken;
     if (newInput) newInput.value = '';

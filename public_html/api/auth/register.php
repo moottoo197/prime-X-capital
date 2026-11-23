@@ -202,6 +202,9 @@ $wallets = [
 ];
 $supabase->upsert('wallet_balances', $wallets, 'user_id,wallet_type,asset');
 
+// 4B. Persist local verified-email marker (guarantees Email: Verified even before optional DB column migration)
+primex_mark_email_verified_local($userId, $email);
+
 // 5. Create Session
 $profilePayload['numeric_uid'] = $numericUid;
 primex_create_session($profilePayload);

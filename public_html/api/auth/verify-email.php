@@ -74,6 +74,7 @@ if (empty($upd['success'])) {
 }
 
 @$supabase->authAdminUpdateUser($userId, ['email_confirm' => true]);
+primex_mark_email_verified_local($userId, $currentEmail !== '' ? $currentEmail : $tokenEmail);
 
 // Update active file session snapshot if caller has an open session cookie
 $sessionToken = extractBearerToken();
