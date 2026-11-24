@@ -8025,6 +8025,10 @@ body.lang-feature-disabled #google_translate_element {
   gap: 12px;
   padding: 13px 16px;
   border-top: 1px solid #F1F5F9;
+  cursor: pointer;
+  touch-action: manipulation;
+  position: relative;
+  z-index: 1;
   transition: background 0.15s ease;
 }
 
@@ -8333,6 +8337,55 @@ body.lang-feature-disabled #google_translate_element {
   .av-avatar-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+  }
+}
+
+/* Admin Adjustment Live Balance Strip */
+.av-adm-balance-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.av-adm-bal-pill {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.av-adm-bal-pill.is-active-debit {
+  background: #FEF2F2;
+  border-color: #FCA5A5;
+}
+
+.av-adm-bal-pill-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748B;
+}
+
+.av-adm-bal-pill.is-active-debit .av-adm-bal-pill-label {
+  color: #B91C1C;
+}
+
+.av-adm-bal-pill-val {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0F172A;
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 520px) {
+  .av-adm-balance-strip {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 }
 

@@ -4000,6 +4000,10 @@ html.color-mode-red-up .market-rate-pill.neg {
   gap: 12px;
   padding: 13px 16px;
   border-top: 1px solid #F1F5F9;
+  cursor: pointer;
+  touch-action: manipulation;
+  position: relative;
+  z-index: 1;
   transition: background 0.15s ease;
 }
 #view-settings .settings-row:not(.settings-name-card):hover { background: #F8FAFF; }
@@ -4152,8 +4156,42 @@ html.color-mode-red-up .market-rate-pill.neg {
   .av-avatar-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 }
 
+.av-adm-balance-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.av-adm-bal-pill {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.av-adm-bal-pill.is-active-debit { background: #FEF2F2; border-color: #FCA5A5; }
+.av-adm-bal-pill-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748B;
+}
+.av-adm-bal-pill.is-active-debit .av-adm-bal-pill-label { color: #B91C1C; }
+.av-adm-bal-pill-val {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0F172A;
+  font-family: var(--font-mono);
+}
+@media (max-width: 520px) {
+  .av-adm-balance-strip { grid-template-columns: 1fr; gap: 6px; }
+}
+
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261124_v130_avatars_css_fix">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261124_v131_avatar_click_debit_wallet">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -6879,10 +6917,20 @@ window.gtranslateSettings = {
               <div style="display:flex; flex-direction:column; gap:12px;">
                 <div class="form-group">
                   <label class="form-label">Target User ID or Registered Email</label>
-                  <input type="text" id="adj-user-id" placeholder="e.g. usr_... or user@gmail.com" style="width:100%;">
+                  <input type="text" id="adj-user-id" placeholder="e.g. usr_... or user@gmail.com" style="width:100%;" onchange="App.loadAdjustmentUserPreview('adj', this.value)" oninput="App.debouncedAdjustmentUserPreview('adj', this.value)">
                 </div>
 
+                <div id="adj-live-balances" class="av-adm-balance-strip" style="display:none;"></div>
+
                 <div class="form-group">
+                  <label class="form-label">Adjustment Type</label>
+                  <div class="av-adm-sign-toggle">
+                    <button type="button" id="adj-sign-credit" class="av-adm-sign-btn active-credit" onclick="App.setAdjustmentSign('CREDIT')">+ Credit</button>
+                    <button type="button" id="adj-sign-debit" class="av-adm-sign-btn" onclick="App.setAdjustmentSign('DEBIT')">− Debit</button>
+                  </div>
+                </div>
+
+                <div class="form-group" id="adj-wallet-group">
                   <label class="form-label" for="adj-wallet">Select Wallet</label>
                   <select id="adj-wallet" style="width:100%;" onchange="App.syncAdjustmentWalletForCategory('adj')">
                     <option value="funding">Spot — Funding Wallet (USDT)</option>
@@ -6891,7 +6939,7 @@ window.gtranslateSettings = {
                   </select>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="adj-type-group">
                   <label class="form-label" for="adj-type">Ledger Category</label>
                   <select id="adj-type" style="width:100%;" onchange="App.syncAdjustmentWalletForCategory('adj')">
                     <option value="DEPOSIT">Deposit — counts toward profit principal &amp; Total Deposits</option>
@@ -6902,12 +6950,14 @@ window.gtranslateSettings = {
                   <div id="adj-category-hint" style="font-size:11px;color:#4B5563;margin-top:4px;line-height:1.4;"></div>
                 </div>
 
-                <div class="form-group">
-                  <label class="form-label">Adjustment Type</label>
-                  <div class="av-adm-sign-toggle">
-                    <button type="button" id="adj-sign-credit" class="av-adm-sign-btn active-credit" onclick="App.setAdjustmentSign('CREDIT')">+ Credit</button>
-                    <button type="button" id="adj-sign-debit" class="av-adm-sign-btn" onclick="App.setAdjustmentSign('DEBIT')">− Debit</button>
-                  </div>
+                <div class="form-group" id="adj-debit-source-group" style="display:none;">
+                  <label class="form-label" for="adj-debit-source">Debit From Balance</label>
+                  <select id="adj-debit-source" style="width:100%;" onchange="App.syncDebitSourceHint('adj')">
+                    <option value="spot">Spot Balance (Deposit / Bonus in Funding &amp; Exchange)</option>
+                    <option value="future">Future Balance (Trading Wallet)</option>
+                    <option value="referral">Referral Balance (Locked Referral Bonus)</option>
+                  </select>
+                  <div id="adj-debit-hint" style="font-size:11px;color:#B91C1C;margin-top:4px;line-height:1.4;"></div>
                 </div>
 
                 <div class="form-group">
@@ -7920,7 +7970,7 @@ window.gtranslateSettings = {
             <button type="button" class="settings-name-edit-btn" onclick="event.stopPropagation(); App.openNameSettingsModal();">Edit</button>
             <svg class="more-item-chevron settings-name-chevron" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </div>
-          <div class="settings-row" role="button" tabindex="0" aria-label="Choose Profile Avatar" onclick="App.openAvatarSelectorModal()" onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); App.openAvatarSelectorModal(); }">
+          <div id="settings-avatar-row" class="settings-row" role="button" tabindex="0" aria-label="Choose Profile Avatar" onclick="window.AlphaAvatarPicker ? window.AlphaAvatarPicker.open() : (window.App && App.openAvatarSelectorModal())" onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); window.AlphaAvatarPicker ? window.AlphaAvatarPicker.open() : (window.App && App.openAvatarSelectorModal()); }">
             <div class="av-set-row-left">
               <div class="av-set-avatar-thumb" id="settings-avatar-preview" aria-hidden="true">PX</div>
               <div class="av-set-row-copy">
@@ -7928,8 +7978,8 @@ window.gtranslateSettings = {
                 <span class="av-set-row-sub">Choose your header &amp; profile avatar</span>
               </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="font-size: 13px; color: var(--primary); font-weight:700;" id="settings-avatar-label">Choose</span>
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+              <button type="button" id="settings-avatar-btn" class="settings-name-edit-btn" onclick="event.stopPropagation(); if(window.AlphaAvatarPicker){window.AlphaAvatarPicker.open();}else if(window.App){window.App.openAvatarSelectorModal();}"><span id="settings-avatar-label">Choose</span></button>
               <svg class="more-item-chevron" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <polyline points="9 18 15 12 9 6"></polyline>
               </svg>
@@ -9256,7 +9306,7 @@ window.gtranslateSettings = {
         </div>
 
         <div class="av-prof-identity">
-          <div class="av-prof-avatar" onclick="App.closeModal('modal-profile'); App.openAvatarSelectorModal();" title="Change Profile Avatar">
+          <div class="av-prof-avatar" onclick="if(window.App){App.closeModal('modal-profile');} if(window.AlphaAvatarPicker){window.AlphaAvatarPicker.open();}else if(window.App){App.openAvatarSelectorModal();}" title="Change Profile Avatar">
             <img id="prof-avatar-img" class="av-prof-avatar-img" alt="Profile avatar" style="display:none;">
             <span id="prof-avatar-initials">PX</span>
             <span class="av-prof-avatar-status"></span>
@@ -10429,11 +10479,20 @@ window.gtranslateSettings = {
         <h3 style="margin:0; font-size:17px; font-weight:800; color:#111827;">Adjust Balances</h3>
         <button class="modal-close" onclick="App.closeModal('modal-admin-adjust-balance')">✕</button>
       </div>
-      <div id="pop-adj-user-label" style="font-size:13px; color:#4B5563; font-weight:600; margin-bottom:14px;">User: —</div>
+      <div id="pop-adj-user-label" style="font-size:13px; color:#4B5563; font-weight:600; margin-bottom:10px;">User: —</div>
+      <div id="pop-adj-live-balances" class="av-adm-balance-strip" style="display:none; margin-bottom:12px;"></div>
       <input type="hidden" id="pop-adj-user-id" value="">
 
       <div style="display:flex; flex-direction:column; gap:12px;">
         <div class="form-group">
+          <label class="form-label">Adjustment Type</label>
+          <div class="av-adm-sign-toggle">
+            <button type="button" id="pop-adj-sign-credit" class="av-adm-sign-btn active-credit" onclick="App.setPopAdjustmentSign('CREDIT')">+ Credit</button>
+            <button type="button" id="pop-adj-sign-debit" class="av-adm-sign-btn" onclick="App.setPopAdjustmentSign('DEBIT')">− Debit</button>
+          </div>
+        </div>
+
+        <div class="form-group" id="pop-adj-wallet-group">
           <label class="form-label" for="pop-adj-wallet">Select Wallet</label>
           <select id="pop-adj-wallet" style="width:100%;" onchange="App.syncAdjustmentWalletForCategory('pop')">
             <option value="funding">Spot — Funding Wallet (USDT)</option>
@@ -10442,7 +10501,7 @@ window.gtranslateSettings = {
           </select>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" id="pop-adj-type-group">
           <label class="form-label" for="pop-adj-type">Ledger Category</label>
           <select id="pop-adj-type" style="width:100%;" onchange="App.syncAdjustmentWalletForCategory('pop')">
             <option value="DEPOSIT">Deposit — counts toward profit principal &amp; Total Deposits</option>
@@ -10453,12 +10512,14 @@ window.gtranslateSettings = {
           <div id="pop-adj-category-hint" style="font-size:11px;color:#4B5563;margin-top:4px;line-height:1.4;"></div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Adjustment Type</label>
-          <div class="av-adm-sign-toggle">
-            <button type="button" id="pop-adj-sign-credit" class="av-adm-sign-btn active-credit" onclick="App.setPopAdjustmentSign('CREDIT')">+ Credit</button>
-            <button type="button" id="pop-adj-sign-debit" class="av-adm-sign-btn" onclick="App.setPopAdjustmentSign('DEBIT')">− Debit</button>
-          </div>
+        <div class="form-group" id="pop-adj-debit-source-group" style="display:none;">
+          <label class="form-label" for="pop-adj-debit-source">Debit From Balance</label>
+          <select id="pop-adj-debit-source" style="width:100%;" onchange="App.syncDebitSourceHint('pop')">
+            <option value="spot">Spot Balance (Deposit / Bonus in Funding &amp; Exchange)</option>
+            <option value="future">Future Balance (Trading Wallet)</option>
+            <option value="referral">Referral Balance (Locked Referral Bonus)</option>
+          </select>
+          <div id="pop-adj-debit-hint" style="font-size:11px;color:#B91C1C;margin-top:4px;line-height:1.4;"></div>
         </div>
 
         <div class="form-group">
@@ -10681,18 +10742,18 @@ window.gtranslateSettings = {
           <h3 class="av-avatar-hero-title">Choose Profile Avatar</h3>
           <div class="av-avatar-hero-sub">Displayed on your header icon, sidebar &amp; profile card</div>
         </div>
-        <button type="button" class="av-prof-close" onclick="App.closeModal('modal-avatar-picker')" aria-label="Close avatar picker">✕</button>
+        <button type="button" class="av-prof-close" onclick="window.AlphaAvatarPicker ? window.AlphaAvatarPicker.close() : (window.App && App.closeModal('modal-avatar-picker'))" aria-label="Close avatar picker">✕</button>
       </div>
       <div class="av-avatar-body">
         <div class="av-avatar-tabs" role="tablist" aria-label="Avatar category">
-          <button type="button" class="av-avatar-tab active" data-avatar-filter="all" onclick="App.filterAvatarGender('all', this)">All (24)</button>
-          <button type="button" class="av-avatar-tab" data-avatar-filter="male" onclick="App.filterAvatarGender('male', this)">Male (11)</button>
-          <button type="button" class="av-avatar-tab" data-avatar-filter="female" onclick="App.filterAvatarGender('female', this)">Female (13)</button>
+          <button type="button" class="av-avatar-tab active" data-avatar-filter="all" onclick="window.AlphaAvatarPicker ? window.AlphaAvatarPicker.filter('all', this) : (window.App && App.filterAvatarGender('all', this))">All (24)</button>
+          <button type="button" class="av-avatar-tab" data-avatar-filter="male" onclick="window.AlphaAvatarPicker ? window.AlphaAvatarPicker.filter('male', this) : (window.App && App.filterAvatarGender('male', this))">Male (11)</button>
+          <button type="button" class="av-avatar-tab" data-avatar-filter="female" onclick="window.AlphaAvatarPicker ? window.AlphaAvatarPicker.filter('female', this) : (window.App && App.filterAvatarGender('female', this))">Female (13)</button>
         </div>
         <div id="avatar-picker-grid" class="av-avatar-grid"></div>
         <div class="av-avatar-footer">
-          <button type="button" class="av-avatar-reset-btn" onclick="App.selectUserAvatar('')">Use Initials</button>
-          <button type="button" class="btn-primary" style="padding:9px 18px; border-radius:11px; font-size:12.5px; font-weight:700;" onclick="App.closeModal('modal-avatar-picker')">Done</button>
+          <button type="button" class="av-avatar-reset-btn" onclick="window.AlphaAvatarPicker ? window.AlphaAvatarPicker.select('') : (window.App && App.selectUserAvatar(''))">Use Initials</button>
+          <button type="button" class="btn-primary" style="padding:9px 18px; border-radius:11px; font-size:12.5px; font-weight:700;" onclick="window.AlphaAvatarPicker ? window.AlphaAvatarPicker.close() : (window.App && App.closeModal('modal-avatar-picker'))">Done</button>
         </div>
       </div>
     </div>
@@ -10720,6 +10781,129 @@ window.gtranslateSettings = {
   </div>
 
   <script>
+    // Self-contained resilient avatar picker fallback so Settings -> Profile Avatar always opens & saves even before app.js finishes loading.
+    window.AlphaAvatarPicker = (function() {
+      var genderFilter = 'all';
+      function getCatalog() {
+        var list = [];
+        for (var m = 1; m <= 11; m++) {
+          var mn = (m < 10 ? '0' : '') + m;
+          list.push({ id: 'male_' + mn, gender: 'male', label: 'Male ' + mn, url: '/assets/avatars/male/male_' + mn + '.png' });
+        }
+        for (var f = 1; f <= 13; f++) {
+          var fn = (f < 10 ? '0' : '') + f;
+          list.push({ id: 'female_' + fn, gender: 'female', label: 'Female ' + fn, url: '/assets/avatars/female/female_' + fn + '.png' });
+        }
+        return list;
+      }
+      function getCachedUser() {
+        if (window.App && window.App.state && window.App.state.user) return window.App.state.user;
+        try {
+          var raw = localStorage.getItem('alphavest_local_user');
+          return raw ? JSON.parse(raw) : null;
+        } catch (e) { return null; }
+      }
+      function getCurrentAvatar(u) {
+        if (u && u.avatar && /^\/assets\/avatars\/(male|female)\/\1_\d{2}\.png$/.test(u.avatar)) return u.avatar;
+        try {
+          var g = localStorage.getItem('alphavest_user_avatar') || '';
+          if (/^\/assets\/avatars\/(male|female)\/\1_\d{2}\.png$/.test(g)) return g;
+        } catch (e) {}
+        return '';
+      }
+      function renderGrid(filter) {
+        var grid = document.getElementById('avatar-picker-grid');
+        if (!grid) return;
+        genderFilter = filter || genderFilter || 'all';
+        var current = getCurrentAvatar(getCachedUser());
+        var items = getCatalog().filter(function(item) { return genderFilter === 'all' || item.gender === genderFilter; });
+        grid.innerHTML = items.map(function(item) {
+          var sel = current === item.url ? ' selected' : '';
+          return '<button type="button" class="av-avatar-option' + sel + '" onclick="window.AlphaAvatarPicker.select(\'' + item.url + '\')" aria-label="Select ' + item.label + '">' +
+            '<span class="av-avatar-check" aria-hidden="true">✓</span>' +
+            '<img src="' + item.url + '" alt="' + item.label + '" loading="lazy">' +
+            '<span class="av-avatar-option-tag">' + item.label + '</span>' +
+          '</button>';
+        }).join('');
+      }
+      function openModalDirect() {
+        var modal = document.getElementById('modal-avatar-picker');
+        if (!modal) return;
+        document.querySelectorAll('#modal-avatar-picker .av-avatar-tab').forEach(function(b) {
+          b.classList.toggle('active', b.getAttribute('data-avatar-filter') === 'all');
+        });
+        renderGrid('all');
+        modal.style.zIndex = '9600';
+        modal.style.pointerEvents = 'auto';
+        modal.classList.add('open');
+      }
+      function closeModalDirect() {
+        if (window.App && typeof window.App.closeModal === 'function') {
+          window.App.closeModal('modal-avatar-picker');
+          return;
+        }
+        var modal = document.getElementById('modal-avatar-picker');
+        if (modal) {
+          modal.classList.remove('open');
+          modal.style.pointerEvents = 'none';
+        }
+      }
+      function open() {
+        if (window.App && typeof window.App.openAvatarSelectorModal === 'function') {
+          window.App.openAvatarSelectorModal();
+          return;
+        }
+        if (!getCachedUser()) {
+          if (window.App && typeof window.App.openModal === 'function') window.App.openModal('modal-auth');
+          return;
+        }
+        openModalDirect();
+      }
+      function filter(gender, btnEl) {
+        if (window.App && typeof window.App.filterAvatarGender === 'function') {
+          window.App.filterAvatarGender(gender, btnEl);
+          return;
+        }
+        document.querySelectorAll('#modal-avatar-picker .av-avatar-tab').forEach(function(b) { b.classList.remove('active'); });
+        if (btnEl) btnEl.classList.add('active');
+        renderGrid(gender || 'all');
+      }
+      function select(avatarPath) {
+        if (window.App && typeof window.App.selectUserAvatar === 'function') {
+          window.App.selectUserAvatar(avatarPath);
+          return;
+        }
+        var clean = String(avatarPath || '').trim();
+        var user = getCachedUser();
+        if (user) {
+          user.avatar = clean;
+          try {
+            localStorage.setItem('alphavest_local_user', JSON.stringify(user));
+            if (clean) localStorage.setItem('alphavest_user_avatar', clean);
+            else localStorage.removeItem('alphavest_user_avatar');
+          } catch (e) {}
+        }
+        var thumb = document.getElementById('settings-avatar-preview');
+        var lbl = document.getElementById('settings-avatar-label');
+        if (thumb) {
+          thumb.innerHTML = clean ? '<img src="' + clean + '" alt="Profile avatar">' : 'PX';
+        }
+        if (lbl) {
+          var match = getCatalog().find(function(a) { return a.url === clean; });
+          lbl.textContent = match ? match.label : 'Choose';
+        }
+        fetch('/api/user/profile.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ avatar: clean })
+        }).catch(function() {}).finally(function() {
+          closeModalDirect();
+        });
+      }
+      return { open: open, filter: filter, select: select, close: closeModalDirect };
+    })();
+
     // Immediate global password toggle fallback
     window.togglePasswordVisibility = function(inputId, buttonEl) {
       if (window.App && typeof window.App.togglePasswordVisibility === 'function') {
@@ -10733,7 +10917,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261124_v130_avatars_css_fix";
+  const CACHE_VERSION = "20261124_v131_avatar_click_debit_wallet";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -10765,18 +10949,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261124_v130_avatars_css_fix"></script>
-  <script defer src="/assets/js/chart.js?v=20261124_v130_avatars_css_fix"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261124_v131_avatar_click_debit_wallet"></script>
+  <script defer src="/assets/js/chart.js?v=20261124_v131_avatar_click_debit_wallet"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261124_v130_avatars_css_fix"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261124_v130_avatars_css_fix"></script>
+  <script defer src="/assets/js/app.js?v=20261124_v131_avatar_click_debit_wallet"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261124_v131_avatar_click_debit_wallet"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261124_v130_avatars_css_fix";
+      var SW_BUILD = "20261124_v131_avatar_click_debit_wallet";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

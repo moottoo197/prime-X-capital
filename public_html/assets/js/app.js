@@ -6412,6 +6412,150 @@ const App = {
       input.value = userId;
       input.focus();
     }
+    this.loadAdjustmentUserPreview('adj', userId);
+  },
+
+  debouncedAdjustmentUserPreview(prefix = 'adj', userRef = '') {
+    clearTimeout(this._adjPreviewTimer);
+    const val = String(userRef || '').trim();
+    if (!val || val.length < 3) {
+      this.renderAdjustmentBalancePreview(prefix, null);
+      return;
+    }
+    this._adjPreviewTimer = setTimeout(() => this.loadAdjustmentUserPreview(prefix, val), 320);
+  },
+
+  async loadAdjustmentUserPreview(prefix = 'adj', userRef = '') {
+    const p = prefix === 'pop' ? 'pop-' : '';
+    const ref = String(userRef || document.getElementById(`${p}adj-user-id`)?.value || '').trim();
+    if (!ref) {
+      this.renderAdjustmentBalancePreview(prefix, null);
+      return;
+    }
+
+    let resolvedId = ref;
+    const matched = (this.state.adminUsers || []).find(u =>
+      String(u.id) === ref ||
+      String(u.email || '').toLowerCase() === ref.toLowerCase() ||
+      (u.numeric_uid && String(u.numeric_uid) === ref)
+    );
+    if (matched && matched.id) resolvedId = String(matched.id);
+
+    try {
+      const res = await this.api(`/admin/users.php?user_id=${encodeURIComponent(resolvedId)}&mode=summary`);
+      if (res?.success && res.data?.wallet_breakdown) {
+        this.renderAdjustmentBalancePreview(prefix, res.data.wallet_breakdown);
+      } else {
+        this.renderAdjustmentBalancePreview(prefix, null);
+      }
+    } catch (e) {
+      this.renderAdjustmentBalancePreview(prefix, null);
+    }
+  },
+
+  renderAdjustmentBalancePreview(prefix = 'adj', wb = null) {
+    const isPop = prefix === 'pop';
+    const p = isPop ? 'pop-' : '';
+    const stripEl = document.getElementById(`${p}adj-live-balances`);
+    const selectEl = document.getElementById(`${p}adj-debit-source`);
+    if (isPop) this.state.popAdjBreakdown = wb || null;
+    else this.state.adjBreakdown = wb || null;
+
+    const spotVal = wb ? Number(wb.transferable_spot_usdt ?? wb.spot_total_usdt ?? 0) : null;
+    const futureVal = wb ? Number(wb.future_total_usdt ?? 0) : null;
+    const refVal = wb ? Number(wb.referral_bonus_usdt ?? 0) : null;
+
+    const fmt = (n) => n === null ? '—' : `$${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    if (selectEl) {
+      const optSpot = Array.from(selectEl.options).find(o => o.value === 'spot');
+      const optFuture = Array.from(selectEl.options).find(o => o.value === 'future');
+      const optRef = Array.from(selectEl.options).find(o => o.value === 'referral');
+      if (optSpot) optSpot.textContent = spotVal === null
+        ? 'Spot Balance (Deposit / Bonus in Funding & Exchange)'
+        : `Spot Balance — ${fmt(spotVal)} USDT available`;
+      if (optFuture) optFuture.textContent = futureVal === null
+        ? 'Future Balance (Trading Wallet)'
+        : `Future Balance — ${fmt(futureVal)} USDT available`;
+      if (optRef) optRef.textContent = refVal === null
+        ? 'Referral Balance (Locked Referral Bonus)'
+        : `Referral Balance — ${fmt(refVal)} USDT available`;
+    }
+
+    if (stripEl) {
+      if (!wb) {
+        stripEl.style.display = 'none';
+        stripEl.innerHTML = '';
+      } else {
+        const mode = isPop ? this.state.popAdjSignMode : this.state.adjSignMode;
+        const activeDebit = mode === 'DEBIT' ? (selectEl?.value || 'spot') : '';
+        stripEl.style.display = 'grid';
+        stripEl.innerHTML = `
+          <div class="av-adm-bal-pill${activeDebit === 'spot' ? ' is-active-debit' : ''}">
+            <span class="av-adm-bal-pill-label">Spot Balance</span>
+            <span class="av-adm-bal-pill-val">${fmt(spotVal)}</span>
+          </div>
+          <div class="av-adm-bal-pill${activeDebit === 'future' ? ' is-active-debit' : ''}">
+            <span class="av-adm-bal-pill-label">Future Balance</span>
+            <span class="av-adm-bal-pill-val">${fmt(futureVal)}</span>
+          </div>
+          <div class="av-adm-bal-pill${activeDebit === 'referral' ? ' is-active-debit' : ''}">
+            <span class="av-adm-bal-pill-label">Referral Balance</span>
+            <span class="av-adm-bal-pill-val">${fmt(refVal)}</span>
+          </div>
+        `;
+      }
+    }
+    this.syncDebitSourceHint(prefix);
+  },
+
+  updateAdjustmentModeUI(prefix = 'adj') {
+    const isPop = prefix === 'pop';
+    const p = isPop ? 'pop-' : '';
+    const isDebit = (isPop ? this.state.popAdjSignMode : this.state.adjSignMode) === 'DEBIT';
+
+    const walletGroup = document.getElementById(`${p}adj-wallet-group`);
+    const typeGroup = document.getElementById(`${p}adj-type-group`);
+    const debitGroup = document.getElementById(`${p}adj-debit-source-group`);
+
+    if (walletGroup) walletGroup.style.display = isDebit ? 'none' : '';
+    if (typeGroup) typeGroup.style.display = isDebit ? 'none' : '';
+    if (debitGroup) debitGroup.style.display = isDebit ? '' : 'none';
+
+    const wb = isPop ? this.state.popAdjBreakdown : this.state.adjBreakdown;
+    if (wb) this.renderAdjustmentBalancePreview(prefix, wb);
+    else this.syncDebitSourceHint(prefix);
+  },
+
+  syncDebitSourceHint(prefix = 'adj') {
+    const isPop = prefix === 'pop';
+    const p = isPop ? 'pop-' : '';
+    const selectEl = document.getElementById(`${p}adj-debit-source`);
+    const hintEl = document.getElementById(`${p}adj-debit-hint`);
+    if (!selectEl || !hintEl) return;
+
+    const src = String(selectEl.value || 'spot').toLowerCase();
+    const wb = isPop ? this.state.popAdjBreakdown : this.state.adjBreakdown;
+    const fmt = (n) => `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`;
+
+    if (src === 'future') {
+      const avail = wb ? ` Available: ${fmt(wb.future_total_usdt)}.` : '';
+      hintEl.textContent = `Debits directly from Future (Trading) balance.${avail}`;
+    } else if (src === 'referral') {
+      const avail = wb ? ` Available: ${fmt(wb.referral_bonus_usdt)}.` : '';
+      hintEl.textContent = `Debits from locked Referral Balance (reduces Spot wallet & Referral Earnings).${avail}`;
+    } else {
+      const avail = wb ? ` Available: ${fmt(wb.transferable_spot_usdt ?? wb.spot_total_usdt)}.` : '';
+      hintEl.textContent = `Debits from non-referral Spot Balance (Funding / Exchange).${avail}`;
+    }
+
+    const stripEl = document.getElementById(`${p}adj-live-balances`);
+    if (stripEl && wb) {
+      const mode = isPop ? this.state.popAdjSignMode : this.state.adjSignMode;
+      const pills = stripEl.querySelectorAll('.av-adm-bal-pill');
+      const keys = ['spot', 'future', 'referral'];
+      pills.forEach((pill, i) => pill.classList.toggle('is-active-debit', mode === 'DEBIT' && keys[i] === src));
+    }
   },
 
   syncAdjustmentWalletForCategory(prefix = 'adj') {
@@ -6450,6 +6594,7 @@ const App = {
     const reasonEl = document.getElementById('pop-adj-reason');
     const walletEl = document.getElementById('pop-adj-wallet');
     const typeEl = document.getElementById('pop-adj-type');
+    const debitEl = document.getElementById('pop-adj-debit-source');
 
     if (idEl) idEl.value = id;
     if (labelEl) {
@@ -6460,11 +6605,14 @@ const App = {
     if (reasonEl) reasonEl.value = '';
     if (walletEl) walletEl.value = 'funding';
     if (typeEl) typeEl.value = 'DEPOSIT';
+    if (debitEl) debitEl.value = 'spot';
 
+    this.renderAdjustmentBalancePreview('pop', null);
     this.syncAdjustmentWalletForCategory('pop');
     this.toggleAdminUserRowSelect(id, true);
     this.setPopAdjustmentSign('CREDIT');
     this.openModal('modal-admin-adjust-balance');
+    this.loadAdjustmentUserPreview('pop', id);
     setTimeout(() => amtEl?.focus(), 60);
   },
 
@@ -6483,6 +6631,7 @@ const App = {
         amtEl.value = isDebit ? String(-Math.abs(num)) : String(Math.abs(num));
       }
     }
+    this.updateAdjustmentModeUI('pop');
   },
 
   syncPopAdjustmentSignFromInput() {
@@ -6499,6 +6648,7 @@ const App = {
     const debitBtn = document.getElementById('pop-adj-sign-debit');
     if (creditBtn) creditBtn.classList.toggle('active-credit', !isDebit);
     if (debitBtn) debitBtn.classList.toggle('active-debit', isDebit);
+    this.updateAdjustmentModeUI('pop');
   },
 
   async submitPopFinancialAdjustment() {
@@ -6517,11 +6667,18 @@ const App = {
 
     try {
       const userId = document.getElementById('pop-adj-user-id')?.value.trim();
-      const adjustmentType = document.getElementById('pop-adj-type')?.value || 'DEPOSIT';
+      const isDebit = this.state.popAdjSignMode === 'DEBIT';
+      const debitSource = document.getElementById('pop-adj-debit-source')?.value || 'spot';
+      let adjustmentType = document.getElementById('pop-adj-type')?.value || 'DEPOSIT';
       let wallet = document.getElementById('pop-adj-wallet')?.value || 'funding';
-      if (adjustmentType === 'REFERRAL_BONUS' && wallet === 'trading') wallet = 'funding';
+      if (isDebit) {
+        wallet = debitSource === 'future' ? 'trading' : 'funding';
+        adjustmentType = debitSource === 'referral' ? 'REFERRAL_BONUS' : 'OTHER';
+      } else if (adjustmentType === 'REFERRAL_BONUS' && wallet === 'trading') {
+        wallet = 'funding';
+      }
       let amount = parseFloat(document.getElementById('pop-adj-amount')?.value) || 0;
-      if (this.state.popAdjSignMode === 'DEBIT' && amount > 0) {
+      if (isDebit && amount > 0) {
         amount = -Math.abs(amount);
       }
       const reason = (document.getElementById('pop-adj-reason')?.value || '').trim();
@@ -6532,7 +6689,7 @@ const App = {
         return;
       }
 
-      const res = await this.api('/admin/adjustments.php', 'POST', {
+      const payload = {
         user_id: userId,
         wallet_type: wallet,
         asset: 'USDT',
@@ -6540,11 +6697,17 @@ const App = {
         adjustment_type: adjustmentType,
         reason,
         idempotency_key: actionKey
-      });
+      };
+      if (amount < 0) payload.debit_source = debitSource;
+
+      const res = await this.api('/admin/adjustments.php', 'POST', payload);
 
       if (res.success) {
         const newBal = res.data?.new_balance != null ? `$${Number(res.data.new_balance).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}` : '';
-        this.toast(`Balance adjusted successfully! ${wallet.toUpperCase()} balance is now ${newBal}`, 'success');
+        const targetLabel = amount < 0
+          ? (debitSource === 'future' ? 'Future Balance' : (debitSource === 'referral' ? 'Referral Balance' : 'Spot Balance'))
+          : wallet.toUpperCase();
+        this.toast(`Balance adjusted successfully! ${targetLabel} is now ${newBal}`, 'success');
         this.closeModal('modal-admin-adjust-balance');
         await this.loadAdminUsers();
         await this.loadAdminData();
@@ -6583,6 +6746,7 @@ const App = {
         amtEl.value = isDebit ? String(-Math.abs(num)) : String(Math.abs(num));
       }
     }
+    this.updateAdjustmentModeUI('adj');
   },
 
   syncAdjustmentSignFromInput() {
@@ -6599,6 +6763,7 @@ const App = {
     const debitBtn = document.getElementById('adj-sign-debit');
     if (creditBtn) creditBtn.classList.toggle('active-credit', !isDebit);
     if (debitBtn) debitBtn.classList.toggle('active-debit', isDebit);
+    this.updateAdjustmentModeUI('adj');
   },
 
   /* Admin: Signal Dispatcher */
@@ -8393,11 +8558,18 @@ const App = {
 
     try {
       const userId = document.getElementById('adj-user-id').value.trim();
-      const adjustmentType = document.getElementById('adj-type')?.value || 'DEPOSIT';
+      const isDebit = this.state.adjSignMode === 'DEBIT';
+      const debitSource = document.getElementById('adj-debit-source')?.value || 'spot';
+      let adjustmentType = document.getElementById('adj-type')?.value || 'DEPOSIT';
       let wallet = document.getElementById('adj-wallet').value || 'funding';
-      if (adjustmentType === 'REFERRAL_BONUS' && wallet === 'trading') wallet = 'funding';
+      if (isDebit) {
+        wallet = debitSource === 'future' ? 'trading' : 'funding';
+        adjustmentType = debitSource === 'referral' ? 'REFERRAL_BONUS' : 'OTHER';
+      } else if (adjustmentType === 'REFERRAL_BONUS' && wallet === 'trading') {
+        wallet = 'funding';
+      }
       let amount = parseFloat(document.getElementById('adj-amount').value) || 0;
-      if (this.state.adjSignMode === 'DEBIT' && amount > 0) {
+      if (isDebit && amount > 0) {
         amount = -Math.abs(amount);
       }
       const reason = document.getElementById('adj-reason').value.trim();
@@ -8407,7 +8579,7 @@ const App = {
         return;
       }
 
-      const res = await this.api('/admin/adjustments.php', 'POST', {
+      const payload = {
         user_id: userId,
         wallet_type: wallet,
         asset: 'USDT',
@@ -8415,14 +8587,21 @@ const App = {
         adjustment_type: adjustmentType,
         reason,
         idempotency_key: actionKey
-      });
+      };
+      if (amount < 0) payload.debit_source = debitSource;
+
+      const res = await this.api('/admin/adjustments.php', 'POST', payload);
 
       if (res.success) {
         const newBal = res.data?.new_balance != null ? `$${Number(res.data.new_balance).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}` : '';
-        this.toast(`Ledger adjustment applied successfully! ${wallet.toUpperCase()} balance is now ${newBal}`, 'success');
+        const targetLabel = amount < 0
+          ? (debitSource === 'future' ? 'Future Balance' : (debitSource === 'referral' ? 'Referral Balance' : 'Spot Balance'))
+          : wallet.toUpperCase();
+        this.toast(`Ledger adjustment applied successfully! ${targetLabel} is now ${newBal}`, 'success');
         document.getElementById('adj-amount').value = '';
         document.getElementById('adj-reason').value = '';
         this.setAdjustmentSign('CREDIT');
+        this.loadAdjustmentUserPreview('adj', userId);
         await this.loadAdminUsers();
         await this.loadAdminData();
         if (this.loadBalances) await this.loadBalances();
@@ -10394,6 +10573,15 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
   openAvatarSelectorModal() {
     if (!this.state.user) {
+      try {
+        const cached = localStorage.getItem('alphavest_local_user');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && (parsed.id || parsed.email)) this.state.user = parsed;
+        }
+      } catch (e) {}
+    }
+    if (!this.state.user) {
       this.openModal('modal-auth');
       return;
     }
@@ -10431,6 +10619,15 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   },
 
   async selectUserAvatar(avatarPath) {
+    if (!this.state.user) {
+      try {
+        const cached = localStorage.getItem('alphavest_local_user');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && (parsed.id || parsed.email)) this.state.user = parsed;
+        }
+      } catch (e) {}
+    }
     if (!this.state.user) {
       this.openModal('modal-auth');
       return;
