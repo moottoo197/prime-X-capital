@@ -887,6 +887,15 @@ const App = {
     const res = await this.api('/auth/me.php?optional=1');
     if (res.success && res.data && res.data.user) {
       this.state.user = res.data.user;
+      if (!this.state.user.avatar) {
+        const storedAvatar = this.getUserAvatar(this.state.user);
+        if (storedAvatar) this.state.user.avatar = storedAvatar;
+      } else {
+        const key = this.getUserAvatarStorageKey(this.state.user);
+        if (key) {
+          try { localStorage.setItem(key, this.state.user.avatar); } catch (e) {}
+        }
+      }
       if (this.state.user.country) {
         localStorage.setItem('alphavest_user_country', this.state.user.country);
       }
@@ -951,6 +960,94 @@ const App = {
     return '';
   },
 
+  getAvatarCatalog() {
+    if (!this._avatarCatalog) {
+      const items = [];
+      for (let i = 1; i <= 11; i++) {
+        const num = String(i).padStart(2, '0');
+        items.push({ id: `male_${num}`, gender: 'male', label: `Male ${num}`, url: `/assets/avatars/male/male_${num}.png` });
+      }
+      for (let i = 1; i <= 13; i++) {
+        const num = String(i).padStart(2, '0');
+        items.push({ id: `female_${num}`, gender: 'female', label: `Female ${num}`, url: `/assets/avatars/female/female_${num}.png` });
+      }
+      this._avatarCatalog = items;
+    }
+    return this._avatarCatalog;
+  },
+
+  isValidAvatarUrl(url) {
+    return /^\/assets\/avatars\/(male|female)\/\1_\d{2}\.png$/.test(String(url || '').trim());
+  },
+
+  getUserAvatarStorageKey(userObj) {
+    const u = userObj || this.state.user;
+    if (!u) return '';
+    const seed = u.id || u.numeric_uid || (u.email || '').toLowerCase().trim();
+    return seed ? `alphavest_user_avatar_${seed}` : '';
+  },
+
+  getUserAvatar(userObj) {
+    const u = userObj || this.state.adminPreviewUser || this.state.user;
+    if (!u) return '';
+    if (this.isValidAvatarUrl(u.avatar)) return u.avatar;
+    try {
+      const perUserKey = this.getUserAvatarStorageKey(u);
+      if (perUserKey) {
+        const stored = localStorage.getItem(perUserKey) || '';
+        if (this.isValidAvatarUrl(stored)) return stored;
+      }
+      const isPreview = Boolean(this.state.adminPreviewUser && userObj === this.state.adminPreviewUser);
+      if (!isPreview) {
+        const globalStored = localStorage.getItem('alphavest_user_avatar') || '';
+        if (this.isValidAvatarUrl(globalStored)) return globalStored;
+      }
+    } catch (e) {}
+    return '';
+  },
+
+  getUserInitials(userObj) {
+    const u = userObj || {};
+    const displayName = ((u.first_name || '') + ' ' + (u.last_name || '')).trim();
+    const seed = displayName || (u.email || '').split('@')[0] || 'PX';
+    return seed.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('') || 'PX';
+  },
+
+  syncUserAvatarElements(userObj) {
+    const u = userObj || this.state.adminPreviewUser || this.state.user;
+    const avatarUrl = this.getUserAvatar(u);
+    const initials = u ? this.getUserInitials(u) : 'PX';
+
+    const profImg = document.getElementById('prof-avatar-img');
+    const profInit = document.getElementById('prof-avatar-initials');
+    if (profImg && profInit) {
+      if (avatarUrl) {
+        profImg.src = avatarUrl;
+        profImg.style.display = 'block';
+        profInit.style.display = 'none';
+      } else {
+        profImg.removeAttribute('src');
+        profImg.style.display = 'none';
+        profInit.textContent = initials;
+        profInit.style.display = '';
+      }
+    }
+
+    const setThumb = document.getElementById('settings-avatar-preview');
+    const setLabel = document.getElementById('settings-avatar-label');
+    if (setThumb) {
+      if (avatarUrl) {
+        setThumb.innerHTML = `<img src="${this.escapeHtml(avatarUrl)}" alt="Profile avatar">`;
+      } else {
+        setThumb.textContent = initials;
+      }
+    }
+    if (setLabel) {
+      const match = this.getAvatarCatalog().find(a => a.url === avatarUrl);
+      setLabel.textContent = match ? match.label : 'Choose';
+    }
+  },
+
   updateHeaderAuth() {
     const authBox = document.getElementById('header-auth-box');
     const adminBtn = document.getElementById('btn-header-admin');
@@ -967,6 +1064,7 @@ const App = {
       const previewUser = this.state.adminPreviewUser;
       const displayUser = previewUser || this.state.user;
       const isAdmin = !previewUser && this.isStaffOrAdmin(this.state.user);
+      const avatarUrl = this.getUserAvatar(displayUser);
       
       if (adminBtn) adminBtn.style.display = isAdmin ? 'inline-flex' : 'none';
       if (profAdminBtn) profAdminBtn.style.display = isAdmin ? 'block' : 'none';
@@ -987,12 +1085,13 @@ const App = {
 
       if (authBox) {
         const headerFullName = ((displayUser.first_name || '') + ' ' + (displayUser.last_name || '')).trim() || (displayUser.email || '').split('@')[0];
-        const headerInitials = headerFullName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'U';
+        const headerInitials = this.getUserInitials(displayUser);
+        const avatarInner = avatarUrl
+          ? `<img class="header-user-avatar-img" src="${this.escapeHtml(avatarUrl)}" alt="${this.escapeHtml(headerFullName)}">`
+          : headerInitials;
         authBox.innerHTML = `
           <button type="button" class="header-user-identity" onclick="App.openModal('modal-profile')" aria-label="Open profile" title="${this.escapeHtml(headerFullName)}">
-            <span class="header-user-avatar" aria-hidden="true">${headerInitials}</span>
-            <span class="header-user-name">${this.escapeHtml(headerFullName)}</span>
-            <span class="header-user-chevron" aria-hidden="true">⌄</span>
+            <span class="header-user-avatar" aria-hidden="true">${avatarInner}</span>
           </button>
         `;
       }
@@ -1009,11 +1108,7 @@ const App = {
       if (profSubEmail) profSubEmail.textContent = displayUser?.email || '—';
       const profUidText = document.getElementById('prof-uid-text');
       if (profUidText) profUidText.textContent = this.getUserUID();
-      const profAvatarInit = document.getElementById('prof-avatar-initials');
-      if (profAvatarInit) {
-        const nameSeed = displayName || (displayUser?.email || '').split('@')[0] || 'PX';
-        profAvatarInit.textContent = nameSeed.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('') || 'PX';
-      }
+      this.syncUserAvatarElements(displayUser);
 
       const userCountry = displayUser?.country || localStorage.getItem('alphavest_user_country') || 'Not set';
       const cDisp = document.getElementById('user-country-display');
@@ -1046,6 +1141,7 @@ const App = {
           </button>
         `;
       }
+      this.syncUserAvatarElements(null);
       this.syncProfileEmailBadge(null);
       this.syncSideDrawer();
     }
@@ -2540,7 +2636,6 @@ const App = {
       const emailEl = document.getElementById('prof-email-label');
       const subEmailEl = document.getElementById('prof-sub-email');
       const uidEl = document.getElementById('prof-uid-text');
-      const avatarInitEl = document.getElementById('prof-avatar-initials');
       const kycBadge = document.getElementById('prof-kyc-badge');
       if (emailEl) {
         emailEl.textContent = displayName || user.email || 'User Account';
@@ -2551,10 +2646,7 @@ const App = {
       if (uidEl) {
         uidEl.textContent = this.getUserUID();
       }
-      if (avatarInitEl) {
-        const nameSeed = displayName || (user.email || '').split('@')[0] || 'PX';
-        avatarInitEl.textContent = nameSeed.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('') || 'PX';
-      }
+      this.syncUserAvatarElements(user);
       if (kycBadge) {
         const kyc = (user.kyc_status || 'NOT_SUBMITTED').toUpperCase();
         if (kyc === 'APPROVED') {
@@ -5055,6 +5147,7 @@ const App = {
     
     localStorage.removeItem('alphavest_local_user');
     localStorage.removeItem('alphavest_user');
+    localStorage.removeItem('alphavest_user_avatar');
     sessionStorage.clear();
     this.state.user = null;
     this.state.adminPreviewUserId = null;
@@ -9808,6 +9901,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     const userCountry = this.state.user?.country || localStorage.getItem('alphavest_user_country') || 'Not set';
     if (countryEl) countryEl.textContent = userCountry;
     if (userCountryDisp) userCountryDisp.textContent = userCountry;
+    this.syncUserAvatarElements(this.state.user);
   },
 
   /* 3.1 Change Account Email */
@@ -10295,6 +10389,87 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       this.toast('Name updated successfully', 'success');
     } else {
       this.toast(res.message || 'Could not update name', 'error');
+    }
+  },
+
+  openAvatarSelectorModal() {
+    if (!this.state.user) {
+      this.openModal('modal-auth');
+      return;
+    }
+    this._avatarFilterGender = 'all';
+    document.querySelectorAll('#modal-avatar-picker .av-avatar-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-avatar-filter') === 'all');
+    });
+    this.renderAvatarPickerGrid('all');
+    this.openModal('modal-avatar-picker');
+  },
+
+  filterAvatarGender(gender, btnEl) {
+    this._avatarFilterGender = gender || 'all';
+    document.querySelectorAll('#modal-avatar-picker .av-avatar-tab').forEach(btn => btn.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    this.renderAvatarPickerGrid(this._avatarFilterGender);
+  },
+
+  renderAvatarPickerGrid(gender) {
+    const grid = document.getElementById('avatar-picker-grid');
+    if (!grid) return;
+    const filter = gender || this._avatarFilterGender || 'all';
+    const current = this.getUserAvatar(this.state.user);
+    const list = this.getAvatarCatalog().filter(item => filter === 'all' || item.gender === filter);
+    grid.innerHTML = list.map(item => {
+      const isSelected = current === item.url;
+      return `
+        <button type="button" class="av-avatar-option${isSelected ? ' selected' : ''}" onclick="App.selectUserAvatar('${item.url}')" aria-label="Select ${item.label}">
+          <span class="av-avatar-check" aria-hidden="true">✓</span>
+          <img src="${item.url}" alt="${item.label}" loading="lazy">
+          <span class="av-avatar-option-tag">${item.label}</span>
+        </button>
+      `;
+    }).join('');
+  },
+
+  async selectUserAvatar(avatarPath) {
+    if (!this.state.user) {
+      this.openModal('modal-auth');
+      return;
+    }
+    const clean = String(avatarPath || '').trim();
+    if (clean !== '' && !this.isValidAvatarUrl(clean)) {
+      this.toast('Invalid avatar selection', 'error');
+      return;
+    }
+    const perUserKey = this.getUserAvatarStorageKey(this.state.user);
+    this.state.user = { ...this.state.user, avatar: clean };
+    try {
+      localStorage.setItem('alphavest_local_user', JSON.stringify(this.state.user));
+      if (clean) {
+        if (perUserKey) localStorage.setItem(perUserKey, clean);
+        localStorage.setItem('alphavest_user_avatar', clean);
+      } else {
+        if (perUserKey) localStorage.removeItem(perUserKey);
+        localStorage.removeItem('alphavest_user_avatar');
+      }
+    } catch (e) {}
+
+    this.updateHeaderAuth();
+    this.syncUserAvatarElements(this.state.user);
+    this.syncSideDrawer();
+    this.renderAvatarPickerGrid(this._avatarFilterGender || 'all');
+
+    try {
+      const res = await this.api('/user/profile.php', 'POST', { avatar: clean });
+      if (res && res.success) {
+        this.closeModal('modal-avatar-picker');
+        this.toast(clean ? 'Profile avatar updated' : 'Using default initials avatar', 'success');
+      } else {
+        this.closeModal('modal-avatar-picker');
+        this.toast(clean ? 'Avatar applied on this device' : 'Default initials applied', 'info');
+      }
+    } catch (e) {
+      this.closeModal('modal-avatar-picker');
+      this.toast(clean ? 'Profile avatar updated' : 'Default initials applied', 'success');
     }
   },
 
@@ -11831,8 +12006,13 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       if (emailEl) emailEl.textContent = user.email || user.username || 'PRIME X Trader';
       if (uidEl) uidEl.textContent = `UID: ${this.getUserUID()}`;
       if (avatarEl) {
-        const initials = (user.first_name || user.email || 'PX').slice(0, 2).toUpperCase();
-        avatarEl.textContent = initials;
+        const avatarUrl = this.getUserAvatar(user);
+        const initials = this.getUserInitials(user);
+        if (avatarUrl) {
+          avatarEl.innerHTML = `<img class="side-drawer-avatar-img" src="${this.escapeHtml(avatarUrl)}" alt="Profile avatar">`;
+        } else {
+          avatarEl.textContent = initials;
+        }
       }
       const kyc = (user.kyc_status || 'NOT_SUBMITTED').toUpperCase();
       if (kycEl) {

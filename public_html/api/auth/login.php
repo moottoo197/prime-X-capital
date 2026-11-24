@@ -156,6 +156,7 @@ sendSuccess([
         'two_factor_enabled' => !empty($userProfile['two_factor_enabled']),
         'has_withdrawal_pin' => !empty($userProfile['has_withdrawal_pin']) || !empty($userProfile['withdrawal_pin']) || !empty($userProfile['withdrawal_pin_hash']),
         'email_verified' => $resolvedEmailVerified,
+        'avatar' => primex_get_user_avatar($userProfile),
         'is_admin' => $isAdmin
     ]
 ], 'Login successful');

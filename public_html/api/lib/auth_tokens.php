@@ -686,4 +686,104 @@ if (!function_exists('primex_is_email_verified_resolved')) {
     }
 }
 
+if (!function_exists('primex_validate_avatar_path')) {
+    function primex_validate_avatar_path(?string $avatar): ?string {
+        $val = trim((string)$avatar);
+        if ($val === '') {
+            return '';
+        }
+        if (!preg_match('#^/assets/avatars/(male|female)/(male|female)_(\d{2})\.png$#', $val, $m)) {
+            return null;
+        }
+        if ($m[1] !== $m[2]) {
+            return null;
+        }
+        $publicRoot = dirname(__DIR__, 2);
+        $fullPath = $publicRoot . $val;
+        if (!is_file($fullPath)) {
+            return null;
+        }
+        return $val;
+    }
+}
 
+if (!function_exists('primex_avatar_store_dir')) {
+    function primex_avatar_store_dir(): ?string {
+        $candidates = [
+            dirname(__DIR__, 3) . '/server/storage/avatars',
+            rtrim(sys_get_temp_dir(), '/\\') . '/primex_avatars',
+        ];
+        foreach ($candidates as $dir) {
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0750, true);
+            }
+            if (is_dir($dir) && is_writable($dir)) {
+                return $dir;
+            }
+        }
+        return null;
+    }
+}
+
+if (!function_exists('primex_avatar_store_file')) {
+    function primex_avatar_store_file(string $userId, string $email = ''): ?string {
+        $dir = primex_avatar_store_dir();
+        if ($dir === null) {
+            return null;
+        }
+        $seed = trim($userId) !== '' ? ('id:' . trim($userId)) : ('em:' . strtolower(trim($email)));
+        if ($seed === 'id:' || $seed === 'em:') {
+            return null;
+        }
+        return $dir . '/avatar_' . hash('sha256', $seed) . '.json';
+    }
+}
+
+if (!function_exists('primex_save_user_avatar')) {
+    function primex_save_user_avatar(string $userId, string $avatar, string $email = ''): void {
+        $valid = primex_validate_avatar_path($avatar);
+        if ($valid === null) {
+            return;
+        }
+        $paths = array_filter([
+            primex_avatar_store_file($userId, ''),
+            $email !== '' ? primex_avatar_store_file('', $email) : null,
+        ]);
+        $payload = json_encode([
+            'user_id'    => $userId,
+            'avatar'     => $valid,
+            'updated_at' => gmdate('c'),
+        ], JSON_UNESCAPED_SLASHES);
+        foreach ($paths as $path) {
+            @file_put_contents($path, $payload, LOCK_EX);
+        }
+    }
+}
+
+if (!function_exists('primex_get_user_avatar')) {
+    function primex_get_user_avatar(array $user): string {
+        $dbAvatar = primex_validate_avatar_path((string)($user['avatar'] ?? ''));
+        if ($dbAvatar !== null && $dbAvatar !== '') {
+            return $dbAvatar;
+        }
+        $userId = (string)($user['id'] ?? '');
+        $email = (string)($user['email'] ?? '');
+        $paths = array_filter([
+            primex_avatar_store_file($userId, ''),
+            $email !== '' ? primex_avatar_store_file('', $email) : null,
+        ]);
+        foreach ($paths as $path) {
+            if (!is_file($path)) {
+                continue;
+            }
+            $data = json_decode((string)@file_get_contents($path), true);
+            if (is_array($data) && array_key_exists('avatar', $data)) {
+                $stored = primex_validate_avatar_path((string)$data['avatar']);
+                if ($stored !== null) {
+                    return $stored;
+                }
+            }
+        }
+        return '';
+    }
+}

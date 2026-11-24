@@ -41,6 +41,7 @@ sendSuccess([
         'email_verified' => $emailVerified,
         'country' => $country,
         'timezone' => $timezone,
+        'avatar' => primex_get_user_avatar($user),
         'is_admin' => $isAdmin
     ]
 ], 'User session active');

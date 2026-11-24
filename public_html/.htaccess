@@ -59,6 +59,9 @@ RewriteRule ^api/(?:admin/deposit_config_store|bound_addresses)\.json$ - [F,L,NC
         Header set Pragma "no-cache"
         Header set Expires "0"
     </FilesMatch>
+    <FilesMatch "\.(?:css|js|mjs)$">
+        Header set Cache-Control "no-cache, must-revalidate, max-age=0"
+    </FilesMatch>
 </IfModule>
 
 # Professional user-facing error pages.
