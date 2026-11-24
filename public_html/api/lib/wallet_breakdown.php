@@ -57,8 +57,7 @@ if (!function_exists('primex_compute_wallet_breakdown')) {
                 'table' => 'ledger_entries',
                 'params' => [
                     'user_id' => 'eq.' . $userId,
-                    'asset' => 'eq.USDT',
-                    'select' => 'entry_type,amount,description,reason,reference_id,wallet_type,created_at',
+                    'select' => 'entry_type,asset,amount,description,reference_id,wallet_type,created_at',
                     'limit' => '5000'
                 ]
             ]
@@ -72,7 +71,17 @@ if (!function_exists('primex_compute_wallet_breakdown')) {
             : [];
         $ledgerRows = ($batch['ledger']['success'] ?? false) && is_array($batch['ledger']['data'] ?? null)
             ? $batch['ledger']['data']
-            : [];
+            : null;
+        if ($ledgerRows === null) {
+            $ledgerFallback = $supabase->select('ledger_entries', [
+                'user_id' => 'eq.' . $userId,
+                'select' => 'entry_type,asset,amount,description,reference_id,wallet_type,created_at',
+                'limit' => '5000'
+            ]);
+            $ledgerRows = ($ledgerFallback['success'] ?? false) && is_array($ledgerFallback['data'] ?? null)
+                ? $ledgerFallback['data']
+                : [];
+        }
 
         $funding = 0.0;
         $exchange = 0.0;
@@ -109,12 +118,14 @@ if (!function_exists('primex_compute_wallet_breakdown')) {
         $tradePnlRaw = 0.0;
 
         foreach ($ledgerRows as $entry) {
+            $entryAsset = strtoupper(trim((string)($entry['asset'] ?? 'USDT')));
+            if ($entryAsset !== '' && $entryAsset !== 'USDT') continue;
             $entryType = strtoupper(trim((string)($entry['entry_type'] ?? '')));
             $amount = (float)($entry['amount'] ?? 0);
             $desc = strtoupper(trim((string)($entry['description'] ?? '')));
-            $reason = strtoupper(trim((string)($entry['reason'] ?? '')));
+            $reason = '';
             $ref = strtoupper(trim((string)($entry['reference_id'] ?? '')));
-            $sourceText = trim($desc . ' ' . $reason . ' ' . $ref);
+            $sourceText = trim($desc . ' ' . $ref);
 
             if ($entryType === 'REFERRAL_COMMISSION') {
                 $referralBonusRaw += $amount;

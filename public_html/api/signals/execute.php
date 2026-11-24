@@ -121,7 +121,7 @@ $capitalBatch = $supabase->selectMany([
     ],
     'ledger' => [
         'table' => 'ledger_entries',
-        'params' => ['user_id' => 'eq.' . (string)$user['id'], 'asset' => 'eq.USDT', 'select' => 'entry_type,amount,description,reason,reference_id,created_at', 'limit' => '5000']
+        'params' => ['user_id' => 'eq.' . (string)$user['id'], 'asset' => 'eq.USDT', 'select' => 'entry_type,amount,description,reference_id,created_at', 'limit' => '5000']
     ]
 ]);
 $sourceFundedCapital = 0.0;

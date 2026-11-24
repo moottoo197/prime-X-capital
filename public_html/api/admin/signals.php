@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ], 1000);
         $adjustmentsRes = $supabase->selectAll('ledger_entries', [
             'entry_type' => 'eq.ADJUSTMENT',
-            'select' => 'user_id,asset,amount,description,reason,reference_id,created_at'
+            'select' => 'user_id,asset,amount,description,reference_id,created_at'
         ], 1000);
         $execRes = $supabase->selectAll('user_signal_executions', [
             'signal_id' => 'eq.' . $requestedSignalId,

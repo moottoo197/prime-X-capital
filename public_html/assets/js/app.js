@@ -1005,6 +1005,15 @@ const App = {
       }
       const profName = document.getElementById('prof-email-label');
       if (profName) profName.textContent = displayName || displayUser?.email || 'User Account';
+      const profSubEmail = document.getElementById('prof-sub-email');
+      if (profSubEmail) profSubEmail.textContent = displayUser?.email || '—';
+      const profUidText = document.getElementById('prof-uid-text');
+      if (profUidText) profUidText.textContent = this.getUserUID();
+      const profAvatarInit = document.getElementById('prof-avatar-initials');
+      if (profAvatarInit) {
+        const nameSeed = displayName || (displayUser?.email || '').split('@')[0] || 'PX';
+        profAvatarInit.textContent = nameSeed.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('') || 'PX';
+      }
 
       const userCountry = displayUser?.country || localStorage.getItem('alphavest_user_country') || 'Not set';
       const cDisp = document.getElementById('user-country-display');
@@ -2526,11 +2535,25 @@ const App = {
     }
 
     if (modalId === 'modal-profile') {
-      const user = this.state.user || {};
+      const user = this.state.adminPreviewUser || this.state.user || {};
+      const displayName = ((user.first_name || '') + ' ' + (user.last_name || '')).trim();
       const emailEl = document.getElementById('prof-email-label');
+      const subEmailEl = document.getElementById('prof-sub-email');
+      const uidEl = document.getElementById('prof-uid-text');
+      const avatarInitEl = document.getElementById('prof-avatar-initials');
       const kycBadge = document.getElementById('prof-kyc-badge');
       if (emailEl) {
-        emailEl.textContent = user.email || 'User Account';
+        emailEl.textContent = displayName || user.email || 'User Account';
+      }
+      if (subEmailEl) {
+        subEmailEl.textContent = user.email || '—';
+      }
+      if (uidEl) {
+        uidEl.textContent = this.getUserUID();
+      }
+      if (avatarInitEl) {
+        const nameSeed = displayName || (user.email || '').split('@')[0] || 'PX';
+        avatarInitEl.textContent = nameSeed.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('') || 'PX';
       }
       if (kycBadge) {
         const kyc = (user.kyc_status || 'NOT_SUBMITTED').toUpperCase();

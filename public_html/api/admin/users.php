@@ -676,7 +676,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $walletType = strtolower(trim($input['wallet_type'] ?? 'funding'));
         $asset = strtoupper(trim($input['asset'] ?? 'USDT'));
         $amount = (float)($input['amount'] ?? 0);
-        $description = trim($input['reason'] ?? $input['description'] ?? 'Administrative Balance Adjustment');
+        $adjustmentType = strtoupper(trim((string)($input['adjustment_type'] ?? '')));
+        $reasonText = trim($input['reason'] ?? $input['description'] ?? 'Administrative Balance Adjustment');
+        if ($adjustmentType !== '' && in_array($adjustmentType, ['DEPOSIT','REFERRAL_BONUS','PROFIT','OTHER'], true)) {
+            if ($adjustmentType === 'REFERRAL_BONUS' && $walletType === 'trading') {
+                sendError('VALIDATION_ERROR', 'Referral Bonus is Spot-only and cannot be credited directly to Future/Trading wallet.');
+            }
+            $description = (strpos(strtoupper($reasonText), '[' . $adjustmentType . ']') === 0)
+                ? $reasonText
+                : '[' . $adjustmentType . '] ' . $reasonText;
+        } else {
+            $description = $reasonText;
+        }
 
         if (empty($userId) || !preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $userId) || $amount == 0) {
             sendError('VALIDATION_ERROR', 'Valid user ID and non-zero amount are required');

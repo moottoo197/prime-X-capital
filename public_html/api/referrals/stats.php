@@ -121,12 +121,13 @@ if ($userId && $supabase->isConfigured()) {
         $totalEarned = 0.0;
         $ledgerRes = $supabase->select('ledger_entries', [
             'user_id' => 'eq.' . $userId,
-            'asset' => 'eq.USDT',
-            'select' => 'entry_type,amount,description,reference_id',
+            'select' => 'entry_type,asset,amount,description,reference_id',
             'limit' => '1000'
         ]);
         if (!empty($ledgerRes['success']) && is_array($ledgerRes['data'] ?? null)) {
             foreach ($ledgerRes['data'] as $entry) {
+                $eAsset = strtoupper(trim((string)($entry['asset'] ?? 'USDT')));
+                if ($eAsset !== '' && $eAsset !== 'USDT') continue;
                 $et = strtoupper(trim((string)($entry['entry_type'] ?? '')));
                 $amt = (float)($entry['amount'] ?? 0);
                 $desc = strtoupper(trim((string)($entry['description'] ?? '')));
