@@ -4191,7 +4191,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261125_v132_live_charts_signals_30d">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261125_v133_signals_redesign_100min_additional">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -5814,7 +5814,25 @@ window.gtranslateSettings = {
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
         </button>
-        <span class="view-back-title">2 Daily Institutional Signals</span>
+        <span class="view-back-title">Institutional Trading Signals</span>
+      </div>
+
+      <div class="av-sig-kpi-grid">
+        <div class="av-sig-kpi-card">
+          <span class="av-sig-kpi-label">Future Balance Gate</span>
+          <strong id="sig-kpi-future-bal" class="av-sig-kpi-val">$0.00</strong>
+          <span id="sig-kpi-future-meta" class="av-sig-kpi-meta">Minimum $100.00 USDT required for daily 6 PM &amp; 8 PM signals</span>
+        </div>
+        <div class="av-sig-kpi-card">
+          <span class="av-sig-kpi-label">Additional Signals ($4.00 Fixed)</span>
+          <strong id="sig-kpi-add-remaining" class="av-sig-kpi-val" style="color:#0052FF;">0 Remaining</strong>
+          <span id="sig-kpi-add-meta" class="av-sig-kpi-meta">Unlocked on $300+ deposits &amp; friend invites · Separate from 30d 2× plan</span>
+        </div>
+        <div class="av-sig-kpi-card">
+          <span class="av-sig-kpi-label">Cumulative Signal Profit</span>
+          <strong class="av-sig-kpi-val positive" data-user-signal-profit-total>+$0.00 USDT</strong>
+          <span id="sig-kpi-plan-meta" class="av-sig-kpi-meta">30-Day 2× Daily Plan (1.67% &times; 2/day) + $4.00 Additional</span>
+        </div>
       </div>
 
       <div id="signals-eligibility-banner" style="margin-bottom: 16px;"></div>
@@ -5826,13 +5844,13 @@ window.gtranslateSettings = {
           <div>
             <div class="av-sig-term-title-row">
               <span id="sig-term-pulse-dot" class="av-sig-pulse-dot is-waiting"></span>
-              <strong id="sig-term-symbol" style="font-size:18px;font-weight:900;color:#0F172A;">BTC/USDT</strong>
+              <strong id="sig-term-symbol" style="font-size:19px;font-weight:900;color:#0F172A;">BTC/USDT</strong>
               <span id="sig-term-dir-badge" class="badge badge-positive">▲ UP / BUY (LONG)</span>
               <span id="sig-term-status-pill" class="badge" style="background:#EFF4FF;color:#0052FF;font-weight:800;">STANDBY</span>
             </div>
           </div>
           <div class="av-sig-term-price-box">
-            <div id="sig-term-price" class="mono" style="font-size:19px;font-weight:900;color:#0F172A;">$77,915.82</div>
+            <div id="sig-term-price" class="mono" style="font-size:20px;font-weight:900;color:#0F172A;">$77,915.82</div>
             <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:2px;">
               <span id="sig-term-move-pct" class="mono" style="font-size:12px;font-weight:800;color:#00B87C;">+0.00%</span>
               <span id="sig-term-countdown" class="mono" style="font-size:11.5px;font-weight:800;color:#DC2626;"></span>
@@ -5859,28 +5877,75 @@ window.gtranslateSettings = {
           </div>
         </div>
 
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <div class="av-sig-term-toolbar">
           <div class="av-mkt-tf-group">
             <button type="button" class="sig-tf-btn active" data-tf="1m" onclick="App.setSignalChartInterval('1m')">1m Live</button>
             <button type="button" class="sig-tf-btn" data-tf="5m" onclick="App.setSignalChartInterval('5m')">5m</button>
             <button type="button" class="sig-tf-btn" data-tf="15m" onclick="App.setSignalChartInterval('15m')">15m</button>
           </div>
+          <div id="sig-term-session-note" class="av-sig-term-session-note">Daily: 6:00 PM &amp; 8:00 PM PKT &middot; Additional: 9:30 PM PKT ($4.00)</div>
         </div>
 
         <div class="av-sig-term-canvas-wrap">
           <canvas id="signals-live-chart-canvas" class="chart-canvas"></canvas>
         </div>
 
-        <div id="sig-term-action-wrap" style="display:none;justify-content:flex-end;margin-top:10px;"></div>
+        <div id="sig-term-action-wrap" style="display:none;justify-content:flex-end;margin-top:12px;"></div>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h3 style="font-size: 16px; font-weight: 700;">Today's Signals (Max 2 Daily)</h3>
-        <span id="signals-quota-badge" class="badge badge-positive">2 Signals / Day</span>
-      </div>
-      <div id="active-signals-list" style="margin-bottom: 20px;"></div>
+      <div class="av-sig-info-grid">
+        <div class="av-sig-panel-card">
+          <div class="av-sig-panel-head">
+            <div>
+              <h4 class="av-sig-panel-title">Globally Synchronized Trading Schedule</h4>
+              <p class="av-sig-panel-sub">Signal broadcast times synchronized to Pakistan Time (PKT UTC+5)</p>
+            </div>
+          </div>
+          <div class="av-sig-sched-tabs" role="tablist">
+            <button type="button" class="av-sig-sched-tab active" data-sig-sched="first" onclick="App.setSignalScheduleTab('first')">First Signal<span>6:00 PM PKT</span></button>
+            <button type="button" class="av-sig-sched-tab" data-sig-sched="second" onclick="App.setSignalScheduleTab('second')">Second Signal<span>8:00 PM PKT</span></button>
+            <button type="button" class="av-sig-sched-tab" data-sig-sched="additional" onclick="App.setSignalScheduleTab('additional')">Additional ($4)<span>9:30 PM PKT</span></button>
+          </div>
+          <div id="sig-schedule-countries" class="av-sig-country-grid"></div>
+        </div>
 
-      <div class="card" style="margin-bottom: 16px;">
+        <div class="av-sig-panel-card">
+          <div class="av-sig-panel-head">
+            <div>
+              <h4 class="av-sig-panel-title">Additional Signal Rewards Program</h4>
+              <p class="av-sig-panel-sub">Fixed $4.00 USDT per 9:30 PM PKT signal &middot; Separate from 30-day 2&times; plan</p>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="av-sig-tier-table">
+              <thead>
+                <tr>
+                  <th>Deposit Amount</th>
+                  <th>Additional Signals</th>
+                  <th>Fixed Reward</th>
+                </tr>
+              </thead>
+              <tbody id="sig-additional-tiers-body">
+                <tr data-tier="100"><td>$100 (Minimum)</td><td>0 Signals</td><td>&mdash;</td></tr>
+                <tr data-tier="300"><td>$300</td><td>1 Signal</td><td class="positive">+$4.00 USDT</td></tr>
+                <tr data-tier="500"><td>$500</td><td>2 Signals</td><td class="positive">+$8.00 USDT</td></tr>
+                <tr data-tier="700"><td>$700</td><td>3 Signals</td><td class="positive">+$12.00 USDT</td></tr>
+                <tr data-tier="1000"><td>$1,000</td><td>4 Signals</td><td class="positive">+$16.00 USDT</td></tr>
+                <tr data-tier="1500"><td>$1,500</td><td>5 Signals</td><td class="positive">+$20.00 USDT</td></tr>
+                <tr data-tier="3000"><td>$3,000</td><td>6 Signals</td><td class="positive">+$24.00 USDT</td></tr>
+                <tr data-tier="5000"><td>$5,000</td><td>7 Signals</td><td class="positive">+$28.00 USDT</td></tr>
+                <tr data-tier="7000"><td>$7,000</td><td>8 Signals</td><td class="positive">+$32.00 USDT</td></tr>
+                <tr data-tier="10000"><td>$10,000</td><td>10 Signals</td><td class="positive">+$40.00 USDT</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="av-sig-ref-note">
+            <strong style="color:#0052FF;">Dual Invite Bonus:</strong> When a friend you invite deposits $300 or more, <strong>both you and your friend</strong> receive that tier&rsquo;s Additional Signal credits ($4.00 USDT per signal). Minimum platform deposit is 100 USD.
+          </div>
+        </div>
+      </div>
+
+      <div id="signals-user-history-wrap" class="card" style="margin-bottom: 16px;">
         <h4 style="margin-bottom: 8px;">Your Signal Performance History</h4>
         <div id="signals-user-history">
           <div style="text-align: center; padding: 16px; color: var(--text-dim); font-size: 12px;">
@@ -6331,7 +6396,7 @@ window.gtranslateSettings = {
                       <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
                     </span>
                     <div class="av-adm-action-text">
-                      <div class="av-adm-action-title">Signal Studio (4 PM / 8 PM)</div>
+                      <div class="av-adm-action-title">Signal Studio (6 PM / 8 PM / 9:30 PM)</div>
                       <div class="av-adm-action-sub">Broadcast &amp; schedule signals</div>
                     </div>
                     <div class="av-adm-action-right">
@@ -6472,11 +6537,10 @@ window.gtranslateSettings = {
               <div>
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
                   <span id="adm-signals-active-pill" class="badge badge-positive" style="font-size:11.5px; padding:5px 10px;">Active Signals: 0</span>
-                  <span class="badge" style="background:#EFF4FF; color:#0052FF; border:1px solid #DBEAFE; font-size:11px; font-weight:800;">30-Day 2× Plan &bull; 1.67% / Session</span>
-                  <span class="badge" style="background:#ECFDF5; color:#059669; border:1px solid #A7F3D0; font-size:11px; font-weight:800;">Push + Email Broadcast</span>
+                  <span style="font-size:11.5px; font-weight:700; color:#475569;">30-Day 2&times; Plan (1.67%/session) &middot; Additional $4.00 Fixed &middot; $100 Min Deposit</span>
                 </div>
                 <h3 class="av-adm-sig-hero-title">Institutional Signal Command Studio</h3>
-                <p class="av-adm-sig-hero-sub">Dispatch worldwide 4 PM &amp; 8 PM PKT signals across Crypto, Forex, Futures, and Stocks with instant dashboard &amp; email alerts.</p>
+                <p class="av-adm-sig-hero-sub">Dispatch worldwide 6:00 PM, 8:00 PM &amp; 9:30 PM PKT signals across Crypto, Forex, Futures, and Stocks with instant dashboard &amp; email alerts.</p>
               </div>
               <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
                 <button type="button" class="btn-secondary" style="font-size:11.5px; padding:6px 10px;" onclick="App.fillSignalPreset('BTC')">BTC/USDT</button>
@@ -6496,12 +6560,12 @@ window.gtranslateSettings = {
               <div class="av-adm-sig-kpi-card">
                 <span class="av-adm-sig-kpi-label">Scheduled Queue</span>
                 <strong id="adm-sig-kpi-scheduled" class="av-adm-sig-kpi-val" style="color:#0052FF;">0</strong>
-                <span class="av-adm-sig-kpi-meta">4 PM / 8 PM PKT &amp; Custom</span>
+                <span class="av-adm-sig-kpi-meta">6 PM / 8 PM / 9:30 PM PKT &amp; Custom</span>
               </div>
               <div class="av-adm-sig-kpi-card">
                 <span class="av-adm-sig-kpi-label">Total Profit Paid</span>
                 <strong id="adm-sig-kpi-paid" class="av-adm-sig-kpi-val">$0.00</strong>
-                <span class="av-adm-sig-kpi-meta">1.67% &times; 2 = 3.33%/day (30d 2×)</span>
+                <span class="av-adm-sig-kpi-meta">1.67% &times; 2 (30d 2&times;) + $4.00 Additional</span>
               </div>
               <div class="av-adm-sig-kpi-card">
                 <span class="av-adm-sig-kpi-label">Archived Sessions</span>
@@ -6516,9 +6580,9 @@ window.gtranslateSettings = {
                 <div class="av-adm-sig-composer-head">
                   <div>
                     <h3 style="margin:0 0 3px; font-size:16px; font-weight:800; color:#0F172A;">Signal Dispatcher</h3>
-                    <p style="font-size:12px; color:#64748B; margin:0;">Configure asset class, directional chart trend, and live broadcast window.</p>
+                    <p style="font-size:12px; color:#64748B; margin:0;">Configure asset class, directional chart trend, and PKT broadcast session.</p>
                   </div>
-                  <span class="badge badge-demo" style="font-size:10px;">PKT UTC+5</span>
+                  <span style="font-size:11px; font-weight:700; color:#0052FF;">PKT UTC+5</span>
                 </div>
 
                 <div style="display:flex; flex-direction:column; gap:12px;">
@@ -6560,7 +6624,7 @@ window.gtranslateSettings = {
                     </select>
                   </div>
 
-                  <div class="form-group">
+                  <div id="adm-sig-profit-group" class="form-group">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                       <label class="form-label" style="margin:0;">Target Profit Return (%)</label>
                       <div style="display:flex; align-items:center; gap:6px;">
@@ -6570,7 +6634,12 @@ window.gtranslateSettings = {
                     </div>
                     <input type="range" id="adm-sig-profit-slider" class="av-adm-range" min="0.5" max="10" step="0.01" value="1.67" oninput="App.syncAdminSignalProfitSlider(this.value)">
                     <input type="number" id="adm-sig-profit-pct" value="1.67" step="0.01" min="0.5" style="width:100%; margin-top:6px;" oninput="App.syncAdminSignalProfitInput(this.value)">
-                    <span style="font-size:11px; color:#64748B; margin-top:4px; display:block;">1.67% &times; 2 daily signals = 3.33%/day &rarr; Doubles deposit in 30 days</span>
+                    <span style="font-size:11px; color:#64748B; margin-top:4px; display:block;">1.67% &times; 2 daily signals (6 PM &amp; 8 PM PKT) = 3.33%/day &rarr; Doubles deposit in 30 days</span>
+                  </div>
+
+                  <div id="adm-sig-fixed-callout" class="av-adm-sig-fixed-callout" style="display:none;">
+                    <strong>Additional Signal Reward: +$4.00 USDT Fixed</strong><br>
+                    9:30 PM PKT Additional Signal (#3) pays a fixed $4.00 USDT reward to eligible $300+ deposit &amp; referral credit holders, separate from the 30-day 2&times; plan.
                   </div>
 
                   <div class="form-group">
@@ -6603,9 +6672,10 @@ window.gtranslateSettings = {
                   <div style="background:#F8FAFC; padding:10px 12px; border-radius:12px; border:1px solid #E5EAF2;">
                     <span style="font-size:11px; font-weight:700; color:#0052FF; display:block; margin-bottom:7px;">Quick Session Presets</span>
                     <div class="preset-chip-group" style="margin-bottom:0;">
-                      <button type="button" class="preset-chip" onclick="App.applyAdminSignalSession(1, '4 PM')">4 PM PKT</button>
-                      <button type="button" class="preset-chip" onclick="App.applyAdminSignalSession(2, '8 PM')">8 PM PKT</button>
-                      <button type="button" class="preset-chip" onclick="App.applyAdminSignalSession(3, 'CUSTOM')">Custom</button>
+                      <button type="button" class="preset-chip" onclick="App.applyAdminSignalSession(1, '6 PM')">6:00 PM PKT</button>
+                      <button type="button" class="preset-chip" onclick="App.applyAdminSignalSession(2, '8 PM')">8:00 PM PKT</button>
+                      <button type="button" class="preset-chip" onclick="App.applyAdminSignalSession(3, '9:30 PM')">9:30 PM Add ($4)</button>
+                      <button type="button" class="preset-chip" onclick="App.applyAdminSignalSession(4, 'CUSTOM')">Custom</button>
                       <button type="button" class="preset-chip" onclick="App.applyAdminSignalSession(0, 'NOW')">Live Now</button>
                     </div>
                   </div>
@@ -6614,8 +6684,9 @@ window.gtranslateSettings = {
                     <div class="form-group">
                       <label class="form-label">Signal Time Slot</label>
                       <select id="adm-sig-time-slot" style="width:100%;" onchange="App.onAdminSignalSlotChange()">
-                        <option value="4 PM" selected>4 PM PKT (#1)</option>
-                        <option value="8 PM">8 PM PKT (#2)</option>
+                        <option value="6 PM" selected>6:00 PM PKT (#1)</option>
+                        <option value="8 PM">8:00 PM PKT (#2)</option>
+                        <option value="9:30 PM">9:30 PM PKT Add (#3)</option>
                         <option value="CUSTOM">Custom Time</option>
                       </select>
                     </div>
@@ -6634,10 +6705,10 @@ window.gtranslateSettings = {
                   <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                     <div class="form-group">
                       <label class="form-label">Slot Number</label>
-                      <select id="adm-sig-slot" style="width:100%;">
-                        <option value="1">Daily #1 (4 PM)</option>
-                        <option value="2">Daily #2 (8 PM)</option>
-                        <option value="3">Manual #3</option>
+                      <select id="adm-sig-slot" style="width:100%;" onchange="App.onAdminSlotSelectChange()">
+                        <option value="1" selected>Daily #1 (6:00 PM)</option>
+                        <option value="2">Daily #2 (8:00 PM)</option>
+                        <option value="3">Additional #3 (9:30 PM &middot; $4)</option>
                         <option value="4">Manual #4</option>
                         <option value="5">Manual #5</option>
                         <option value="6">Manual #6</option>
@@ -6686,7 +6757,7 @@ window.gtranslateSettings = {
                 <div class="av-adm-sig-composer-head">
                   <div>
                     <h3 style="margin:0 0 3px; font-size:16px; font-weight:800; color:#0F172A;">Active Signals Status &amp; Feeds</h3>
-                    <p style="margin:0; font-size:12px; color:#64748B;">Live and scheduled worldwide signal lanes by session</p>
+                    <p style="margin:0; font-size:12px; color:#64748B;">Live and scheduled worldwide signal lanes by PKT session</p>
                   </div>
                   <button type="button" class="btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="App.loadAdminSignals()">Refresh</button>
                 </div>
@@ -6694,17 +6765,24 @@ window.gtranslateSettings = {
                 <div id="adm-signal-lanes" class="signal-admin-lanes" style="margin-bottom:0;">
                   <section class="signal-admin-lane signal-admin-lane-4pm">
                     <div class="signal-admin-lane-head">
-                      <div><span class="signal-lane-icon">◷</span><div><strong>4:00 PM PKT</strong><small>Daily Signal #1 &bull; Worldwide</small></div></div>
-                      <span class="signal-lane-tag">DAILY</span>
+                      <div><span class="signal-lane-icon">◷</span><div><strong>6:00 PM PKT</strong><small>Daily Signal #1 &bull; Worldwide</small></div></div>
+                      <span class="signal-lane-tag">DAILY #1</span>
                     </div>
-                    <div id="adm-signal-lane-4pm" class="signal-admin-lane-body"><div class="signal-lane-empty">Loading 4 PM signal…</div></div>
+                    <div id="adm-signal-lane-4pm" class="signal-admin-lane-body"><div class="signal-lane-empty">Loading 6:00 PM signal…</div></div>
                   </section>
                   <section class="signal-admin-lane signal-admin-lane-8pm">
                     <div class="signal-admin-lane-head">
                       <div><span class="signal-lane-icon">◷</span><div><strong>8:00 PM PKT</strong><small>Daily Signal #2 &bull; Worldwide</small></div></div>
-                      <span class="signal-lane-tag">DAILY</span>
+                      <span class="signal-lane-tag">DAILY #2</span>
                     </div>
-                    <div id="adm-signal-lane-8pm" class="signal-admin-lane-body"><div class="signal-lane-empty">Loading 8 PM signal…</div></div>
+                    <div id="adm-signal-lane-8pm" class="signal-admin-lane-body"><div class="signal-lane-empty">Loading 8:00 PM signal…</div></div>
+                  </section>
+                  <section class="signal-admin-lane signal-admin-lane-930pm">
+                    <div class="signal-admin-lane-head">
+                      <div><span class="signal-lane-icon">$4</span><div><strong>9:30 PM PKT</strong><small>Additional Signal #3 &bull; $4.00 Fixed</small></div></div>
+                      <span class="signal-lane-tag">ADDITIONAL</span>
+                    </div>
+                    <div id="adm-signal-lane-930pm" class="signal-admin-lane-body"><div class="signal-lane-empty">Loading 9:30 PM Additional signal…</div></div>
                   </section>
                   <section class="signal-admin-lane signal-admin-lane-custom">
                     <div class="signal-admin-lane-head">
@@ -6713,9 +6791,9 @@ window.gtranslateSettings = {
                     </div>
                     <div id="adm-signal-lane-custom" class="signal-admin-lane-body"><div class="signal-lane-empty">Loading custom signals…</div></div>
                   </section>
-                  <section class="signal-admin-lane signal-admin-lane-test">
+                  <section class="signal-admin-lane signal-admin-lane-test" style="grid-column: 1 / -1;">
                     <div class="signal-admin-lane-head">
-                      <div><span class="signal-lane-icon">T</span><div><strong>Testing Signals</strong><small>4 PM / 8 PM / Custom &bull; No Profit</small></div></div>
+                      <div><span class="signal-lane-icon">T</span><div><strong>Testing Signals</strong><small>6 PM / 8 PM / 9:30 PM / Custom &bull; No Profit</small></div></div>
                       <span class="signal-lane-tag">TEST ONLY</span>
                     </div>
                     <div id="adm-signal-lane-test" class="signal-admin-lane-body"><div class="signal-lane-empty">No testing signals</div></div>
@@ -6739,7 +6817,7 @@ window.gtranslateSettings = {
                       <th>Signal / Slot</th>
                       <th>Direction</th>
                       <th>Broadcast Time (PKT)</th>
-                      <th>Profit %</th>
+                      <th>Profit / Reward</th>
                       <th>Expiry Window</th>
                       <th>Live Status</th>
                       <th>Action</th>
@@ -6794,7 +6872,7 @@ window.gtranslateSettings = {
                   </div>
                   <div class="form-group">
                     <label class="form-label">Minimum Deposit (USDT)</label>
-                    <input type="number" id="sett-min-dep" step="1" value="10.00" style="width:100%;">
+                    <input type="number" id="sett-min-dep" step="1" min="100" value="100.00" style="width:100%;">
                   </div>
                 </div>
 
@@ -9102,8 +9180,8 @@ window.gtranslateSettings = {
         </div>
 
         <div style="background:rgba(255,179,0,0.1); border:1px solid rgba(255,179,0,0.25); padding:10px; border-radius:8px; font-size:12px; color:var(--warning);">
-          <strong id="dep-min-label">Minimum Deposit: 10 USDT</strong>
-          <p id="dep-instructions-text" style="margin-top:4px;">Deposits below threshold cannot be recovered. Network gas fees apply.</p>
+          <strong id="dep-min-label">Minimum Deposit: 100 USDT</strong>
+          <p id="dep-instructions-text" style="margin-top:4px;">Minimum deposit is 100 USDT. Deposits below threshold cannot be credited. Deposit $300+ to unlock Additional Signals ($4.00 each).</p>
         </div>
 
         <!-- MANUAL AUDIT & BLOCKCHAIN VERIFICATION -->
@@ -9127,8 +9205,8 @@ window.gtranslateSettings = {
             </div>
 
             <div class="form-group" style="margin:0;">
-              <label class="form-label" style="font-size:11px;">Transferred Amount (USDT / Crypto) *</label>
-              <input type="number" id="dep-live-amount" placeholder="e.g. 20" value="20" min="1" step="any" style="font-size:14px; font-weight:700; width:100%;">
+              <label class="form-label" style="font-size:11px;">Transferred Amount (USDT / Crypto, Min 100 USD) *</label>
+              <input type="number" id="dep-live-amount" placeholder="e.g. 100" value="100" min="100" step="any" style="font-size:14px; font-weight:700; width:100%;">
             </div>
 
             <button id="btn-submit-live-deposit" class="btn-primary" style="width:100%; padding:12px; font-size:13px; font-weight:700; background:#0052FF; color:#ffffff; margin-top:4px;" onclick="App.submitLiveDeposit()">
@@ -9735,8 +9813,8 @@ window.gtranslateSettings = {
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="form-group">
-            <label class="form-label">Daily Slot #</label>
-            <input type="number" id="edit-sig-slot" min="0" step="1" style="background:#F8FAFC; color:#0F172A; border:1px solid #E2E8F0; border-radius:6px; padding:9px 10px; width:100%;">
+            <label class="form-label">Slot # (0=Custom, 1=6PM, 2=8PM, 3=9:30PM Add)</label>
+            <input type="number" id="edit-sig-slot" min="0" max="3" step="1" style="background:#F8FAFC; color:#0F172A; border:1px solid #E2E8F0; border-radius:6px; padding:9px 10px; width:100%;">
           </div>
           <div class="form-group">
             <label class="form-label">Profit % (Return)</label>
@@ -10310,22 +10388,22 @@ window.gtranslateSettings = {
             <label class="form-label" style="margin: 0;">Trade Stake Amount (USDT)</label>
             <span style="font-size: 11px; color: var(--text-muted);">Trading Bal: <strong id="exec-sig-avail-bal" style="color: var(--primary);">$0.00</strong></span>
           </div>
-          <input type="number" id="exec-sig-amount" min="20" step="0.01" value="20.00" placeholder="Your full USDT balance" oninput="App.updateExecuteSignalCalc()" readonly>
+          <input type="number" id="exec-sig-amount" min="100" step="0.01" value="100.00" placeholder="Your full USDT balance" oninput="App.updateExecuteSignalCalc()" readonly>
         </div>
 
         <!-- Profit calculation breakdown -->
         <div class="card" style="background: #F8FAFC; border: 1px solid #E2E8F0; padding: 10px 12px; font-size: 12px;">
           <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
             <span style="color: var(--text-muted);">Configured Return:</span>
-            <span id="exec-sig-profit-rate" style="color: var(--primary); font-weight: 700;">+5.0%</span>
+            <span id="exec-sig-profit-rate" style="color: var(--primary); font-weight: 700;">+1.67%</span>
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
             <span style="color: var(--text-muted);">Credited Profit:</span>
-            <strong id="exec-sig-est-profit" class="positive">+$1.00 USDT</strong>
+            <strong id="exec-sig-est-profit" class="positive">+$1.67 USDT</strong>
           </div>
           <div style="display: flex; justify-content: space-between; border-top: 1px solid var(--border-subtle); padding-top: 6px; margin-top: 4px; font-weight: 700;">
             <span>Total Returned to Balance:</span>
-            <span id="exec-sig-total-return" style="color: var(--primary);">$21.00 USDT</span>
+            <span id="exec-sig-total-return" style="color: var(--primary);">$101.67 USDT</span>
           </div>
         </div>
 
@@ -10467,7 +10545,7 @@ window.gtranslateSettings = {
         </div>
         <div class="form-group">
           <label class="form-label">Minimum Deposit</label>
-          <input type="number" id="edit-dep-min" value="10" placeholder="Minimum deposit amount">
+          <input type="number" id="edit-dep-min" value="100" min="100" placeholder="Minimum deposit amount">
         </div>
         <div class="form-group">
           <label class="form-label">User Instructions Note</label>
@@ -11107,7 +11185,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261125_v132_live_charts_signals_30d";
+  const CACHE_VERSION = "20261125_v133_signals_redesign_100min_additional";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -11139,18 +11217,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261125_v132_live_charts_signals_30d"></script>
-  <script defer src="/assets/js/chart.js?v=20261125_v132_live_charts_signals_30d"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261125_v133_signals_redesign_100min_additional"></script>
+  <script defer src="/assets/js/chart.js?v=20261125_v133_signals_redesign_100min_additional"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261125_v132_live_charts_signals_30d"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261125_v132_live_charts_signals_30d"></script>
+  <script defer src="/assets/js/app.js?v=20261125_v133_signals_redesign_100min_additional"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261125_v133_signals_redesign_100min_additional"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261125_v132_live_charts_signals_30d";
+      var SW_BUILD = "20261125_v133_signals_redesign_100min_additional";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

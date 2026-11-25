@@ -18,8 +18,8 @@ $defaultConfigs = [
         'asset' => 'USDT',
         'address' => 'TLuCocpgveoDMeyJPTS7hydVg9eSwYzcwE',
         'deposit_address' => 'TLuCocpgveoDMeyJPTS7hydVg9eSwYzcwE',
-        'min_deposit' => 10.0,
-        'minimum_deposit' => 10.0,
+        'min_deposit' => 100.0,
+        'minimum_deposit' => 100.0,
         'confirmations' => 1,
         'instructions' => "Don't send NFTs to this address."
     ],
@@ -29,8 +29,8 @@ $defaultConfigs = [
         'asset' => 'USDT',
         'address' => '0x18a5db369d3c304529fd6c398e66fb7730ff1fd7',
         'deposit_address' => '0x18a5db369d3c304529fd6c398e66fb7730ff1fd7',
-        'min_deposit' => 10.0,
-        'minimum_deposit' => 10.0,
+        'min_deposit' => 100.0,
+        'minimum_deposit' => 100.0,
         'confirmations' => 15,
         'instructions' => "Don't send NFTs to this address."
     ],
@@ -40,8 +40,8 @@ $defaultConfigs = [
         'asset' => 'USDT',
         'address' => '0x18a5db369d3c304529fd6c398e66fb7730ff1fd7',
         'deposit_address' => '0x18a5db369d3c304529fd6c398e66fb7730ff1fd7',
-        'min_deposit' => 10.0,
-        'minimum_deposit' => 10.0,
+        'min_deposit' => 100.0,
+        'minimum_deposit' => 100.0,
         'confirmations' => 12,
         'instructions' => "Don't send NFTs to this address."
     ]
@@ -159,6 +159,9 @@ function loadCurrentConfigs(SupabaseClient $supabase, array $defaultConfigs, str
             $cfg['asset'] = 'USDT';
             $cfg['address'] = $permanentDepositAddresses[$net];
             $cfg['deposit_address'] = $permanentDepositAddresses[$net];
+            $enforcedMin = max(100.0, (float)($cfg['min_deposit'] ?? $cfg['minimum_deposit'] ?? 100.0));
+            $cfg['min_deposit'] = $enforcedMin;
+            $cfg['minimum_deposit'] = $enforcedMin;
         } else {
             unset($configs[$net]);
         }
@@ -193,7 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $asset = 'USDT';
     // Ignore any address supplied by the client. The destination is permanent.
     $address = $permanentDepositAddresses[$network];
-    $minDeposit = (float)($input['min_deposit'] ?? $input['minimum_deposit'] ?? 10.0);
+    $minDeposit = max(100.0, (float)($input['min_deposit'] ?? $input['minimum_deposit'] ?? 100.0));
     $instructions = trim($input['instructions'] ?? "Don't send NFTs to this address.");
     $confirmations = (int)($input['confirmations'] ?? ($network === 'TRC20' ? 1 : 12));
 

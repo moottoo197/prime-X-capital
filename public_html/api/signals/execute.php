@@ -1,9 +1,10 @@
 <?php
 /**
- * User Signal Execution - atomic Supabase RPC
+ * User Signal Execution - atomic Supabase RPC + Fixed $4 Additional Signal Settlement
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/wallet_breakdown.php';
+require_once dirname(__DIR__) . '/lib/additional_signals.php';
 
 $user = requireAuth();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);
@@ -16,73 +17,45 @@ if (!preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $signalId)) sendError('INVALID_SIG
 $supabase = getSupabaseClient();
 if (!$supabase->isConfigured()) sendError('SUPABASE_CONFIG_MISSING', 'Supabase REST client is not configured.', 503);
 
-// Load the signal before validating its session. Manual/custom signals (daily_slot=0)
-// use their own published_at/expires_at window and must not be blocked by the
-// daily 4 PM / 8 PM guard.
 $sigRes = $supabase->select('trading_signals', ['id' => "eq.{$signalId}", 'limit' => '1', 'select' => '*']);
 if (!$sigRes['success'] || empty($sigRes['data'][0])) sendError('SIGNAL_NOT_FOUND', 'Signal not found in Supabase');
 $signal = $sigRes['data'][0];
-// Testing signals are permanently non-profit. The reserved ID prefix is the
-// primary marker; optional is_testing/no_profit metadata is also honored when
-// present so a testing record can never reach the profit-credit RPC.
+
 $isTestingSignal = strpos($signalId, 'sig_test_') === 0
     || filter_var($signal['is_testing'] ?? false, FILTER_VALIDATE_BOOLEAN)
     || filter_var($signal['no_profit'] ?? false, FILTER_VALIDATE_BOOLEAN);
 if ($isTestingSignal) {
     sendError('TEST_SIGNAL_NO_PROFIT', 'Testing signals are for worldwide testing only. They cannot be confirmed and cannot generate or credit profit.');
 }
+
 $slot = (int)($signal['daily_slot'] ?? 0);
 $status = strtoupper((string)($signal['status'] ?? 'PUBLISHED'));
 if (!in_array($status, ['PUBLISHED', 'ACTIVE', 'SCHEDULED'], true)) {
     sendError('SIGNAL_NOT_LIVE', 'This signal is not currently live.');
 }
 
-// Daily signal windows are global and anchored to Pakistan Time (PKT).
-// Do not use the user's profile timezone here; all users share the same broadcast window.
-$timezoneName = 'Asia/Karachi';
-$tz = new DateTimeZone('Asia/Karachi');
-$now = new DateTime('now', $tz);
+$isAdditionalSignal = ($slot === 3 || strpos($signalId, 'sig_add_') === 0);
 
-if (in_array($slot, [1, 2], true)) {
-    // Daily signals are globally scheduled in PKT. Their actual confirmation
-    // window comes from the saved signal record, so an admin-selected duration is honored.
-    try {
-        $startAt = new DateTime((string)($signal['published_at'] ?? $signal['scheduled_at'] ?? ''), new DateTimeZone('UTC'));
-    } catch (Throwable $e) {
-        sendError('SIGNAL_NOT_LIVE', 'This daily signal has an invalid schedule.');
-    }
-    try {
-        $endAt = new DateTime((string)($signal['expires_at'] ?? ''), new DateTimeZone('UTC'));
-    } catch (Throwable $e) {
-        $endAt = (clone $startAt)->modify('+' . max(1, (int)($signal['duration_minutes'] ?? 15)) . ' minutes');
-    }
-    $nowUtcTs = (new DateTime('now', new DateTimeZone('UTC')))->getTimestamp();
-    if ($nowUtcTs < $startAt->getTimestamp() || $nowUtcTs >= $endAt->getTimestamp()) {
-        sendError('SIGNAL_NOT_LIVE', 'This daily signal is outside its configured confirmation window.');
-    }
-} elseif ($slot === 0) {
-    // Manual/custom signal: use the exact server-side UTC window stored on the signal.
-    try {
-        $startAt = new DateTime((string)($signal['published_at'] ?? $signal['scheduled_at'] ?? ''), new DateTimeZone('UTC'));
-    } catch (Throwable $e) {
-        sendError('SIGNAL_NOT_LIVE', 'This manual signal has an invalid schedule.');
-    }
-    try {
-        $endAt = new DateTime((string)($signal['expires_at'] ?? ''), new DateTimeZone('UTC'));
-    } catch (Throwable $e) {
-        $endAt = (clone $startAt)->modify('+' . max(1, (int)($signal['duration_minutes'] ?? 15)) . ' minutes');
-    }
-    $nowUtcTs = (new DateTime('now', new DateTimeZone('UTC')))->getTimestamp();
-    if ($nowUtcTs < $startAt->getTimestamp() || $nowUtcTs >= $endAt->getTimestamp()) {
-        sendError('SIGNAL_NOT_LIVE', 'This manual/custom signal is outside its configured confirmation window.');
-    }
-} else {
+// All signal confirmation windows are globally anchored in UTC from published_at/expires_at
+if (!in_array($slot, [0, 1, 2, 3], true)) {
     sendError('SIGNAL_NOT_LIVE', 'This signal is not assigned to a valid signal session.');
 }
+try {
+    $startAt = new DateTime((string)($signal['published_at'] ?? $signal['scheduled_at'] ?? ''), new DateTimeZone('UTC'));
+} catch (Throwable $e) {
+    sendError('SIGNAL_NOT_LIVE', 'This signal has an invalid schedule.');
+}
+try {
+    $endAt = new DateTime((string)($signal['expires_at'] ?? ''), new DateTimeZone('UTC'));
+} catch (Throwable $e) {
+    $endAt = (clone $startAt)->modify('+' . max(1, (int)($signal['duration_minutes'] ?? 15)) . ' minutes');
+}
+$nowUtcTs = (new DateTime('now', new DateTimeZone('UTC')))->getTimestamp();
+if ($nowUtcTs < $startAt->getTimestamp() || $nowUtcTs >= $endAt->getTimestamp()) {
+    sendError('SIGNAL_NOT_LIVE', 'This signal is outside its configured confirmation window.');
+}
 
-// The signal minimum and profit principal are based only on funded capital:
-// completed deposits + net Admin Financial Adjustments. Referral bonuses and
-// prior signal profits are intentionally excluded from the profit principal.
+// Snapshot current total USDT balance before execution
 $walletRes = $supabase->select('wallet_balances', [
     'user_id' => 'eq.' . (string)$user['id'],
     'asset' => 'eq.USDT',
@@ -95,6 +68,184 @@ if ($walletRes['success'] && is_array($walletRes['data'])) {
     }
 }
 
+// =========================================================================
+// PATH A: ADDITIONAL SIGNAL (9:30 PM PKT / Slot #3)
+//   - Requires Additional Signal credits unlocked via $300+ deposit / referral
+//   - Credits a fixed $4.00 USDT reward
+//   - Completely separate from the 30-Day 2x Plan (never counts toward 2x cap)
+// =========================================================================
+if ($isAdditionalSignal) {
+    $userId = (string)$user['id'];
+    $addStatus = primex_get_additional_signal_status($supabase, $userId);
+    if ((int)($addStatus['remaining'] ?? 0) <= 0) {
+        sendError(
+            'NO_ADDITIONAL_SIGNAL_CREDITS',
+            'You have 0 Additional Signal credits remaining. Deposit $300+ or invite a friend who deposits $300+ to unlock $4.00 Additional Signals.',
+            400
+        );
+    }
+
+    // Check existing single-use execution row
+    $dupCheck = $supabase->select('user_signal_executions', [
+        'user_id' => 'eq.' . $userId,
+        'signal_id' => 'eq.' . $signalId,
+        'select' => 'id',
+        'limit' => '1'
+    ]);
+    if (!empty($dupCheck['success']) && !empty($dupCheck['data'][0])) {
+        sendError('SIGNAL_ALREADY_USED', 'Each user can confirm a signal one time only.');
+    }
+
+    $fixedReward = 4.00;
+    $executionId = 'sig_exec_' . bin2hex(random_bytes(8));
+    $nowIso = gmdate('Y-m-d H:i:s');
+
+    $insExec = $supabase->insert('user_signal_executions', [[
+        'id' => $executionId,
+        'user_id' => $userId,
+        'signal_id' => $signalId,
+        'symbol' => (string)($signal['symbol'] ?? 'ETH/USDT'),
+        'direction' => (string)($signal['direction'] ?? 'BUY'),
+        'stake_amount' => 0,
+        'profit_percentage' => 0,
+        'profit_amount' => $fixedReward,
+        'status' => 'COMPLETED',
+        'executed_at' => $nowIso,
+        'created_at' => $nowIso
+    ]]);
+    if (empty($insExec['success'])) {
+        $errMsg = (string)($insExec['message'] ?? $insExec['error'] ?? '');
+        if (stripos($errMsg, 'duplicate') !== false || stripos($errMsg, '23505') !== false || stripos($errMsg, 'unique') !== false) {
+            sendError('SIGNAL_ALREADY_USED', 'Each user can confirm a signal one time only.');
+        }
+        sendError('EXECUTION_FAILED', 'Additional signal execution failed. ' . $errMsg, 502);
+    }
+
+    // Credit fixed $4.00 USDT to trading wallet atomically via RPC (or REST CAS fallback)
+    $credited = false;
+    $creditRpc = $supabase->rpc('reconcile_signal_profit_once', [
+        'p_user_id' => $userId,
+        'p_signal_id' => 'addsig:' . $signalId,
+        'p_amount' => $fixedReward,
+        'p_profit_percentage' => 0
+    ]);
+    if (!empty($creditRpc['success'])) {
+        $credited = true;
+    } else {
+        // Fallback if RPC isn't deployed: credit trading wallet + ledger idempotently
+        $refId = 'sig_add_exec:' . $signalId . ':' . $userId;
+        $existingLedger = $supabase->select('ledger_entries', [
+            'entry_type' => 'eq.TRADE_PNL',
+            'reference_id' => 'eq.' . $refId,
+            'select' => 'id',
+            'limit' => '1'
+        ]);
+        if (!empty($existingLedger['success']) && !empty($existingLedger['data'][0])) {
+            $credited = true;
+        } else {
+            $trRes = $supabase->select('wallet_balances', [
+                'user_id' => 'eq.' . $userId,
+                'wallet_type' => 'eq.trading',
+                'asset' => 'eq.USDT',
+                'limit' => '1'
+            ]);
+            if (empty($trRes['success']) || empty($trRes['data'][0])) {
+                $supabase->insert('wallet_balances', [[
+                    'user_id' => $userId,
+                    'wallet_type' => 'trading',
+                    'asset' => 'USDT',
+                    'balance' => 0,
+                    'available_balance' => 0,
+                    'reserved_balance' => 0,
+                    'promotional_balance' => 0,
+                    'created_at' => $nowIso,
+                    'updated_at' => $nowIso
+                ]]);
+                $trRes = $supabase->select('wallet_balances', [
+                    'user_id' => 'eq.' . $userId,
+                    'wallet_type' => 'eq.trading',
+                    'asset' => 'eq.USDT',
+                    'limit' => '1'
+                ]);
+            }
+            if (!empty($trRes['success']) && !empty($trRes['data'][0])) {
+                $beforeBal = (float)($trRes['data'][0]['balance'] ?? 0);
+                $afterBal = round($beforeBal + $fixedReward, 2);
+                $upd = $supabase->update('wallet_balances', [
+                    'balance' => $afterBal,
+                    'available_balance' => $afterBal,
+                    'updated_at' => $nowIso
+                ], [
+                    'user_id' => 'eq.' . $userId,
+                    'wallet_type' => 'eq.trading',
+                    'asset' => 'eq.USDT'
+                ]);
+                if (!empty($upd['success'])) {
+                    $supabase->insert('ledger_entries', [[
+                        'user_id' => $userId,
+                        'wallet_type' => 'trading',
+                        'asset' => 'USDT',
+                        'amount' => $fixedReward,
+                        'balance_before' => $beforeBal,
+                        'balance_after' => $afterBal,
+                        'entry_type' => 'TRADE_PNL',
+                        'reference_id' => $refId,
+                        'description' => 'Additional Signal fixed reward (+4.00 USDT, separate from 30-day 2x plan) for ' . $signalId,
+                        'created_at' => $nowIso
+                    ]]);
+                    $credited = true;
+                }
+            }
+        }
+    }
+
+    if (!$credited) {
+        sendError('PROFIT_CREDIT_FAILED', 'Additional signal confirmation could not credit $4.00 USDT. Please contact support.', 502);
+    }
+
+    $consumeRes = primex_consume_additional_signal_credit($supabase, $userId, $signalId);
+
+    $balanceAfter = round($currentBalance + $fixedReward, 2);
+    $postWalletRes = $supabase->select('wallet_balances', [
+        'user_id' => 'eq.' . $userId,
+        'asset' => 'eq.USDT',
+        'select' => 'balance'
+    ]);
+    if ($postWalletRes['success'] && is_array($postWalletRes['data'])) {
+        $persistedAfter = 0.0;
+        foreach ($postWalletRes['data'] as $walletRow) {
+            $persistedAfter += max(0.0, (float)($walletRow['balance'] ?? 0));
+        }
+        $balanceAfter = round($persistedAfter, 2);
+    }
+    try {
+        $supabase->update('user_signal_executions', [
+            'principal_balance' => 0,
+            'balance_before' => round($currentBalance, 2),
+            'balance_after' => $balanceAfter
+        ], ['id' => 'eq.' . $executionId]);
+    } catch (Throwable $e) {}
+
+    sendSuccess([
+        'execution_id' => $executionId,
+        'signal_id' => $signalId,
+        'is_additional' => true,
+        'profit_amount' => $fixedReward,
+        'profit_percentage' => 0.0,
+        'reward_usdt' => $fixedReward,
+        'principal_balance' => 0.0,
+        'balance_before' => round($currentBalance, 2),
+        'expected_profit' => $fixedReward,
+        'balance_after' => $balanceAfter,
+        'additional_signals' => $consumeRes['status'] ?? null
+    ], 'Additional signal executed! +$4.00 USDT fixed profit credited (separate from 30-day 2x plan).');
+}
+
+// =========================================================================
+// PATH B: STANDARD DAILY & CUSTOM SIGNALS (Slots 0, 1, 2)
+//   - Minimum Future Balance & funded capital = 100.00 USDT
+//   - Slot 1 (6:00 PM PKT) & Slot 2 (8:00 PM PKT): 1.67% each = 3.33%/day -> 2x in 30 days
+// =========================================================================
 $capitalBasis = 0.0;
 $capitalBasisRpc = $supabase->rpc('calculate_signal_profit_principal', [
     'p_user_id' => (string)$user['id']
@@ -109,11 +260,6 @@ if ($capitalBasisRpc['success']) {
     }
 }
 
-// Re-read the source-of-capital records locally for every confirmation so the
-// principal used for profit can never fall back to a hard-coded 20-USDT/minimum
-// value returned by an older database function. Only completed deposits and net
-// Admin Financial Adjustments count; referral commissions, bonuses and TRADE_PNL
-// entries remain outside the principal.
 $capitalBatch = $supabase->selectMany([
     'deposits' => [
         'table' => 'deposits',
@@ -126,8 +272,8 @@ $capitalBatch = $supabase->selectMany([
 ]);
 $sourceFundedCapital = 0.0;
 foreach (($capitalBatch['deposits']['data'] ?? []) as $row) {
-    $status = strtoupper(trim((string)($row['status'] ?? '')));
-    if (!in_array($status, ['COMPLETED','APPROVED','CONFIRMED'], true)) continue;
+    $rowStatus = strtoupper(trim((string)($row['status'] ?? '')));
+    if (!in_array($rowStatus, ['COMPLETED', 'APPROVED', 'CONFIRMED'], true)) continue;
     $sourceFundedCapital += max(0.0, (float)($row['amount'] ?? 0));
 }
 foreach (($capitalBatch['ledger']['data'] ?? []) as $row) {
@@ -135,12 +281,6 @@ foreach (($capitalBatch['ledger']['data'] ?? []) as $row) {
     $reason = strtoupper(trim((string)($row['reason'] ?? '')));
     $reference = strtoupper(trim((string)($row['reference_id'] ?? '')));
     $sourceText = trim($desc . ' ' . $reason . ' ' . $reference);
-    // Only admin adjustments explicitly classified as DEPOSIT form principal.
-    // Referral bonuses, profit adjustments and OTHER adjustments are separate.
-    // v83+ typed adjustments use [DEPOSIT]. Also recognize legacy admin
-    // adjustments whose reason explicitly contains "deposit" but predates the
-    // adjustment-type selector. Never treat Referral Bonus, Profit, or Other
-    // adjustments as principal.
     $isTypedDeposit = strpos($desc, '[DEPOSIT]') === 0 || strpos($reason, '[DEPOSIT]') === 0 || strpos($reference, '[DEPOSIT]') === 0;
     $isLegacyDeposit = !$isTypedDeposit
         && strpos($desc, '[REFERRAL_BONUS]') !== 0
@@ -162,30 +302,24 @@ if ($sourceFundedCapital > 0.0) {
     $capitalBasis = $depositPlusBonus;
 }
 
-$privilegedUser = in_array(strtoupper((string)($user['role'] ?? '')), ['ADMIN','SUPER_ADMIN','VIP','FINANCE_MANAGER','KYC_MANAGER'], true);
-if (!$privilegedUser && $futureWalletBalance < 20.0) {
-    if ($transferableSpotBalance >= 20.0) {
-        sendError('TRANSFER_TO_FUTURE_REQUIRED', 'Please transfer at least 20 USDT (Deposit Balance / Deposit Bonus) from your Spot Wallet to your Future Balance before confirming a signal.', 400);
+$minReq = 100.0;
+$privilegedUser = in_array(strtoupper((string)($user['role'] ?? '')), ['ADMIN', 'SUPER_ADMIN', 'VIP', 'FINANCE_MANAGER', 'KYC_MANAGER'], true);
+if (!$privilegedUser && $futureWalletBalance < $minReq) {
+    if ($transferableSpotBalance >= $minReq) {
+        sendError('TRANSFER_TO_FUTURE_REQUIRED', 'Please transfer at least 100 USDT (Deposit Balance / Deposit Bonus) from your Spot Wallet to your Future Balance before confirming a signal.', 400);
     }
-    sendError('MINIMUM_BALANCE_REQUIRED', 'A minimum Future Balance of 20 USDT (from Deposit Balance or Deposit Bonus) is required to confirm a signal. Referral Bonus cannot be transferred to Future.', 400);
+    sendError('MINIMUM_BALANCE_REQUIRED', 'A minimum Future Balance of 100 USDT (from Deposit Balance or Deposit Bonus) is required to confirm a signal. Referral Bonus cannot be transferred to Future.', 400);
 }
-if (!$privilegedUser && $capitalBasis < 20.0) {
-    sendError('MINIMUM_BALANCE_REQUIRED', 'A minimum funded capital of 20 USDT from Deposit Balance or Deposit Bonus is required to confirm a signal.', 400);
+if (!$privilegedUser && $capitalBasis < $minReq) {
+    sendError('MINIMUM_BALANCE_REQUIRED', 'A minimum funded capital of 100 USDT from Deposit Balance or Deposit Bonus is required to confirm a signal.', 400);
 }
 if ($futureWalletBalance > 0.0 && $capitalBasis > $futureWalletBalance && !$privilegedUser) {
     $capitalBasis = round($futureWalletBalance, 2);
 }
-$isDailySignal = in_array($slot, [1, 2], true);
 
-// Daily 4 PM / 8 PM signals use one fixed rate so two confirmed sessions
-// produce ~3.33% of funded principal per day (1.67% each) without compounding,
-// doubling the user's funded deposit in 30 days (60 sessions, capped at 100%).
-// Referral rewards and all other bonus/PNL categories remain outside this principal.
+$isDailySignal = in_array($slot, [1, 2], true);
 $profitPercentage = $isTestingSignal ? 0.0 : ($isDailySignal ? 1.67 : max(0.0, (float)($signal['profit_percentage'] ?? 1.67)));
 
-// Keep the stored daily signal rate aligned with the fixed 30-day doubler rule so
-// the existing atomic execution RPC reads the same 1.67% rate. This does not alter
-// scheduling, duration, direction, or any other signal fields.
 if ($isDailySignal && !$isTestingSignal && abs((float)($signal['profit_percentage'] ?? 1.67) - 1.67) > 0.000001) {
     $rateSync = $supabase->update('trading_signals', ['profit_percentage' => 1.67], ['id' => 'eq.' . $signalId]);
     if (!$rateSync['success']) {
@@ -194,12 +328,7 @@ if ($isDailySignal && !$isTestingSignal && abs((float)($signal['profit_percentag
     $signal['profit_percentage'] = 1.67;
 }
 
-// A funded deposit/administrative capital amount can earn at most 100% of that
-// principal from the two normal daily signals. At 1.67% per session, two sessions
-// per day = 3.33% per day, so the full principal doubles over 30 daily cycles.
-// The cap is calculated from each daily signal's execution profit plus any explicit
-// principal-reconciliation credits for that same signal. Referral commissions,
-// promotional bonuses, custom/manual signal PNL, and other credits remain separate.
+// 30-day 2x cap (100% of funded principal across sig_daily_* ONLY; Additional Signals are completely excluded)
 $dailySignalProfitTotal = 0.0;
 $dailyProfitCap = round($capitalBasis, 2);
 if ($isDailySignal && !$isTestingSignal && $dailyProfitCap > 0) {
@@ -242,7 +371,7 @@ if ($isDailySignal && !$isTestingSignal && $dailyProfitCap > 0) {
     $dailySignalProfitTotal = round(array_sum($dailySignalTotals), 2);
     $remainingDailyProfit = round(max(0.0, $dailyProfitCap - $dailySignalProfitTotal), 2);
     if ($remainingDailyProfit < 0.01) {
-        sendError('DAILY_PROFIT_CAP_REACHED', 'This funded principal has already reached its 100% daily-signal profit cap. No additional principal-based daily profit can be credited.', 409);
+        sendError('DAILY_PROFIT_CAP_REACHED', 'This funded principal has already reached its 100% 30-day daily-signal profit cap. No additional principal-based daily profit can be credited.', 409);
     }
 } else {
     $remainingDailyProfit = null;
@@ -250,15 +379,9 @@ if ($isDailySignal && !$isTestingSignal && $dailyProfitCap > 0) {
 
 $expectedProfit = round(($capitalBasis * $profitPercentage) / 100, 2);
 if ($isDailySignal && !$isTestingSignal && $remainingDailyProfit !== null) {
-    // Normally the final session is an exact 2.5% credit. The min() also protects
-    // against a one-cent rounding remainder on unusual principal amounts.
     $expectedProfit = round(min($expectedProfit, $remainingDailyProfit), 2);
 }
 
-// The existing RPC remains the authoritative atomic execution path. We do not
-// replace its signal/session/idempotency logic. After it succeeds, daily-signal
-// profit is reconciled against the exact signal's TRADE_PNL ledger total so an
-// older 20-USDT/minimum-wallet credit cannot leave a larger funded principal at 0.5.
 $rpc = $supabase->rpc('execute_alphavest_signal', [
     'p_signal_id' => $signalId,
     'p_user_id' => (string)$user['id']
@@ -284,14 +407,7 @@ if (($result['success'] ?? true) === false) {
 $profitAmount = (float)($result['profit_amount'] ?? 0);
 $executionId = trim((string)($result['execution_id'] ?? ''));
 
-// For normal daily signals, calculate the amount already credited for THIS signal
-// only. This prevents prior daily-signal profits from being mistaken for the current
-// signal and also makes old partial 0.5-USDT credits safely repairable.
 if ($isDailySignal && !$isTestingSignal && $expectedProfit > 0) {
-    // Never let the RPC's legacy profit amount (for example $0.50) become the final
-    // result when the user's actual funded principal requires a larger 2.5% credit.
-    // Start from the RPC result because that is the amount the atomic execution path
-    // actually reports as credited, then add any matching ledger reconciliation rows.
     $signalCreditedTotal = max(0.0, $profitAmount);
     $signalLedgerRes = $supabase->select('ledger_entries', [
         'user_id' => 'eq.' . (string)$user['id'],
@@ -319,8 +435,6 @@ if ($isDailySignal && !$isTestingSignal && $expectedProfit > 0) {
     $signalCreditedTotal = round($signalCreditedTotal, 2);
     $remainingSignalProfit = round(max(0.0, $expectedProfit - $signalCreditedTotal), 2);
     if ($remainingSignalProfit > 0) {
-        // Key the reconciliation by the exact remaining amount so a later principal
-        // increase can safely credit only the newly required difference.
         $correctionSignalId = $signalId . ':principal:' . number_format($remainingSignalProfit, 2, '.', '');
         $fix = $supabase->rpc('reconcile_signal_profit_once', [
             'p_user_id' => (string)$user['id'],
@@ -339,15 +453,6 @@ if ($isDailySignal && !$isTestingSignal && $expectedProfit > 0) {
     $profitAmount = round(min($signalCreditedTotal, $expectedProfit), 2);
 }
 
-// Keep the execution record's balance snapshot aligned with the server-authoritative
-// funded-capital calculation so Admin User/Signal Detail can show the exact state at
-// confirmation time without changing the existing execution/idempotency flow.
-
-// The exact-signal reconciliation above also handles legacy partial credits.
-
-// Read the wallet again after the authoritative execution/repair so the
-// confirmation snapshot reflects the real persisted balance, including any
-// concurrent ledger changes handled by the database transaction.
 $balanceAfter = round($currentBalance + $profitAmount, 2);
 $postWalletRes = $supabase->select('wallet_balances', [
     'user_id' => 'eq.' . (string)$user['id'],
@@ -368,15 +473,13 @@ if ($executionId !== '') {
             'balance_before' => round($currentBalance, 2),
             'balance_after' => $balanceAfter
         ], ['id' => 'eq.' . $executionId]);
-    } catch (Throwable $e) {
-        // Detail snapshots are informational; never turn a successful signal
-        // execution into a failure solely because the optional snapshot update failed.
-    }
+    } catch (Throwable $e) {}
 }
 
 sendSuccess([
     'execution_id' => $result['execution_id'] ?? null,
     'signal_id' => $signalId,
+    'is_additional' => false,
     'profit_amount' => $profitAmount,
     'profit_percentage' => (float)($result['profit_percentage'] ?? ($signal['profit_percentage'] ?? 1.67)),
     'principal_balance' => round($capitalBasis, 2),

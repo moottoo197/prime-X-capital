@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         sendError('UNSUPPORTED_DEPOSIT_NETWORK', 'Only USDT TRC20, ERC20, and BEP20 deposits are supported.', 400);
     }
 
-    $minDeposit = 10.0;
+    $minDeposit = 100.0;
     $confirmations = ($network === 'TRC20') ? 1 : 12;
     $instructions = "Don't send NFTs to this address.";
 
@@ -89,6 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         } catch (Exception $e) {}
     }
 
+    $minDeposit = max(100.0, $minDeposit);
     $address = $defaultAddresses[$network];
 
     sendSuccess([
@@ -124,7 +125,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $txHash = trim((string)($input['tx_hash'] ?? ''));
     $idempotencyKey = trim((string)($input['idempotency_key'] ?? ($_SERVER['HTTP_X_IDEMPOTENCY_KEY'] ?? '')));
 
+    $minDepositRequired = 100.0;
+    if (file_exists($configFilePath)) {
+        $savedCfg = json_decode(@file_get_contents($configFilePath), true);
+        if (is_array($savedCfg) && isset($savedCfg[$network])) {
+            $minDepositRequired = max($minDepositRequired, (float)($savedCfg[$network]['min_deposit'] ?? $savedCfg[$network]['minimum_deposit'] ?? 100.0));
+        }
+    }
+    if ($supabase->isConfigured()) {
+        try {
+            $ssRes = $supabase->select('system_settings', [
+                'setting_key' => 'in.(MIN_DEPOSIT_USDT,deposit_min_usdt,min_deposit)',
+                'select' => 'setting_key,setting_value'
+            ]);
+            if (!empty($ssRes['success']) && is_array($ssRes['data'])) {
+                foreach ($ssRes['data'] as $s) {
+                    $v = $s['setting_value'] ?? '';
+                    if (is_numeric($v)) {
+                        $minDepositRequired = max($minDepositRequired, (float)$v);
+                    }
+                }
+            }
+        } catch (Exception $e) {}
+    }
+
     if ($amount <= 0) sendError('VALIDATION_ERROR', 'Deposit amount must be greater than zero');
+    if ($amount < $minDepositRequired) {
+        sendError('MINIMUM_DEPOSIT_REQUIRED', 'Minimum deposit limit is ' . number_format($minDepositRequired, 0) . ' USDT.', 400);
+    }
     if ($idempotencyKey === '') sendError('IDEMPOTENCY_KEY_REQUIRED', 'Please submit the deposit once using the current form button.');
 
     $depId = 'dep_' . bin2hex(random_bytes(8));

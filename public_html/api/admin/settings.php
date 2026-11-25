@@ -17,8 +17,8 @@ $defaultSettings = [
     'copy_trading_profit_split' => '0.10',
     'min_withdrawal' => '3.00',
     'min_withdrawal_usdt' => '3.00',
-    'min_deposit' => '10.00',
-    'deposit_min_usdt' => '10.00',
+    'min_deposit' => '100.00',
+    'deposit_min_usdt' => '100.00',
     'system_notice' => 'System operating with zero-trust ledger protection.',
     'hot_wallet_trc20' => 'TLuCocpgveoDMeyJPTS7hydVg9eSwYzcwE',
     'hot_wallet_erc20' => '0x18a5db369d3c304529fd6c398e66fb7730ff1fd7',
@@ -51,6 +51,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // Minimum withdrawal is a fixed platform rule. Never let an old setting override it.
     $defaultSettings['min_withdrawal'] = '3.00';
     $defaultSettings['min_withdrawal_usdt'] = '3.00';
+    // Minimum deposit is floored at 100.00 USDT platform-wide.
+    $loadedMinDep = max(100.0, (float)($defaultSettings['deposit_min_usdt'] ?? $defaultSettings['min_deposit'] ?? 100.0));
+    $defaultSettings['min_deposit'] = number_format($loadedMinDep, 2, '.', '');
+    $defaultSettings['deposit_min_usdt'] = number_format($loadedMinDep, 2, '.', '');
 
     sendSuccess(['settings' => $defaultSettings], 'Settings loaded from Supabase');
 }
@@ -70,11 +74,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     unset($input['min_withdrawal'], $input['min_withdrawal_usdt'], $input['minimum_withdrawal']);
     $minDep = null;
     if (isset($input['min_deposit']) && is_numeric($input['min_deposit'])) {
-        $minDep = (float)$input['min_deposit'];
+        $minDep = max(100.0, (float)$input['min_deposit']);
     } elseif (isset($input['deposit_min_usdt']) && is_numeric($input['deposit_min_usdt'])) {
-        $minDep = (float)$input['deposit_min_usdt'];
+        $minDep = max(100.0, (float)$input['deposit_min_usdt']);
     } elseif (isset($input['minimum_deposit']) && is_numeric($input['minimum_deposit'])) {
-        $minDep = (float)$input['minimum_deposit'];
+        $minDep = max(100.0, (float)$input['minimum_deposit']);
+    }
+    if ($minDep !== null) {
+        $input['min_deposit'] = (string)$minDep;
+        $input['deposit_min_usdt'] = (string)$minDep;
     }
 
     // Never persist deposit receiving-address changes or console-only SMTP credentials here.
@@ -146,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     sendSuccess([
-        'min_deposit' => $minDep ?? 10.0,
-        'deposit_min_usdt' => $minDep ?? 10.0
+        'min_deposit' => $minDep ?? 100.0,
+        'deposit_min_usdt' => $minDep ?? 100.0
     ], 'Platform configuration saved successfully in Supabase');
 }

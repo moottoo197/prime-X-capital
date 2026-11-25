@@ -91,7 +91,9 @@ if (!function_exists('primex_broadcast_signal_live_if_needed')) {
 
         $symbol = strtoupper(trim((string)($signal['symbol'] ?? 'BTC/USDT')));
         $direction = strtoupper(trim((string)($signal['direction'] ?? 'BUY')));
-        $profitPct = (float)($signal['profit_percentage'] ?? 1.67);
+        $slot = (int)($signal['daily_slot'] ?? 0);
+        $isAdditional = ($slot === 3 || strpos($sigId, 'sig_add_') === 0 || !empty($signal['is_additional']));
+        $profitPct = $isAdditional ? 0.0 : (float)($signal['profit_percentage'] ?? 1.67);
         $duration = max(1, (int)($signal['duration_minutes'] ?? 15));
         $expiresAtPkt = '';
         $expRaw = (string)($signal['expires_at'] ?? '');
@@ -122,7 +124,8 @@ if (!function_exists('primex_broadcast_signal_live_if_needed')) {
                 $profitPct,
                 $duration,
                 $expiresAtPkt,
-                $signalsUrl
+                $signalsUrl,
+                $isAdditional
             );
             $mailRes = primex_send_templated_email($email, $template);
             if (!empty($mailRes['success'])) {

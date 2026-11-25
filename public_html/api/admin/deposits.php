@@ -5,6 +5,7 @@
 require_once dirname(__DIR__) . '/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/mailer.php';
 require_once dirname(__DIR__) . '/lib/email_templates.php';
+require_once dirname(__DIR__) . '/lib/additional_signals.php';
 
 $admin = requireAdmin();
 $adminId = (string)($admin['id'] ?? '');
@@ -160,6 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $already = !empty($result['already_processed']);
     $status = (string)($result['status'] ?? ($decision === 'APPROVE' ? 'COMPLETED' : 'REJECTED'));
+    $additionalGrantResult = ['credits' => 0, 'depositor_granted' => false, 'inviter_granted' => false];
 
     if (!$already) {
         try {
@@ -170,6 +172,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $depRow = (!empty($depLookup['success']) && !empty($depLookup['data'][0])) ? $depLookup['data'][0] : null;
             $depUserId = trim((string)($depRow['user_id'] ?? ''));
+            $depAmount = (float)($depRow['amount'] ?? 0);
+
+            if ($depUserId !== '' && $decision === 'APPROVE' && $depAmount >= 300.0) {
+                $additionalGrantResult = primex_grant_additional_signals_for_deposit($supabase, $depId, $depUserId, $depAmount);
+            }
+
             if ($depUserId !== '') {
                 $profLookup = $supabase->select('profiles', [
                     'id' => 'eq.' . $depUserId,
@@ -183,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $tpl = primex_email_template_deposit_status(
                         $recipientName,
                         $decision,
-                        (float)($depRow['amount'] ?? 0),
+                        $depAmount,
                         (string)($depRow['asset'] ?? 'USDT'),
                         (string)($depRow['network'] ?? 'TRC20'),
                         $depId,
@@ -210,6 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     sendSuccess([
         'deposit_id' => $depId,
         'status' => $status,
-        'already_processed' => $already
+        'already_processed' => $already,
+        'additional_signals' => $additionalGrantResult
     ], $already ? 'This deposit was already processed once.' : ($decision === 'APPROVE' ? 'Deposit approved and credited to wallet' : 'Deposit marked as REJECTED'));
 }

@@ -1252,6 +1252,7 @@ const App = {
     } else if (view === 'referrals') {
       this.loadReferrals();
     } else if (view === 'signals') {
+      this.renderSignalScheduleTable(this.state.signalScheduleTab || 'first');
       setTimeout(() => this.initSignalsTerminal(), 30);
       this.loadSignals();
     } else if (view === 'home') {
@@ -2875,7 +2876,8 @@ const App = {
         submitBtn.textContent = depositsEnabled ? 'Submit Deposit for Admin Approval' : 'Deposits Temporarily Disabled';
       }
       const address = res.data.address || (res.data.deposit_info && res.data.deposit_info.address) || '';
-      const minDeposit = res.data.min_deposit || (res.data.deposit_info && res.data.deposit_info.minimum_deposit) || 10;
+      const minDeposit = Math.max(100, Number(res.data.min_deposit || (res.data.deposit_info && res.data.deposit_info.minimum_deposit) || 100) || 100);
+      this.state.minDepositRequired = minDeposit;
       const instructions = res.data.instructions || '';
       const confirmations = res.data.required_confirmations || 12;
 
@@ -2884,6 +2886,13 @@ const App = {
       
       const minLabelEl = document.getElementById('dep-min-label');
       if (minLabelEl) minLabelEl.textContent = `Minimum Deposit: ${minDeposit} ${asset} (${confirmations} Confirmations Required)`;
+
+      const amtInput = document.getElementById('dep-live-amount');
+      if (amtInput) {
+        amtInput.min = String(minDeposit);
+        amtInput.placeholder = `e.g. ${minDeposit}`;
+        if (!amtInput.value || Number(amtInput.value) < minDeposit) amtInput.value = String(minDeposit);
+      }
 
       const instEl = document.getElementById('dep-instructions-text');
       if (instEl && instructions) instEl.textContent = instructions;
@@ -2928,11 +2937,16 @@ const App = {
       const asset = document.getElementById('dep-asset')?.value || 'USDT';
       const network = document.getElementById('dep-network')?.value || 'TRC20';
       const amount = parseFloat(document.getElementById('dep-live-amount')?.value) || 0;
+      const minDepReq = Math.max(100, Number(statusCheck?.data?.min_deposit || this.state.minDepositRequired || 100) || 100);
       const userAddress = (document.getElementById('dep-user-address')?.value || '').trim();
       const txHash = (document.getElementById('dep-live-txhash')?.value || '').trim();
 
       if (amount <= 0) {
         this.toast('Please enter a valid deposit amount', 'error');
+        return;
+      }
+      if (amount < minDepReq) {
+        this.toast(`Minimum deposit is ${minDepReq} ${asset}. Please enter at least ${minDepReq} ${asset}.`, 'error');
         return;
       }
       if (!userAddress && !txHash) {
@@ -3769,7 +3783,10 @@ const App = {
 
   renderSignals() {
     const container = document.getElementById('active-signals-list');
-    if (!container) return;
+    if (!container) {
+      if (this.state.currentView === 'signals') this.initSignalsTerminal();
+      return;
+    }
     if (!this.state.activeSignals.length) {
       container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-dim);">No active signals published currently.</div>`;
       if (this.state.currentView === 'signals') this.initSignalsTerminal();
@@ -4197,16 +4214,79 @@ const App = {
     }
   },
 
-  /* Signals: 2 Daily Signals, eligibility-gated execution & 1-Time Execution with Profit Credit */
+  /* Signals: 2 Daily Signals (6 PM / 8 PM PKT) + Additional Signals (9:30 PM PKT, $4 Fixed) */
+  setSignalScheduleTab(tab = 'first') {
+    this.state.signalScheduleTab = tab;
+    document.querySelectorAll('.av-sig-sched-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-sig-sched') === tab);
+    });
+    this.renderSignalScheduleTable(tab);
+  },
+
+  renderSignalScheduleTable(tab = 'first') {
+    const host = document.getElementById('sig-schedule-countries');
+    if (!host) return;
+    const tables = {
+      first: [
+        { name: 'UK', time: '1:00 PM', utc: 'UTC+0' },
+        { name: 'Ghana', time: '1:00 PM', utc: 'UTC+0' },
+        { name: 'Nigeria', time: '2:00 PM', utc: 'UTC+1' },
+        { name: 'South Africa', time: '3:00 PM', utc: 'UTC+2' },
+        { name: 'Egypt', time: '4:00 PM', utc: 'UTC+3' },
+        { name: 'Kenya', time: '4:00 PM', utc: 'UTC+3' },
+        { name: 'Tanzania', time: '4:00 PM', utc: 'UTC+3' },
+        { name: 'Turkey', time: '5:00 PM', utc: 'UTC+4' },
+        { name: 'UAE', time: '5:00 PM', utc: 'UTC+4' },
+        { name: 'Pakistan', time: '6:00 PM', utc: 'UTC+5', pkt: true },
+        { name: 'India', time: '6:30 PM', utc: 'UTC+5:30' },
+        { name: 'China', time: '9:00 PM', utc: 'UTC+8' }
+      ],
+      second: [
+        { name: 'UK', time: '3:00 PM', utc: 'UTC+0' },
+        { name: 'Ghana', time: '3:00 PM', utc: 'UTC+0' },
+        { name: 'Nigeria', time: '4:00 PM', utc: 'UTC+1' },
+        { name: 'South Africa', time: '5:00 PM', utc: 'UTC+2' },
+        { name: 'Egypt', time: '6:00 PM', utc: 'UTC+3' },
+        { name: 'Kenya', time: '6:00 PM', utc: 'UTC+3' },
+        { name: 'Tanzania', time: '6:00 PM', utc: 'UTC+3' },
+        { name: 'Turkey', time: '7:00 PM', utc: 'UTC+4' },
+        { name: 'UAE', time: '7:00 PM', utc: 'UTC+4' },
+        { name: 'Pakistan', time: '8:00 PM', utc: 'UTC+5', pkt: true },
+        { name: 'India', time: '8:30 PM', utc: 'UTC+5:30' },
+        { name: 'China', time: '11:00 PM', utc: 'UTC+8' }
+      ],
+      additional: [
+        { name: 'UK', time: '4:30 PM', utc: 'UTC+0' },
+        { name: 'Ghana', time: '4:30 PM', utc: 'UTC+0' },
+        { name: 'Nigeria', time: '5:30 PM', utc: 'UTC+1' },
+        { name: 'South Africa', time: '6:30 PM', utc: 'UTC+2' },
+        { name: 'Egypt', time: '7:30 PM', utc: 'UTC+3' },
+        { name: 'Kenya', time: '7:30 PM', utc: 'UTC+3' },
+        { name: 'Tanzania', time: '7:30 PM', utc: 'UTC+3' },
+        { name: 'Turkey', time: '8:30 PM', utc: 'UTC+4' },
+        { name: 'UAE', time: '8:30 PM', utc: 'UTC+4' },
+        { name: 'Pakistan', time: '9:30 PM', utc: 'UTC+5', pkt: true },
+        { name: 'India', time: '10:00 PM', utc: 'UTC+5:30' },
+        { name: 'China', time: '12:30 AM', utc: 'UTC+8' }
+      ]
+    };
+    const rows = tables[tab] || tables.first;
+    host.innerHTML = rows.map(r => `
+      <div class="av-sig-country-row${r.pkt ? ' is-pkt' : ''}">
+        <span class="av-sig-country-name">${this.escapeHtml(r.name)}</span>
+        <span class="av-sig-country-time">${this.escapeHtml(r.time)} <span class="av-sig-country-utc">(${this.escapeHtml(r.utc)})</span></span>
+      </div>
+    `).join('');
+  },
+
   async loadSignals() {
     const container = document.getElementById('active-signals-list');
     const eligBanner = document.getElementById('signals-eligibility-banner');
     const quotaBadge = document.getElementById('signals-quota-badge');
     const userHistory = document.getElementById('signals-user-history');
 
-    // Never blank an already-hydrated dashboard while the network request runs.
-    // Cached signals remain visible immediately; the fresh response replaces them
-    // silently when it arrives.
+    this.renderSignalScheduleTable(this.state.signalScheduleTab || 'first');
+
     const hasVisibleSignals = Array.isArray(this.state.signals) && this.state.signals.length > 0;
     if (container && !hasVisibleSignals) {
       container.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-muted);">Loading live quantitative signals...</div>`;
@@ -4234,7 +4314,47 @@ const App = {
     const tradingUsdt = Number(data.future_balance_usdt ?? this.state.balances?.future_total_usdt ?? this.state.balances?.breakdown?.trading_total_usdt ?? 0);
     const transferableSpotUsdt = Number(data.transferable_spot_usdt ?? this.state.balances?.transferable_spot_usdt ?? 0);
     const referralBonusUsdt = Number(data.referral_bonus_usdt ?? this.state.balances?.referral_bonus_usdt ?? 0);
-    const minReq = Number(data.min_deposit_required || 20.0);
+    const minReq = Math.max(100, Number(data.min_deposit_required || 100) || 100);
+    const addStatus = data.additional_signals || {};
+    const addRemaining = Number(addStatus.remaining ?? 0);
+    const addTotalEarned = Number(addStatus.total_earned ?? 0);
+    const addUsed = Number(addStatus.used ?? 0);
+    const addDepositCredits = Number(addStatus.deposit_credits ?? 0);
+    const addReferralCredits = Number(addStatus.referral_credits ?? 0);
+    const totalDeposited = Number(data.user_deposited ?? 0);
+
+    const kpiFutEl = document.getElementById('sig-kpi-future-bal');
+    const kpiFutMetaEl = document.getElementById('sig-kpi-future-meta');
+    const kpiAddEl = document.getElementById('sig-kpi-add-remaining');
+    const kpiAddMetaEl = document.getElementById('sig-kpi-add-meta');
+    if (kpiFutEl) {
+      kpiFutEl.textContent = `$${tradingUsdt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      kpiFutEl.style.color = tradingUsdt >= minReq ? '#059669' : '#0F172A';
+    }
+    if (kpiFutMetaEl) {
+      kpiFutMetaEl.textContent = tradingUsdt >= minReq
+        ? `Qualified ($${minReq.toFixed(0)} Min) · Daily 6:00 PM & 8:00 PM PKT unlocked`
+        : `Minimum $${minReq.toFixed(0)} USDT Future Balance required for daily signals`;
+    }
+    if (kpiAddEl) {
+      kpiAddEl.textContent = `${addRemaining} Remaining`;
+    }
+    if (kpiAddMetaEl) {
+      kpiAddMetaEl.textContent = addTotalEarned > 0
+        ? `Earned ${addTotalEarned} (${addDepositCredits} deposit + ${addReferralCredits} referral) · Used ${addUsed} · $4.00/signal`
+        : `Deposit $300+ or invite a $300+ depositor to unlock $4.00 signals`;
+    }
+
+    // Highlight highest unlocked tier row in tier table
+    const tierRows = document.querySelectorAll('#sig-additional-tiers-body tr[data-tier]');
+    let highestUnlockedTier = 0;
+    [100, 300, 500, 700, 1000, 1500, 3000, 5000, 7000, 10000].forEach(t => {
+      if (totalDeposited >= t) highestUnlockedTier = t;
+    });
+    tierRows.forEach(tr => {
+      tr.classList.toggle('is-current-tier', Number(tr.getAttribute('data-tier')) === highestUnlockedTier);
+    });
+
     const isPrivileged = Boolean(
       this.state.user?.is_admin ||
       ['ADMIN', 'SUPER_ADMIN', 'VIP', 'FINANCE_MANAGER', 'KYC_MANAGER'].includes(this.state.user?.role)
@@ -4250,12 +4370,10 @@ const App = {
     data.needs_future_transfer = needsTransferToFuture;
     data.user_total_deposited = tradingUsdt;
 
-    // Quota badge
     if (quotaBadge) {
       quotaBadge.textContent = `${data.today_signals_count} / ${data.daily_limit || 2} Dispatched Today`;
     }
 
-    // Eligibility banner
     if (eligBanner) {
       if (!data.is_eligible) {
         eligBanner.innerHTML = needsTransferToFuture ? `
@@ -4267,7 +4385,7 @@ const App = {
                   <span style="font-size: 11px; color: #1E3A8A;">Future Balance: $${tradingUsdt.toFixed(2)} &bull; Transferable Spot: $${transferableSpotUsdt.toFixed(2)}</span>
                 </div>
                 <div style="font-size: 13px; color: #111827; font-weight: 700;">
-                  Move your Deposit or Deposit Bonus from Spot to Future Balance to unlock Signals.
+                  Move your Deposit or Deposit Bonus from Spot to Future Balance to unlock daily signals.
                 </div>
                 <div style="font-size: 12px; color: #4B5563; margin-top: 2px;">
                   Future Balance is used for Trades and Signals. Referral Bonus stays locked in Spot.
@@ -4287,10 +4405,10 @@ const App = {
                   <span style="font-size: 11px; color: #6B7280;">Future Balance: $${tradingUsdt.toFixed(2)} USDT</span>
                 </div>
                 <div style="font-size: 13px; color: #111827; font-weight: 700;">
-                  Institutional Signals &amp; Guaranteed Profit Execution require ${minReq} USDT in Future Balance.
+                  Daily Signals &amp; 30-Day 2× Profit Growth require at least ${minReq} USDT in Future Balance.
                 </div>
                 <div style="font-size: 12px; color: #4B5563; margin-top: 2px;">
-                  Deposit USDT and transfer Deposit / Deposit Bonus to Future Balance.${referralBonusUsdt > 0 ? ` Referral Bonus ($${referralBonusUsdt.toFixed(2)}) cannot be transferred to Future.` : ''}
+                  Deposit 100+ USDT and transfer Deposit / Deposit Bonus to Future Balance.${referralBonusUsdt > 0 ? ` Referral Bonus ($${referralBonusUsdt.toFixed(2)}) cannot be transferred to Future.` : ''}
                 </div>
               </div>
               <button class="btn-primary" style="padding: 8px 16px; font-size: 12px; font-weight: 700; white-space: nowrap; border-radius: 999px;" onclick="App.openDepositModal()">
@@ -4303,20 +4421,20 @@ const App = {
         eligBanner.innerHTML = `
           <div class="card" style="background: #ECFDF5; border: 1px solid #A7F3D0; padding: 12px 14px; border-radius: 12px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
-              <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <span class="badge badge-positive">FUTURE ACCOUNT QUALIFIED</span>
                 <span style="font-size: 12px; color: #111827; font-weight: 600;">
-                  Future Balance ($${tradingUsdt.toFixed(2)} USDT) &bull; Signal Access Unlocked
+                  Future Balance ($${tradingUsdt.toFixed(2)} USDT) &bull; Daily 6:00 PM &amp; 8:00 PM PKT Unlocked
                 </span>
               </div>
-              <span style="font-size: 11px; color: #059669; font-weight: 700;">1-Time Execution Guaranteed Profit Active</span>
+              <span style="font-size: 11px; color: #059669; font-weight: 700;">Additional Credits: ${addRemaining} (@ $4.00 USDT Fixed)</span>
             </div>
           </div>
         `;
       }
     }
 
-    // Render Signals List (Strictly shows LIVE signals or confirmed signals for today)
+    // Legacy #active-signals-list stays removed from HTML; this block is skipped cleanly when absent
     if (container) {
       if (!this.state.signals.length) {
         container.innerHTML = `
@@ -4326,133 +4444,7 @@ const App = {
           </div>
         `;
       } else {
-        container.innerHTML = this.state.signals.map(s => {
-          const isBuy = ['BUY', 'LONG', 'UP'].includes(String(s.direction || 'BUY').toUpperCase());
-          const dirBadge = isBuy ? 'badge-positive' : 'badge-negative';
-          const isTesting = Boolean(s.is_testing || s.no_profit || String(s.id || '').startsWith('sig_test_'));
-          const profitPct = isTesting ? 0 : (s.profit_percentage || 1.67);
-          const hasUsed = Boolean(s.has_used || s.has_confirmed);
-          const isExpired = Boolean(s.is_expired || (s.time_left_seconds !== undefined && s.time_left_seconds <= 0 && s.status === 'PUBLISHED'));
-          const isScheduled = Boolean(s.is_scheduled || s.status === 'SCHEDULED');
-          const isLive = !isExpired && !isScheduled && (s.status === 'PUBLISHED' || s.status === 'ACTIVE');
-
-          let actionButtonHtml = '';
-          let timingNoticeHtml = '';
-
-          if (isTesting) {
-            actionButtonHtml = `
-              <button class="btn-secondary" style="width:100%;padding:11px 16px;font-size:12px;font-weight:800;background:#F5F3FF;border:1px solid #DDD6FE;color:#7C3AED;border-radius:10px;cursor:pointer;" onclick="App.openExecuteSignalModal('${s.id}')">
-                🧪 OPEN TESTING SIGNAL — NO PROFIT
-              </button>`;
-            timingNoticeHtml = isLive ? `
-              <div style="font-size:12px;color:#6D28D9;margin-bottom:12px;background:#F5F3FF;padding:10px 14px;border-radius:10px;border:1px solid #DDD6FE;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-                <div><span style="font-size:10px;text-transform:uppercase;font-weight:800;display:block;">🧪 Testing Broadcast</span><strong style="color:#111827;font-size:13px;">Worldwide • No Profit</strong></div>
-                <div style="text-align:right;"><span style="font-size:10px;text-transform:uppercase;font-weight:800;display:block;">⏳ Test Expires In</span><span class="mono sig-timer-live" data-sig-id="${s.id}" data-time-left="${s.time_left_seconds || ((s.duration_minutes || 15) * 60)}" style="font-weight:900;color:#7C3AED;font-size:16px;">${this.formatCountdown(s.time_left_seconds || ((s.duration_minutes || 15) * 60))}</span></div>
-              </div>` : '';
-          } else if (hasUsed) {
-            actionButtonHtml = `
-              <button disabled class="btn-disabled" style="cursor: not-allowed; width: 100%; padding: 11px 16px; font-size: 13px; font-weight: 700; background: #ECFDF5; border: 1px solid #A7F3D0; color: #059669; border-radius: 10px; pointer-events: none;">
-                ✅ Confirmed &bull; Profit Added to Balance (Single-Use Completed)
-              </button>
-            `;
-            timingNoticeHtml = `
-              <div style="font-size: 12px; color: #059669; margin-bottom: 12px; background: #ECFDF5; padding: 10px 14px; border-radius: 10px; border: 1px solid #A7F3D0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                <div>
-                  <span style="color: #6B7280; font-size: 10px; text-transform: uppercase; font-weight: 700; display: block;">Session Broadcast</span>
-                  <strong style="color: #111827; font-size: 13px;">Completed</strong>
-                </div>
-                <div style="text-align: right;">
-                  <span style="color: #059669; font-weight: 700;">✅ Profit Locked: +$${s.execution?.profit_amount ? Number(s.execution.profit_amount).toFixed(2) : Number(s.execution?.profit_amount || 0).toFixed(2)} USDT</span>
-                  <div class="mono" style="color: #6B7280; font-size: 10px;">${s.execution?.executed_at || 'Captured'}</div>
-                </div>
-              </div>
-            `;
-          } else if (isExpired) {
-            actionButtonHtml = `
-              <button disabled class="btn-disabled" style="cursor: not-allowed; width: 100%; padding: 11px 16px; font-size: 12px; font-weight: 700; background: #F3F5F8; border: 1px solid #E5E9F0; color: #6B7280; border-radius: 10px; pointer-events: none;">
-                ⌛ Expired (Unconfirmed - Profit Not Added)
-              </button>
-            `;
-            timingNoticeHtml = `
-              <div style="font-size: 12px; color: #DC2626; margin-bottom: 12px; background: #FEF2F2; padding: 10px 14px; border-radius: 10px; border: 1px solid #FECACA; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                <div>
-                  <span style="color: #6B7280; font-size: 10px; text-transform: uppercase; font-weight: 700; display: block;">Session Broadcast</span>
-                  <strong style="color: #4B5563; font-size: 13px;">Closed</strong>
-                </div>
-                <div style="text-align: right;">
-                  <span style="color: #DC2626; font-weight: 700; font-size: 12px;">⌛ Validity Expired</span>
-                  <div style="color: #6B7280; font-size: 10px;">15-minute confirmation window ended</div>
-                </div>
-              </div>
-            `;
-          } else if (isScheduled) {
-            actionButtonHtml = '';
-            timingNoticeHtml = '';
-          } else if (!data.is_eligible) {
-            actionButtonHtml = data.needs_future_transfer ? `
-              <button class="btn-primary" style="width: 100%; padding: 11px 16px; font-size: 12px; font-weight: 700; border-radius: 10px;" onclick="App.navigate('transfer')">
-                ⇄ Transfer ${minReq} USDT from Spot to Future to Confirm
-              </button>
-            ` : `
-              <button class="btn-secondary" style="width: 100%; padding: 11px 16px; font-size: 12px; font-weight: 700; border-radius: 10px;" onclick="App.openDepositModal()">
-                🔒 Deposit 20 USDT &amp; Transfer to Future to Unlock
-              </button>
-            `;
-            timingNoticeHtml = `
-              <div style="font-size: 12px; color: #B45309; margin-bottom: 12px; background: #FFFBEB; padding: 10px 14px; border-radius: 10px; border: 1px solid #FDE68A; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                <div>
-                  <span style="color: #6B7280; font-size: 10px; text-transform: uppercase; font-weight: 700; display: block;">⚡ Active Broadcast Window</span>
-                  <strong style="color: #0052FF; font-size: 13px;">Live Window</strong>
-                </div>
-                <div style="text-align: right;">
-                  <span style="color: #DC2626; font-size: 10px; text-transform: uppercase; font-weight: 800; display: block;">⏳ Signal Expires In</span>
-                  <span class="mono sig-timer-live" data-sig-id="${s.id}" data-time-left="${s.time_left_seconds || ((s.duration_minutes || 15) * 60)}" style="font-weight: 900; color: #F6465D; font-size: 16px; letter-spacing: 0.5px;">${this.formatCountdown(s.time_left_seconds || ((s.duration_minutes || 15) * 60))}</span>
-                </div>
-              </div>
-            `;
-          } else {
-            actionButtonHtml = `
-              <button class="btn-primary" style="width: 100%; padding: 13px 18px; font-size: 14px; font-weight: 800; background: #0052FF; color: #FFFFFF; border-radius: 999px; box-shadow: 0 4px 14px rgba(0, 82, 255, 0.25); cursor: pointer;" data-alpha-action="signal:${s.id}" onclick="App.confirmSignalDirectly('${s.id}')">
-                ⚡ Confirm Signal (+${profitPct}% Profit Added to Balance)
-              </button>
-            `;
-            timingNoticeHtml = `
-              <div style="font-size: 12px; color: #1E40AF; margin-bottom: 12px; background: #EFF4FF; padding: 10px 14px; border-radius: 10px; border: 1px solid #DBEAFE; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                <div>
-                  <span style="color: #6B7280; font-size: 10px; text-transform: uppercase; font-weight: 700; display: block;">⚡ Active Broadcast Window</span>
-                  <strong style="color: #0052FF; font-size: 13px;">Ready for Execution</strong>
-                </div>
-                <div style="text-align: right;">
-                  <span style="color: #DC2626; font-size: 10px; text-transform: uppercase; font-weight: 800; display: block;">⏳ Signal Expires In</span>
-                  <span class="mono sig-timer-live" data-sig-id="${s.id}" data-time-left="${s.time_left_seconds || ((s.duration_minutes || 15) * 60)}" style="font-weight: 900; color: #F6465D; font-size: 16px; letter-spacing: 0.5px;">${this.formatCountdown(s.time_left_seconds || ((s.duration_minutes || 15) * 60))}</span>
-                </div>
-              </div>
-            `;
-          }
-
-          return `
-            <div class="card" style="margin-bottom: 14px; border: 1px solid ${hasUsed ? '#A7F3D0' : isLive ? '#BFDBFE' : '#E5E9F0'}; background: #FFFFFF;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <strong style="font-size: 18px; color: #111827;">${s.symbol}</strong>
-                  <span class="badge ${dirBadge}">${s.direction}</span>
-                  ${isTesting ? `<span class="badge" style="background:#F5F3FF;color:#7C3AED;">🧪 TEST • NO PROFIT</span>` : ''}
-                </div>
-                <div style="text-align: right;">
-                  <span class="badge" style="background: ${isTesting ? '#F5F3FF' : '#EFF4FF'}; color: ${isTesting ? '#7C3AED' : '#0052FF'}; font-weight: 800; font-size: 13px;">
-                    ${isTesting ? 'TEST ONLY' : '+' + profitPct + '% Guaranteed Profit'}
-                  </span>
-                </div>
-              </div>
-
-              ${timingNoticeHtml}
-
-              <div>
-                ${actionButtonHtml}
-              </div>
-            </div>
-          `;
-        }).join('');
+        container.innerHTML = '';
       }
     }
 
@@ -4464,7 +4456,7 @@ const App = {
       if (!executions.length) {
         userHistory.innerHTML = `
           <div style="text-align: center; padding: 16px; color: var(--text-dim); font-size: 12px;">
-            No executed signals yet today. Click "Execute Signal" on any active signal above.
+            No executed signals yet today. Confirm any live signal in the terminal above during its broadcast window.
           </div>
         `;
       } else {
@@ -4474,8 +4466,8 @@ const App = {
               <thead>
                 <tr>
                   <th>Signal</th>
-                  <th>Stake</th>
-                  <th>Profit %</th>
+                  <th>Type / Stake</th>
+                  <th>Reward Rate</th>
                   <th>Profit Credited</th>
                   <th>Execution Time</th>
                   <th>Status</th>
@@ -4488,14 +4480,15 @@ const App = {
                   const stake = Number(ex.stake_amount ?? 0);
                   const pct = Number(ex.profit_percentage ?? 0);
                   const profit = Number(ex.profit_amount ?? 0);
+                  const isAddExec = String(ex.signal_id || '').startsWith('sig_add_') || (pct <= 0 && stake <= 0 && profit >= 3.99);
                   const executedAt = ex.executed_at || ex.created_at || '—';
                   return `
                   <tr>
-                    <td data-label="Signal"><strong>${symbol}</strong> <span class="badge ${direction === 'BUY' ? 'badge-positive' : 'badge-negative'}">${direction}</span></td>
-                    <td data-label="Stake" class="mono">$${stake.toFixed(2)} USDT</td>
-                    <td data-label="Profit %" class="mono positive">+${pct.toFixed(2)}%</td>
+                    <td data-label="Signal"><strong>${this.escapeHtml(symbol)}</strong> <span class="badge ${direction === 'BUY' ? 'badge-positive' : 'badge-negative'}">${this.escapeHtml(direction)}</span></td>
+                    <td data-label="Type / Stake" class="mono">${isAddExec ? 'Additional Signal' : `$${stake.toFixed(2)} USDT`}</td>
+                    <td data-label="Reward Rate" class="mono positive">${isAddExec ? '$4.00 FIXED' : `+${pct.toFixed(2)}%`}</td>
                     <td data-label="Profit Credited" class="mono positive"><strong>+$${profit.toFixed(2)} USDT</strong></td>
-                    <td data-label="Execution Time" class="mono" style="font-size: 11px; color: var(--text-muted);">${executedAt}</td>
+                    <td data-label="Execution Time" class="mono" style="font-size: 11px; color: var(--text-muted);">${this.escapeHtml(executedAt)}</td>
                     <td data-label="Status"><span class="badge badge-positive">PAID</span></td>
                   </tr>`;
                 }).join('')}
@@ -4576,15 +4569,15 @@ const App = {
     let activeSig = allCandidates.find(s => s.id === this.state.activeTerminalSignalId) || allCandidates[0] || null;
     if (activeSig) this.state.activeTerminalSignalId = activeSig.id;
 
-    // Render selector pills if more than 1 signal exists
     const pillsEl = document.getElementById('sig-term-selector-pills');
     if (pillsEl) {
       if (allCandidates.length > 1) {
         pillsEl.style.display = 'flex';
         pillsEl.innerHTML = allCandidates.map(s => {
           const isBuy = ['BUY', 'LONG', 'UP'].includes(String(s.direction || 'BUY').toUpperCase());
+          const isAdd = Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
           const selected = activeSig && s.id === activeSig.id;
-          return `<button type="button" class="av-sig-sel-pill ${selected ? 'active' : ''}" onclick="App.setSignalTerminalSignal('${this.escapeHtml(s.id)}')">${this.escapeHtml(s.symbol)} ${isBuy ? '▲ UP' : '▼ DOWN'}</button>`;
+          return `<button type="button" class="av-sig-sel-pill ${selected ? 'active' : ''}" onclick="App.setSignalTerminalSignal('${this.escapeHtml(s.id)}')">${this.escapeHtml(s.symbol)} ${isBuy ? '▲ UP' : '▼ DOWN'}${isAdd ? ' · $4 Add' : ''}</button>`;
         }).join('');
       } else {
         pillsEl.style.display = 'none';
@@ -4602,6 +4595,7 @@ const App = {
     };
 
     const isLive = Boolean(activeSig && !activeSig.is_expired && !activeSig.is_scheduled && (activeSig.status === 'PUBLISHED' || activeSig.status === 'ACTIVE'));
+    const isAdditional = Boolean(activeSig && (activeSig.is_additional || Number(activeSig.daily_slot) === 3 || String(activeSig.id || '').startsWith('sig_add_')));
     const levels = this.computeSignalTerminalLevels(fallbackSig);
     const dec = this.getSignalTerminalPriceDecimals(levels.sym, levels.entry);
     const currSym = '$';
@@ -4614,6 +4608,7 @@ const App = {
     const tp1El = document.getElementById('sig-term-tp1');
     const tp2El = document.getElementById('sig-term-tp2');
     const slEl = document.getElementById('sig-term-sl');
+    const noteEl = document.getElementById('sig-term-session-note');
     const actionWrap = document.getElementById('sig-term-action-wrap');
 
     if (dotEl) dotEl.className = `av-sig-pulse-dot ${isLive ? 'is-live' : 'is-waiting'}`;
@@ -4624,9 +4619,9 @@ const App = {
     }
     if (statEl) {
       if (isLive) {
-        statEl.style.background = '#ECFDF5';
-        statEl.style.color = '#059669';
-        statEl.textContent = 'LIVE EXECUTING';
+        statEl.style.background = isAdditional ? '#EFF4FF' : '#ECFDF5';
+        statEl.style.color = isAdditional ? '#0052FF' : '#059669';
+        statEl.textContent = isAdditional ? 'ADDITIONAL SIGNAL • $4.00 FIXED' : 'LIVE EXECUTING';
       } else {
         statEl.style.background = '#EFF4FF';
         statEl.style.color = '#0052FF';
@@ -4637,21 +4632,38 @@ const App = {
     if (tp1El) tp1El.textContent = `${currSym}${levels.tp1.toFixed(dec)}`;
     if (tp2El) tp2El.textContent = `${currSym}${levels.tp2.toFixed(dec)}`;
     if (slEl) slEl.textContent = `${currSym}${levels.sl.toFixed(dec)}`;
+    if (noteEl) {
+      noteEl.textContent = isLive
+        ? (isAdditional
+            ? '9:30 PM PKT Additional Signal · +$4.00 USDT Fixed (Separate from 30d 2× plan)'
+            : `${activeSig?.slot_label || 'Daily Session'} · +${levels.pct}% Return toward 30-day 2× target`)
+        : 'Daily: 6:00 PM & 8:00 PM PKT · Additional: 9:30 PM PKT ($4.00)';
+    }
 
     if (actionWrap) {
       const sigData = this.state.signalsData || {};
+      const minReq = Math.max(100, Number(sigData.min_deposit_required || 100) || 100);
+      const addRemaining = Number(sigData.additional_signals?.remaining ?? 0);
       const hasUsed = Boolean(activeSig && (activeSig.has_used || activeSig.has_confirmed));
       const isTest = Boolean(activeSig && (activeSig.is_testing || activeSig.no_profit || String(activeSig.id || '').startsWith('sig_test_')));
-      if (activeSig && isLive && !isTest) {
+      if (activeSig && isLive) {
         actionWrap.style.display = 'flex';
-        if (hasUsed) {
-          actionWrap.innerHTML = `<span class="badge badge-positive" style="padding:7px 12px;">✅ Confirmed (+${levels.pct}%)</span>`;
+        if (isTest) {
+          actionWrap.innerHTML = `<button type="button" class="btn-secondary" style="padding:9px 16px;font-size:12px;font-weight:800;background:#F5F3FF;border:1px solid #DDD6FE;color:#7C3AED;border-radius:999px;cursor:pointer;" onclick="App.openExecuteSignalModal('${this.escapeHtml(activeSig.id)}')">🧪 Open Testing Signal — No Profit</button>`;
+        } else if (hasUsed) {
+          actionWrap.innerHTML = `<span class="badge badge-positive" style="padding:8px 14px;">✅ Confirmed (${isAdditional ? '+$4.00 Fixed' : `+${levels.pct}%`})</span>`;
+        } else if (isAdditional) {
+          if (addRemaining > 0) {
+            actionWrap.innerHTML = `<button type="button" class="btn-primary" style="padding:10px 18px;font-size:13px;font-weight:800;border-radius:999px;" data-alpha-action="signal:${this.escapeHtml(activeSig.id)}" onclick="App.confirmSignalDirectly('${this.escapeHtml(activeSig.id)}')">🎁 Confirm Additional Signal (+$4.00 USDT Fixed)</button>`;
+          } else {
+            actionWrap.innerHTML = `<button type="button" class="btn-secondary" style="padding:9px 16px;font-size:12px;font-weight:700;border-radius:999px;" onclick="App.openDepositModal()">🔒 Deposit $300+ or Invite Friend to Unlock Additional Signal</button>`;
+          }
         } else if (sigData.is_eligible) {
-          actionWrap.innerHTML = `<button type="button" class="btn-primary" style="padding:8px 14px;font-size:12px;font-weight:800;border-radius:999px;" data-alpha-action="signal:${this.escapeHtml(activeSig.id)}" onclick="App.confirmSignalDirectly('${this.escapeHtml(activeSig.id)}')">⚡ Confirm Signal (+${levels.pct}%)</button>`;
+          actionWrap.innerHTML = `<button type="button" class="btn-primary" style="padding:10px 18px;font-size:13px;font-weight:800;border-radius:999px;" data-alpha-action="signal:${this.escapeHtml(activeSig.id)}" onclick="App.confirmSignalDirectly('${this.escapeHtml(activeSig.id)}')">⚡ Confirm Signal (+${levels.pct}%)</button>`;
         } else if (sigData.needs_future_transfer) {
-          actionWrap.innerHTML = `<button type="button" class="btn-primary" style="padding:8px 14px;font-size:12px;font-weight:700;border-radius:999px;" onclick="App.navigate('transfer')">⇄ Transfer to Future</button>`;
+          actionWrap.innerHTML = `<button type="button" class="btn-primary" style="padding:9px 16px;font-size:12px;font-weight:700;border-radius:999px;" onclick="App.navigate('transfer')">⇄ Transfer to Future</button>`;
         } else {
-          actionWrap.innerHTML = `<button type="button" class="btn-secondary" style="padding:8px 14px;font-size:12px;font-weight:700;border-radius:999px;" onclick="App.openDepositModal()">🔒 Deposit 20 USDT</button>`;
+          actionWrap.innerHTML = `<button type="button" class="btn-secondary" style="padding:9px 16px;font-size:12px;font-weight:700;border-radius:999px;" onclick="App.openDepositModal()">🔒 Deposit ${minReq} USDT</button>`;
         }
       } else {
         actionWrap.innerHTML = '';
@@ -4673,12 +4685,10 @@ const App = {
       const open = p;
       let close;
       if (i < preSignalCount) {
-        // Pre-signal consolidation converging cleanly toward entry price
         const pull = (levels.entry - open) * 0.16;
         const wiggle = Math.sin(i * 0.7) * levels.entry * volScale * 0.55;
         close = Math.max(levels.entry * 0.5, open + pull + wiggle);
       } else {
-        // Live window candles trend strictly in the signal direction
         const liveStepIdx = i - preSignalCount + 1;
         const liveStepsTotal = Math.max(1, totalCandles - preSignalCount);
         const stepProgress = liveStepIdx / liveStepsTotal;
@@ -4737,14 +4747,12 @@ const App = {
       const totalWindow = Math.max(60000, (expMs - pubMs) || 900000);
       const progress = Math.max(0.05, Math.min(0.98, (Date.now() - pubMs) / totalWindow));
 
-      // Directional trajectory: strictly moves toward TP1 / TP2 along signal direction
       const desiredTarget = levels.entry + (levels.tp2 - levels.entry) * (0.28 + 0.68 * progress);
       const dirSign = levels.isBuy ? 1 : -1;
       const stepPull = (desiredTarget - nextPrice) * 0.22;
       const microNoise = dirSign * Math.abs(Math.random() * 0.00055) * levels.entry;
       nextPrice = nextPrice + stepPull + (Math.random() > 0.28 ? microNoise : -microNoise * 0.2);
 
-      // Guardrail: never drift below SL (for BUY) or above SL (for SELL)
       if (levels.isBuy && nextPrice < levels.entry) nextPrice = levels.entry + Math.abs(microNoise);
       if (!levels.isBuy && nextPrice > levels.entry) nextPrice = levels.entry - Math.abs(microNoise);
 
@@ -4752,11 +4760,10 @@ const App = {
       const cdEl = document.getElementById('sig-term-countdown');
       if (cdEl) cdEl.textContent = secLeft > 0 ? `⏳ ${this.formatCountdown(secLeft)}` : 'Session Ending';
     } else {
-      // Gentle standby micro-consolidation near entry
       const wiggle = (Math.random() - 0.5) * levels.entry * (levels.isForex ? 0.00018 : 0.0006);
       nextPrice = nextPrice + wiggle + (levels.entry - nextPrice) * 0.12;
       const cdEl = document.getElementById('sig-term-countdown');
-      if (cdEl) cdEl.textContent = '4 PM / 8 PM PKT';
+      if (cdEl) cdEl.textContent = '6 PM / 8 PM / 9:30 PM PKT';
     }
 
     meta.lastPrice = nextPrice;
@@ -4812,6 +4819,7 @@ const App = {
       return;
     }
 
+    const isAdditional = Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
     const actionScope = `signal:${signalId}`;
     const actionKey = this.beginAction(actionScope);
     if (actionKey === null) {
@@ -4821,15 +4829,15 @@ const App = {
     this.setActionButtons(actionScope, true, 'Confirming...');
 
     try {
-      this.toast('⚡ Confirming signal & automatically crediting profit...', 'info');
+      this.toast(isAdditional ? '🎁 Confirming Additional Signal (+$4.00 USDT Fixed)...' : '⚡ Confirming signal & automatically crediting profit...', 'info');
       const res = await this.api('/signals/execute.php', 'POST', {
         signal_id: signalId,
-        stake_amount: 20,
+        stake_amount: isAdditional ? 0 : 100,
         idempotency_key: actionKey
       });
 
       if (res.success) {
-        const profitAmt = res.data?.profit_amount !== undefined ? Number(res.data.profit_amount).toFixed(2) : '0.50';
+        const profitAmt = res.data?.profit_amount !== undefined ? Number(res.data.profit_amount).toFixed(2) : (isAdditional ? '4.00' : '1.67');
         this.toast(res.message || `Signal confirmed! +$${profitAmt} USDT profit automatically added to your balance!`, 'success');
         this.state.signals = (this.state.signals || []).filter(sig => sig.id !== signalId);
         this.renderHomeSignals();
@@ -4856,25 +4864,22 @@ const App = {
     if (!container) return;
 
     const signals = this.state.signals || [];
+    const sigData = this.state.signalsData || {};
+    const minReq = Math.max(100, Number(sigData.min_deposit_required || 100) || 100);
+    const addRemaining = Number(sigData.additional_signals?.remaining ?? 0);
     const totalAssetsUsdt = Number(this.state.balances?.total_assets_usdt || this.state.balances?.total_usd || 0);
-    const tradingUsdt = Number(this.state.balances?.breakdown?.trading_total_usdt || this.state.balances?.balances?.trading?.USDT?.available || this.state.balances?.balances?.trading?.USDT?.balance || 0);
-    const fundingUsdt = Number(this.state.balances?.breakdown?.funding_total_usdt || this.state.balances?.balances?.funding?.USDT?.available || this.state.balances?.balances?.funding?.USDT?.balance || 0);
-    const exchangeUsdt = Number(this.state.balances?.breakdown?.exchange_total_usdt || this.state.balances?.balances?.exchange?.USDT?.available || 0);
-    const userWalletBal = Math.max(totalAssetsUsdt, tradingUsdt + fundingUsdt + exchangeUsdt, Number(this.state.signalsData?.user_balance || 0));
-    const effectiveDeposit = userWalletBal;
-
+    const tradingUsdt = Number(sigData.future_balance_usdt ?? this.state.balances?.future_total_usdt ?? this.state.balances?.breakdown?.trading_total_usdt ?? 0);
     const isEligible = Boolean(
-      this.state.signalsData?.is_eligible || 
-      effectiveDeposit >= 20.0 || 
-      userWalletBal >= 20.0 || 
-      this.state.user?.is_admin || 
+      sigData.is_eligible ||
+      tradingUsdt >= minReq ||
+      this.state.user?.is_admin ||
       ['ADMIN', 'SUPER_ADMIN', 'VIP', 'FINANCE_MANAGER', 'KYC_MANAGER'].includes(this.state.user?.role)
     );
 
     if (!signals.length) {
       container.innerHTML = `
         <div style="text-align: center; padding: 16px 12px; color: #6B7280; font-size: 12px; background: #F8FAFC; border-radius: 10px; border: 1px dashed #CBD5E1;">
-          📡 No active signals broadcasted right now.
+          📡 No active signals broadcasted right now. Next windows: 6:00 PM / 8:00 PM / 9:30 PM PKT.
         </div>
       `;
       return;
@@ -4884,7 +4889,8 @@ const App = {
       const isBuy = ['BUY', 'LONG', 'UP'].includes(String(s.direction || 'BUY').toUpperCase());
       const dirBadge = isBuy ? 'badge-positive' : 'badge-negative';
       const isTesting = Boolean(s.is_testing || s.no_profit || String(s.id || '').startsWith('sig_test_'));
-      const profitPct = isTesting ? 0 : (s.profit_percentage || 1.67);
+      const isAdditional = !isTesting && Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
+      const profitPct = (isTesting || isAdditional) ? 0 : (s.profit_percentage || 1.67);
       const hasUsed = Boolean(s.has_used || s.has_confirmed);
       const isExpired = Boolean(s.is_expired || (s.time_left_seconds !== undefined && s.time_left_seconds <= 0 && s.status === 'PUBLISHED'));
       const isScheduled = Boolean(s.is_scheduled || s.status === 'SCHEDULED');
@@ -4912,7 +4918,7 @@ const App = {
         timerBadgeHtml = `
           <div style="display: flex; justify-content: space-between; align-items: center; background: #ECFDF5; border: 1px solid #A7F3D0; padding: 6px 10px; border-radius: 8px; margin-bottom: 8px; font-size: 11px;">
             <span style="color: #059669; font-weight: 700;">✅ Succeeded:</span>
-            <span style="color: #059669; font-weight: 700;">+${profitPct}% Credited</span>
+            <span style="color: #059669; font-weight: 700;">${isAdditional ? '+$4.00 Fixed' : `+${profitPct}% Credited`}</span>
           </div>
         `;
       } else if (isExpired) {
@@ -4930,10 +4936,30 @@ const App = {
       } else if (isScheduled) {
         actionHtml = '';
         timerBadgeHtml = '';
+      } else if (isAdditional) {
+        if (addRemaining > 0) {
+          actionHtml = `
+            <button class="btn-primary" style="width: 100%; padding: 9px 14px; font-size: 12px; font-weight: 800; background: #0052FF; color: #FFFFFF; border-radius: 999px; box-shadow: 0 4px 12px rgba(0, 82, 255, 0.25); cursor: pointer;" data-alpha-action="signal:${s.id}" onclick="App.confirmSignalDirectly('${s.id}')">
+              🎁 Confirm Additional Signal (+$4.00 USDT)
+            </button>
+          `;
+        } else {
+          actionHtml = `
+            <button class="btn-secondary" style="width: 100%; padding: 8px 12px; font-size: 11px; font-weight: 700; border-radius: 8px;" onclick="App.openDepositModal()">
+              🔒 Deposit $300+ or Invite Friend for Additional Signal
+            </button>
+          `;
+        }
+        timerBadgeHtml = `
+          <div style="display: flex; justify-content: space-between; align-items: center; background: #EFF4FF; border: 1px solid #DBEAFE; padding: 6px 10px; border-radius: 8px; margin-bottom: 8px; font-size: 11px;">
+            <span style="color: #1E40AF; font-weight: 700;">⏳ Additional Window Expires:</span>
+            <strong class="mono sig-timer-live" data-sig-id="${s.id}" data-time-left="${s.time_left_seconds || ((s.duration_minutes || 15) * 60)}" style="font-weight: 800; color: #F6465D; font-size: 13px;">${this.formatCountdown(s.time_left_seconds || ((s.duration_minutes || 15) * 60))}</strong>
+          </div>
+        `;
       } else if (!isEligible) {
         actionHtml = `
           <button class="btn-secondary" style="width: 100%; padding: 8px 12px; font-size: 11px; font-weight: 700; border-radius: 8px;" onclick="App.openDepositModal()">
-            🔒 Deposit 20 USDT to Unlock Signal
+            🔒 Deposit ${minReq} USDT to Unlock Signal
           </button>
         `;
         timerBadgeHtml = `
@@ -4964,8 +4990,8 @@ const App = {
               <span class="badge ${dirBadge}">${s.direction}</span>
               ${isTesting ? `<span class="badge" style="font-size: 10px; background:#F5F3FF; color:#7C3AED;">🧪 TEST • NO PROFIT</span>` : ''}
             </div>
-            <span class="badge" style="background:${isTesting ? '#F5F3FF' : '#ECFDF5'}; color:${isTesting ? '#7C3AED' : '#059669'}; font-weight:700; font-size:11px;">
-              ${isTesting ? 'TEST ONLY' : '+' + profitPct + '% Return'}
+            <span class="badge" style="background:${isTesting ? '#F5F3FF' : (isAdditional ? '#EFF4FF' : '#ECFDF5')}; color:${isTesting ? '#7C3AED' : (isAdditional ? '#0052FF' : '#059669')}; font-weight:700; font-size:11px;">
+              ${isTesting ? 'TEST ONLY' : (isAdditional ? '+$4.00 Fixed' : `+${profitPct}% Return`)}
             </span>
           </div>
 
@@ -4986,8 +5012,6 @@ const App = {
       return;
     }
 
-    const schedTime = '';
-
     this.state.activeExecutingSignal = s;
     const idEl = document.getElementById('exec-sig-id');
     if (idEl) idEl.value = s.id;
@@ -5005,11 +5029,12 @@ const App = {
     }
 
     const isTestingModal = Boolean(s.is_testing || s.no_profit || String(s.id || '').startsWith('sig_test_'));
-    const profitPct = isTestingModal ? 0 : (s.profit_percentage || 1.67);
+    const isAdditionalModal = !isTestingModal && Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
+    const profitPct = (isTestingModal || isAdditionalModal) ? 0 : (s.profit_percentage || 1.67);
     const profitBadge = document.getElementById('exec-sig-profit-badge');
-    if (profitBadge) profitBadge.textContent = isTestingModal ? '🧪 TESTING • NO PROFIT' : `+${profitPct}% Guaranteed Profit`;
+    if (profitBadge) profitBadge.textContent = isTestingModal ? '🧪 TESTING • NO PROFIT' : (isAdditionalModal ? '+$4.00 USDT Fixed Reward' : `+${profitPct}% Guaranteed Profit`);
     const profitRate = document.getElementById('exec-sig-profit-rate');
-    if (profitRate) profitRate.textContent = isTestingModal ? 'NO PROFIT' : `+${profitPct}%`;
+    if (profitRate) profitRate.textContent = isTestingModal ? 'NO PROFIT' : (isAdditionalModal ? '$4.00 FIXED' : `+${profitPct}%`);
 
     const schedTimeEl = document.getElementById('exec-sig-schedule-time');
     if (schedTimeEl) schedTimeEl.textContent = '';
@@ -5017,11 +5042,9 @@ const App = {
     if (expTimeEl) expTimeEl.textContent = this.formatCountdown(s.time_left_seconds || ((s.duration_minutes || 15) * 60));
 
     const tradingBal = Number(
-      this.state.balances?.total_assets_usdt ||
-      this.state.balances?.total_usd ||
-      ((this.state.balances?.breakdown?.funding_total_usdt || 0) +
-       (this.state.balances?.breakdown?.exchange_total_usdt || 0) +
-       (this.state.balances?.breakdown?.trading_total_usdt || 0)) ||
+      this.state.signalsData?.future_balance_usdt ??
+      this.state.balances?.future_total_usdt ??
+      this.state.balances?.breakdown?.trading_total_usdt ??
       0
     );
     const availBalEl = document.getElementById('exec-sig-avail-bal');
@@ -5030,7 +5053,9 @@ const App = {
     if (amountEl && !isTestingModal) {
       amountEl.value = Math.max(0, tradingBal).toFixed(2);
       amountEl.readOnly = true;
-      amountEl.title = 'Signal profit is calculated from your full current USDT balance.';
+      amountEl.title = isAdditionalModal
+        ? 'Additional Signals pay a fixed $4.00 USDT reward.'
+        : 'Signal profit is calculated from your Future USDT balance.';
     }
 
     this.updateExecuteSignalCalc();
@@ -5040,10 +5065,11 @@ const App = {
   updateExecuteSignalCalc() {
     const s = this.state.activeExecutingSignal;
     if (!s) return;
-    const amount = parseFloat(document.getElementById('exec-sig-amount').value) || 20;
+    const amount = parseFloat(document.getElementById('exec-sig-amount').value) || 0;
     const isTestingCalc = Boolean(s.is_testing || s.no_profit || String(s.id || '').startsWith('sig_test_'));
-    const profitPct = isTestingCalc ? 0 : (s.profit_percentage || 1.67);
-    const profit = (amount * profitPct) / 100;
+    const isAdditionalCalc = !isTestingCalc && Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
+    const profitPct = (isTestingCalc || isAdditionalCalc) ? 0 : (s.profit_percentage || 1.67);
+    const profit = isTestingCalc ? 0 : (isAdditionalCalc ? 4.00 : (amount * profitPct) / 100);
     const total = amount + profit;
 
     const estProfitEl = document.getElementById('exec-sig-est-profit');
@@ -5061,7 +5087,9 @@ const App = {
       this.closeModal('modal-execute-signal');
       return;
     }
-    const amount = parseFloat(document.getElementById('exec-sig-amount').value) || 20;
+    const isAdditionalExec = activeSignal && Boolean(activeSignal.is_additional || Number(activeSignal.daily_slot) === 3 || String(activeSignal.id || '').startsWith('sig_add_'));
+    const rawAmount = parseFloat(document.getElementById('exec-sig-amount').value);
+    const amount = Number.isFinite(rawAmount) ? rawAmount : (isAdditionalExec ? 0 : 100);
     const btn = document.getElementById('btn-confirm-execute-signal');
     const actionScope = `signal:${signalId}`;
     const actionKey = this.beginAction(actionScope);
@@ -5899,7 +5927,7 @@ const App = {
 
     const tabTitles = {
       overview: 'Overview Dashboard',
-      signals: 'Signal Studio (4 PM / 8 PM)',
+      signals: 'Signal Studio (6 PM / 8 PM / 9:30 PM)',
       deposits: 'Incoming Deposits',
       withdrawals: 'Withdrawals Desk',
       kyc: 'KYC Identity Desk',
@@ -7256,7 +7284,6 @@ const App = {
     const slotEl = document.getElementById('adm-sig-slot');
     const timeSlotEl = document.getElementById('adm-sig-time-slot');
     const dateTargetEl = document.getElementById('adm-sig-date-target');
-    const durationEl = document.getElementById('adm-sig-duration');
     const profitEl = document.getElementById('adm-sig-profit-pct');
     const customWrap = document.getElementById('adm-sig-custom-datetime-wrap');
 
@@ -7274,10 +7301,20 @@ const App = {
       return;
     }
 
-    if (timeType === 'CUSTOM' || slot >= 3) {
+    if (timeType === '9:30 PM' || timeType === '21:30' || slot === 3) {
+      if (timeSlotEl) timeSlotEl.value = '9:30 PM';
+      if (slotEl) slotEl.value = '3';
+      if (dateTargetEl && (dateTargetEl.value === 'LIVE' || dateTargetEl.value === 'CUSTOM')) dateTargetEl.value = 'TODAY';
+      if (customWrap) customWrap.style.display = 'none';
+      this.onAdminSignalSlotChange();
+      this.toast('Session preset loaded: Additional Signal #3 (9:30 PM PKT · $4.00 Fixed)', 'success');
+      return;
+    }
+
+    if (timeType === 'CUSTOM' || slot > 3) {
       if (timeSlotEl) timeSlotEl.value = 'CUSTOM';
       if (dateTargetEl) dateTargetEl.value = 'CUSTOM';
-      if (slotEl) slotEl.value = String(slot || 3);
+      if (slotEl) slotEl.value = String(slot || 4);
       if (customWrap) customWrap.style.display = 'block';
       const customInput = document.getElementById('adm-sig-custom-datetime');
       if (customInput && !customInput.value) {
@@ -7285,13 +7322,14 @@ const App = {
         customInput.value = inOneHour.toISOString().slice(0, 16);
       }
       this.onAdminCustomDateTimeChange();
-      this.toast(`Manual Signal #${slot || 3} selected. Set your custom broadcast schedule time below.`, 'info');
+      this.onAdminSignalSlotChange();
+      this.toast(`Manual Signal #${slot || 4} selected. Set your custom broadcast schedule time below.`, 'info');
       return;
     }
 
-    const cleanSlotTime = (timeType === '4 PM' || timeType === '16:00' || slot === 1) ? '4 PM' : '8 PM';
+    const cleanSlotTime = (timeType === '8 PM' || timeType === '20:00' || slot === 2) ? '8 PM' : '6 PM';
     if (timeSlotEl) timeSlotEl.value = cleanSlotTime;
-    if (slotEl) slotEl.value = cleanSlotTime === '4 PM' ? '1' : '2';
+    if (slotEl) slotEl.value = cleanSlotTime === '8 PM' ? '2' : '1';
     if (dateTargetEl && (dateTargetEl.value === 'LIVE' || dateTargetEl.value === 'CUSTOM')) dateTargetEl.value = 'TODAY';
     if (customWrap) customWrap.style.display = 'none';
 
@@ -7300,11 +7338,17 @@ const App = {
   },
 
   onAdminSignalSlotChange() {
-    const timeSlot = document.getElementById('adm-sig-time-slot')?.value || '4 PM';
+    const timeSlot = document.getElementById('adm-sig-time-slot')?.value || '6 PM';
     const dateTarget = document.getElementById('adm-sig-date-target')?.value || 'TODAY';
     const timeEl = document.getElementById('adm-sig-broadcast-time');
     const slotEl = document.getElementById('adm-sig-slot');
     const customWrap = document.getElementById('adm-sig-custom-datetime-wrap');
+    const profitGroup = document.getElementById('adm-sig-profit-group');
+    const fixedCallout = document.getElementById('adm-sig-fixed-callout');
+
+    const isSlot3 = (timeSlot === '9:30 PM' || timeSlot === '21:30' || slotEl?.value === '3');
+    if (profitGroup) profitGroup.style.display = isSlot3 ? 'none' : '';
+    if (fixedCallout) fixedCallout.style.display = isSlot3 ? 'block' : 'none';
 
     if (timeSlot === 'CUSTOM' || dateTarget === 'CUSTOM') {
       if (customWrap) customWrap.style.display = 'block';
@@ -7314,9 +7358,9 @@ const App = {
       if (customWrap) customWrap.style.display = 'none';
     }
 
-    const isSlot2 = (timeSlot === '8 PM' || timeSlot === '20:00' || timeSlot === '2');
-    if (slotEl && (slotEl.value === '1' || slotEl.value === '2')) {
-      slotEl.value = isSlot2 ? '2' : '1';
+    const isSlot2 = (timeSlot === '8 PM' || timeSlot === '20:00');
+    if (slotEl && ['1', '2', '3'].includes(slotEl.value)) {
+      slotEl.value = isSlot3 ? '3' : (isSlot2 ? '2' : '1');
     }
 
     if (dateTarget === 'LIVE') {
@@ -7325,24 +7369,29 @@ const App = {
     }
 
     const now = new Date();
-    // Pakistan is UTC+5. Calculate UTC equivalent for PKT hours (16:00 PKT = 11:00 UTC, 20:00 PKT = 15:00 UTC)
-    const targetHourUtc = isSlot2 ? 15 : 11;
+    // Pakistan is UTC+5: 6:00 PM PKT = 13:00 UTC, 8:00 PM PKT = 15:00 UTC, 9:30 PM PKT = 16:30 UTC
+    const targetHourUtc = isSlot3 ? 16 : (isSlot2 ? 15 : 13);
+    const targetMinUtc = isSlot3 ? 30 : 0;
     const target = new Date(now);
-    target.setUTCHours(targetHourUtc, 0, 0, 0);
+    target.setUTCHours(targetHourUtc, targetMinUtc, 0, 0);
 
     if (dateTarget === 'TOMORROW') {
       target.setUTCDate(target.getUTCDate() + 1);
     } else if (dateTarget === 'TODAY' && target.getTime() <= now.getTime()) {
-      // If time today has passed, roll to tomorrow
       target.setUTCDate(target.getUTCDate() + 1);
     }
 
-    const yyyy = target.getFullYear();
-    const mm = String(target.getMonth() + 1).padStart(2, '0');
-    const dd = String(target.getDate()).padStart(2, '0');
-    const hh = String(target.getHours()).padStart(2, '0');
-    const min = '00';
-    const val = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+    const yyyy = target.getUTCFullYear();
+    const mm = String(target.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(target.getUTCDate()).padStart(2, '0');
+    // Convert back to PKT wall-clock string (+5h) because dispatchAdminSignal parses as +05:00
+    const pktDate = new Date(target.getTime() + 5 * 3600 * 1000);
+    const py = pktDate.getUTCFullYear();
+    const pm = String(pktDate.getUTCMonth() + 1).padStart(2, '0');
+    const pd = String(pktDate.getUTCDate()).padStart(2, '0');
+    const ph = String(pktDate.getUTCHours()).padStart(2, '0');
+    const pmin = String(pktDate.getUTCMinutes()).padStart(2, '0');
+    const val = `${py}-${pm}-${pd}T${ph}:${pmin}`;
 
     if (timeEl) timeEl.value = val;
   },
@@ -7359,8 +7408,9 @@ const App = {
     const slotVal = document.getElementById('adm-sig-slot')?.value;
     const timeSlotEl = document.getElementById('adm-sig-time-slot');
     if (timeSlotEl) {
-      if (slotVal === '1') timeSlotEl.value = '4 PM';
+      if (slotVal === '1') timeSlotEl.value = '6 PM';
       else if (slotVal === '2') timeSlotEl.value = '8 PM';
+      else if (slotVal === '3') timeSlotEl.value = '9:30 PM';
       else timeSlotEl.value = 'CUSTOM';
       this.onAdminSignalSlotChange();
     }
@@ -7399,14 +7449,13 @@ const App = {
 
     this.state.adminSignals = signalsList;
 
-    // Admin-only presentation lanes. These are derived from the existing signal records
-    // and do not alter creation, scheduling, eligibility, expiry, or execution logic.
     const renderSignalLaneCard = (s) => {
       const isPublished = (s.status === 'PUBLISHED' || s.status === 'ACTIVE');
       const isScheduled = (s.status === 'SCHEDULED');
       const duration = Number(s.duration_minutes || 15);
       const isTesting = Boolean(s.is_testing || s.no_profit || String(s.id || '').startsWith('sig_test_'));
-      const profitPct = isTesting ? 0 : Number(s.profit_percentage || 0);
+      const isAdditional = !isTesting && Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
+      const profitPct = (isTesting || isAdditional) ? 0 : Number(s.profit_percentage || 0);
       const statusText = isPublished ? `LIVE • ${duration}m` : (isScheduled ? 'SCHEDULED' : 'EXPIRED');
       const statusCls = isPublished ? 'live' : (isScheduled ? 'scheduled' : 'expired');
       const start = s.published_at || s.scheduled_at || '';
@@ -7419,7 +7468,7 @@ const App = {
         </div>
         <div class="signal-lane-main">
           <span class="signal-lane-direction ${s.direction === 'BUY' ? 'buy' : 'sell'}">${s.direction === 'BUY' ? '▲ BUY' : '▼ SELL'}</span>
-          <span class="signal-lane-profit" style="${isTesting ? 'color:#D97706;' : ''}">${isTesting ? 'TEST • NO PROFIT' : '+' + profitPct.toFixed(2) + '%'}</span>
+          <span class="signal-lane-profit" style="${isTesting ? 'color:#D97706;' : ''}">${isTesting ? 'TEST • NO PROFIT' : (isAdditional ? '+$4.00 FIXED' : '+' + profitPct.toFixed(2) + '%')}</span>
         </div>
         <div class="av-adm-sig-bar ${statusCls}"><span style="width:${isPublished ? '72%' : (isScheduled ? '40%' : '100%')};"></span></div>
         <div class="signal-lane-meta"><span>Duration: ${duration} min</span><span>Worldwide</span><span>${esc(start ? start.replace('T',' ').slice(0,16) : '—')} PKT</span></div>
@@ -7432,14 +7481,17 @@ const App = {
     };
     const lane4 = document.getElementById('adm-signal-lane-4pm');
     const lane8 = document.getElementById('adm-signal-lane-8pm');
+    const lane930 = document.getElementById('adm-signal-lane-930pm');
     const laneCustom = document.getElementById('adm-signal-lane-custom');
     const laneTest = document.getElementById('adm-signal-lane-test');
     const daily4 = signalsList.filter(s => !s.is_testing && Number(s.daily_slot) === 1);
     const daily8 = signalsList.filter(s => !s.is_testing && Number(s.daily_slot) === 2);
-    const custom = signalsList.filter(s => !s.is_testing && Number(s.daily_slot) !== 1 && Number(s.daily_slot) !== 2);
+    const add930 = signalsList.filter(s => !s.is_testing && (Number(s.daily_slot) === 3 || Boolean(s.is_additional) || String(s.id || '').startsWith('sig_add_')));
+    const custom = signalsList.filter(s => !s.is_testing && Number(s.daily_slot) !== 1 && Number(s.daily_slot) !== 2 && Number(s.daily_slot) !== 3 && !String(s.id || '').startsWith('sig_add_'));
     const testing = signalsList.filter(s => Boolean(s.is_testing || String(s.id || '').startsWith('sig_test_')));
-    if (lane4) lane4.innerHTML = daily4.length ? daily4.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>◷</span><strong>No 4 PM signal record</strong><small>The daily 4 PM slot will appear here when scheduled.</small></div>`;
-    if (lane8) lane8.innerHTML = daily8.length ? daily8.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>◷</span><strong>No 8 PM signal record</strong><small>The daily 8 PM slot will appear here when scheduled.</small></div>`;
+    if (lane4) lane4.innerHTML = daily4.length ? daily4.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>◷</span><strong>No 6:00 PM signal record</strong><small>The daily 6:00 PM PKT slot will appear here when scheduled.</small></div>`;
+    if (lane8) lane8.innerHTML = daily8.length ? daily8.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>◷</span><strong>No 8:00 PM signal record</strong><small>The daily 8:00 PM PKT slot will appear here when scheduled.</small></div>`;
+    if (lane930) lane930.innerHTML = add930.length ? add930.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>$4</span><strong>No 9:30 PM Additional signal</strong><small>The 9:30 PM PKT Additional ($4.00 Fixed) slot appears here when scheduled.</small></div>`;
     if (laneCustom) laneCustom.innerHTML = custom.length ? custom.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>✦</span><strong>No custom signals</strong><small>Manual and custom scheduled broadcasts will appear here.</small></div>`;
     if (laneTest) laneTest.innerHTML = testing.length ? testing.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>T</span><strong>No testing signals</strong><small>Testing broadcasts are worldwide and cannot generate profit.</small></div>`;
 
@@ -7462,7 +7514,10 @@ const App = {
         statusBadge = '<span class="badge" style="background:#F3F4F6; color:#6B7280; border:1px solid #E5E7EB;">EXPIRED</span>';
       }
 
-      const profitPct = s.profit_percentage || 1.67;
+      const isTestRow = Boolean(s.is_testing || String(s.id || '').startsWith('sig_test_'));
+      const isAddRow = !isTestRow && Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
+      const profitPct = (isTestRow || isAddRow) ? 0 : (s.profit_percentage || 1.67);
+      const rewardDisplay = isTestRow ? 'NO PROFIT' : (isAddRow ? '+$4.00 FIXED' : `+${profitPct}%`);
       const slotLabel = s.slot_label || `Slot #${s.daily_slot || 1}`;
       const rawStart = String(s.scheduled_at || s.published_at || '');
       const startMs = rawStart ? Date.parse(rawStart.replace(' ', 'T') + (rawStart.endsWith('Z') ? '' : 'Z')) : NaN;
@@ -7493,7 +7548,7 @@ const App = {
             <div style="color:#111827; font-weight:700;">${timeDisplay}</div>
             <div style="color:#0052FF; font-size:10.5px; font-weight:600;">${this.escapeHtml(tz)}</div>
           </td>
-          <td data-label="Profit %" style="font-family:var(--font-mono); color:#059669; font-weight:800; font-size:13px;">+${profitPct}%</td>
+          <td data-label="Profit / Reward" style="font-family:var(--font-mono); color:${isAddRow ? '#0052FF' : '#059669'}; font-weight:800; font-size:13px;">${rewardDisplay}</td>
           <td data-label="Expiry Window" style="font-size:12px; color:#D97706; font-weight:700;">${duration} mins validity</td>
           <td data-label="Live Status">${statusBadge}</td>
           <td data-label="Action">
@@ -7550,7 +7605,7 @@ const App = {
     if (symEl) symEl.value = signal.symbol || 'BTC/USDT';
     if (dirEl) dirEl.value = (signal.direction || 'BUY').toUpperCase();
     if (slotEl) slotEl.value = Number.isFinite(Number(signal.daily_slot)) ? String(Number(signal.daily_slot)) : '0';
-    if (profitEl) profitEl.value = signal.profit_percentage || 1.67;
+    if (profitEl) profitEl.value = Number(signal.daily_slot) === 3 ? 0 : (signal.profit_percentage || 1.67);
     if (durEl) durEl.value = signal.duration_minutes || 15;
     if (statEl) statEl.value = (signal.status || 'SCHEDULED').toUpperCase();
 
@@ -7576,8 +7631,8 @@ const App = {
     const direction = document.getElementById('edit-sig-direction')?.value;
     const slotRaw = document.getElementById('edit-sig-slot')?.value ?? '';
     const parsedSlot = parseInt(slotRaw, 10);
-    const slot = Number.isFinite(parsedSlot) ? Math.max(0, Math.min(2, parsedSlot)) : 1;
-    const profit = parseFloat(document.getElementById('edit-sig-profit')?.value) || 1.67;
+    const slot = Number.isFinite(parsedSlot) ? Math.max(0, Math.min(3, parsedSlot)) : 1;
+    const profit = slot === 3 ? 0 : (parseFloat(document.getElementById('edit-sig-profit')?.value) || 1.67);
     const timeVal = document.getElementById('edit-sig-time')?.value;
     const duration = parseInt(document.getElementById('edit-sig-duration')?.value, 10) || 15;
     const status = document.getElementById('edit-sig-status')?.value;
@@ -7687,7 +7742,7 @@ const App = {
             <div class="stat-card"><div class="stat-label">Broadcast</div><div class="stat-value" style="font-size:15px;">${esc(dt(s.published_at || s.scheduled_at))}</div></div>
             <div class="stat-card"><div class="stat-label">Expires</div><div class="stat-value" style="font-size:15px;">${esc(dt(s.expires_at))}</div></div>
             <div class="stat-card"><div class="stat-label">Duration</div><div class="stat-value" style="font-size:15px;">${Number(s.duration_minutes || 15)} min</div></div>
-            <div class="stat-card"><div class="stat-label">Profit %</div><div class="stat-value" style="font-size:15px;">${Number(s.profit_percentage || 0).toFixed(2)}%</div></div>
+            <div class="stat-card"><div class="stat-label">${Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_')) ? 'Fixed Reward' : 'Profit %'}</div><div class="stat-value" style="font-size:15px;">${Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_')) ? '$4.00 FIXED' : `${Number(s.profit_percentage || 0).toFixed(2)}%`}</div></div>
           </div>
           <div class="signal-detail-price-grid">
             <div class="stat-card"><div class="stat-label">Entry Min</div><div class="stat-value" style="font-size:15px;">${Number(s.entry_price_min || 0).toLocaleString()}</div></div>
@@ -7790,10 +7845,11 @@ const App = {
     const duration = parseInt(document.getElementById('adm-sig-duration')?.value, 10) || 15;
     const profitPct = parseFloat(document.getElementById('adm-sig-profit-pct')?.value) || 1.67;
     const slot = parseInt(document.getElementById('adm-sig-slot')?.value, 10) || 1;
-    const timeSlot = document.getElementById('adm-sig-time-slot')?.value || '4 PM';
+    const timeSlot = document.getElementById('adm-sig-time-slot')?.value || '6 PM';
     const dateTarget = document.getElementById('adm-sig-date-target')?.value || 'TODAY';
     const isTesting = Boolean(document.getElementById('adm-sig-testing')?.checked);
-    const signalMode = forcedMode || (dateTarget === 'LIVE' ? 'MANUAL' : (timeSlot === 'CUSTOM' || slot > 2 || dateTarget === 'CUSTOM' ? 'CUSTOM' : 'DAILY'));
+    const isAdditionalSelected = (timeSlot === '9:30 PM' || slot === 3) && dateTarget !== 'LIVE' && dateTarget !== 'CUSTOM';
+    const signalMode = forcedMode || (dateTarget === 'LIVE' ? 'MANUAL' : (isAdditionalSelected ? 'ADDITIONAL' : (timeSlot === 'CUSTOM' || slot > 3 || dateTarget === 'CUSTOM' ? 'CUSTOM' : 'DAILY')));
 
     if (!symbol || !direction) {
       this.toast('Please select symbol and direction', 'error');
@@ -7803,8 +7859,6 @@ const App = {
     let broadcastIso = '';
     if (broadcastTime && broadcastTime !== 'NOW') {
       try {
-        // datetime-local is a wall-clock value. The admin scheduler is PKT, so
-        // don't let the browser's local timezone silently shift the selected time.
         const m = String(broadcastTime).match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
         if (m) {
           const offset = timezone.includes('UTC+5:30') ? '+05:30' : (timezone.includes('UTC+4') ? '+04:00' : (timezone.includes('UTC+3') ? '+03:00' : (timezone.includes('UTC+0') ? '+00:00' : (timezone.includes('UTC-4') ? '-04:00' : '+05:00'))));
@@ -7817,6 +7871,11 @@ const App = {
     }
 
     const previewLevels = this.computeSignalTerminalLevels({ symbol, direction, profit_percentage: profitPct });
+    const resolvedDailySlot = isTesting
+      ? 0
+      : (signalMode === 'ADDITIONAL' ? 3 : (signalMode === 'DAILY' ? (slot === 2 ? 2 : 1) : 0));
+    const resolvedProfitPct = isTesting || signalMode === 'ADDITIONAL' ? 0 : profitPct;
+
     const res = await this.api('/admin/signals.php', 'POST', {
       action: 'CREATE',
       symbol,
@@ -7827,8 +7886,8 @@ const App = {
       tp2: previewLevels.tp2,
       sl: previewLevels.sl,
       duration_minutes: duration,
-      profit_percentage: isTesting ? 0 : profitPct,
-      daily_slot: isTesting ? 0 : (signalMode === 'DAILY' ? (slot === 2 ? 2 : 1) : 0),
+      profit_percentage: resolvedProfitPct,
+      daily_slot: resolvedDailySlot,
       signal_mode: signalMode,
       testing: isTesting,
       test_time_slot: timeSlot,
@@ -7930,7 +7989,7 @@ const App = {
       if (makerFee !== undefined && document.getElementById('sett-maker-fee')) document.getElementById('sett-maker-fee').value = makerFee;
       if (takerFee !== undefined && document.getElementById('sett-taker-fee')) document.getElementById('sett-taker-fee').value = takerFee;
       if (copySplit !== undefined && document.getElementById('sett-copy-split')) document.getElementById('sett-copy-split').value = copySplit;
-      if (minDep !== undefined && document.getElementById('sett-min-dep')) document.getElementById('sett-min-dep').value = minDep;
+      if (minDep !== undefined && document.getElementById('sett-min-dep')) document.getElementById('sett-min-dep').value = Math.max(100, parseFloat(minDep) || 100);
       if (notice !== undefined && document.getElementById('sett-notice')) document.getElementById('sett-notice').value = notice;
       if (trc20 !== undefined && document.getElementById('sett-trc20-addr')) document.getElementById('sett-trc20-addr').value = trc20;
       if (erc20 !== undefined && document.getElementById('sett-erc20-addr')) document.getElementById('sett-erc20-addr').value = erc20;
@@ -7941,13 +8000,15 @@ const App = {
   },
 
   async saveAdminSettings() {
+    const minDepVal = Math.max(100, parseFloat(document.getElementById('sett-min-dep')?.value) || 100);
+    if (document.getElementById('sett-min-dep')) document.getElementById('sett-min-dep').value = String(minDepVal);
     const settings = {
       min_withdrawal: '3.00',
       withdrawal_fee: document.getElementById('sett-with-fee').value,
       maker_fee: document.getElementById('sett-maker-fee').value,
       taker_fee: document.getElementById('sett-taker-fee').value,
       copy_trading_profit_split: document.getElementById('sett-copy-split').value,
-      min_deposit: document.getElementById('sett-min-dep').value,
+      min_deposit: String(minDepVal),
       system_notice: document.getElementById('sett-notice').value,
       hot_wallet_trc20: document.getElementById('sett-trc20-addr').value,
       hot_wallet_erc20: document.getElementById('sett-erc20-addr').value,
@@ -8808,7 +8869,7 @@ const App = {
 
     if (cardsHost) {
       cardsHost.innerHTML = configs.map(c => {
-        const minDep = c.minimum_deposit ?? c.min_deposit ?? 10;
+        const minDep = Math.max(100, Number(c.minimum_deposit ?? c.min_deposit ?? 100) || 100);
         const addr = c.address || '';
         return `
           <div class="av-adm-chain-card">
@@ -8831,7 +8892,7 @@ const App = {
 
     if (tbody) {
       tbody.innerHTML = configs.map(c => {
-        const minDep = c.minimum_deposit ?? c.min_deposit ?? 10;
+        const minDep = Math.max(100, Number(c.minimum_deposit ?? c.min_deposit ?? 100) || 100);
         const addr = c.address || '';
         return `
           <tr>
@@ -8878,7 +8939,7 @@ const App = {
     }
   },
 
-  openEditDepositConfigModal(asset = 'USDT', network = 'TRC20', address = '', min = 10, instructions = '') {
+  openEditDepositConfigModal(asset = 'USDT', network = 'TRC20', address = '', min = 100, instructions = '') {
     this.openModal('modal-edit-deposit-config');
     const assetEl = document.getElementById('edit-dep-asset');
     const netEl = document.getElementById('edit-dep-network');
@@ -8886,11 +8947,12 @@ const App = {
     const minEl = document.getElementById('edit-dep-min');
     const instEl = document.getElementById('edit-dep-instructions');
 
+    const safeMin = Math.max(100, Number(min) || 100);
     if (assetEl) assetEl.value = asset;
     if (netEl) netEl.value = network;
     if (addrEl) addrEl.value = address || 'TX8q9PzB9k8vY2L3m4N5p6Q7r8S9t0U1vW';
-    if (minEl) minEl.value = min || 10;
-    if (instEl) instEl.value = instructions || `Send ${asset} (${network}) to this address. Minimum deposit is ${min} ${asset}.`;
+    if (minEl) minEl.value = safeMin;
+    if (instEl) instEl.value = instructions || `Send ${asset} (${network}) to this address. Minimum deposit is ${safeMin} ${asset}.`;
   },
 
   async saveDepositConfig() {
@@ -8899,7 +8961,7 @@ const App = {
     const asset = document.getElementById('edit-dep-asset')?.value;
     const network = document.getElementById('edit-dep-network')?.value;
     const address = document.getElementById('edit-dep-address')?.value?.trim();
-    const minDeposit = parseFloat(document.getElementById('edit-dep-min')?.value) || 10;
+    const minDeposit = Math.max(100, parseFloat(document.getElementById('edit-dep-min')?.value) || 100);
     const instructions = document.getElementById('edit-dep-instructions')?.value?.trim();
 
     if (!address) {
@@ -11323,7 +11385,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
           Daily Trading Signals
         </div>
         <div style="font-size: 12px; color: #4B5563; line-height: 1.5;">
-          All members with minimum 20 USDT aggregated balance qualify for institutional trade dispatches twice daily in their local country time.
+          All members with minimum 100 USDT Future balance qualify for daily institutional dispatches at 6:00 PM &amp; 8:00 PM PKT (30-day 2&times; plan), plus 9:30 PM PKT Additional Signals ($4.00 fixed) on $300+ deposits &amp; friend invites.
         </div>
       </div>
 
@@ -11354,7 +11416,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
           Welcome to the PRIME X CAPITAL Trading Network, ${this.escapeHtml(userEmail.split('@')[0])}
         </div>
         <div style="font-size: 12px; color: #4B5563; line-height: 1.5;">
-          Your account is assigned to high-priority order routing. Maintain at least 20 USDT in your portfolio to ensure automated execution of all scheduled signals.
+          Your account is assigned to high-priority order routing. Maintain at least 100 USDT in your Future Balance to unlock daily 6:00 PM &amp; 8:00 PM PKT signals, and deposit $300+ or invite friends to unlock $4.00 Additional Signals at 9:30 PM PKT.
         </div>
       </div>
     `;

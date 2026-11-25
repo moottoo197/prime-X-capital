@@ -41,8 +41,28 @@ if ($supabase->isConfigured()) {
         'live_signals' => [
             'table' => 'trading_signals',
             'params' => ['status' => 'in.(PUBLISHED,ACTIVE)', 'select' => 'id,symbol,direction,profit_percentage,duration_minutes,daily_slot,published_at,scheduled_at,expires_at,created_at', 'order' => 'published_at.desc', 'limit' => '10']
+        ],
+        'stored_notifications' => [
+            'table' => 'user_notifications',
+            'params' => ['user_id' => "eq.{$userId}", 'select' => 'id,user_id,type,title,message,is_read,created_at', 'order' => 'created_at.desc', 'limit' => '15']
         ]
     ]);
+
+    // -1. Stored user notifications (e.g. Additional Signal deposit/referral unlocks)
+    $storedRes = $batch['stored_notifications'] ?? ['success' => false];
+    if (!empty($storedRes['success']) && is_array($storedRes['data'] ?? null)) {
+        foreach ($storedRes['data'] as $sn) {
+            $notifications[] = [
+                'id' => 'notif_db_' . ($sn['id'] ?? bin2hex(random_bytes(4))),
+                'user_id' => $userId,
+                'type' => (string)($sn['type'] ?? 'SIGNAL_AVAILABLE'),
+                'title' => (string)($sn['title'] ?? 'Prime X Capital Alert'),
+                'message' => (string)($sn['message'] ?? ''),
+                'is_read' => !empty($sn['is_read']) ? 1 : 0,
+                'created_at' => (string)($sn['created_at'] ?? gmdate('Y-m-d H:i:s'))
+            ];
+        }
+    }
 
     // 0. Live trading signal broadcasts (shown on all user dashboards while active)
     $liveSigRes = $batch['live_signals'] ?? ['success' => false];
@@ -63,7 +83,9 @@ if ($supabase->isConfigured()) {
             $lsIsBuy = in_array($lsDirRaw, ['BUY', 'LONG', 'UP'], true);
             $lsDirLabel = $lsIsBuy ? 'UP / BUY (LONG)' : 'DOWN / SELL (SHORT)';
             $lsSlot = (int)($ls['daily_slot'] ?? 0);
+            $lsIsAdditional = ($lsSlot === 3 || strpos($lsId, 'sig_add_') === 0);
             $lsPct = in_array($lsSlot, [1, 2], true) ? 1.67 : (float)($ls['profit_percentage'] ?? 1.67);
+            $lsRewardTxt = $lsIsAdditional ? '+$4.00 USDT fixed reward' : "+{$lsPct}% target";
             $lsDur = max(1, (int)($ls['duration_minutes'] ?? 15));
             $lsTime = $pubRaw !== '' ? $pubRaw : gmdate('Y-m-d H:i:s');
 
@@ -71,8 +93,8 @@ if ($supabase->isConfigured()) {
                 'id' => 'notif_live_sig_' . $lsId,
                 'user_id' => $userId,
                 'type' => 'SIGNAL_AVAILABLE',
-                'title' => "⚡ Live Signal: {$lsSym} ({$lsDirLabel})",
-                'message' => "{$lsSym} {$lsDirLabel} signal is LIVE now (+{$lsPct}% target, {$lsDur}m window). Open Signals Terminal to confirm.",
+                'title' => ($lsIsAdditional ? "🎁 Additional Signal Live: " : "⚡ Live Signal: ") . "{$lsSym} ({$lsDirLabel})",
+                'message' => "{$lsSym} {$lsDirLabel} signal is LIVE now ({$lsRewardTxt}, {$lsDur}m window). Open Signals Terminal to confirm.",
                 'is_read' => 0,
                 'created_at' => $lsTime
             ];
@@ -191,15 +213,18 @@ if ($supabase->isConfigured()) {
             if (strpos($signalId, 'sig_test_') === 0) continue;
             $profit = (float)($s['profit_amount'] ?? 0);
             $sym = $s['symbol'] ?? 'USDT';
-            $pct = $s['profit_percentage'] ?? '1.67';
+            $pct = (float)($s['profit_percentage'] ?? 0);
+            $isAddExec = (strpos($signalId, 'sig_add_') === 0 || ($pct <= 0 && abs($profit - 4.0) < 0.01));
             $time = $s['executed_at'] ?? $s['created_at'] ?? gmdate('Y-m-d H:i:s');
 
             $notifications[] = [
                 'id' => 'notif_sig_' . ($s['id'] ?? bin2hex(random_bytes(4))),
                 'user_id' => $userId,
                 'type' => 'SIGNAL_SETTLED',
-                'title' => "⚡ High-Yield Signal Profit: +{$profit} USDT",
-                'message' => "Your quantitative trading signal for {$sym} settled with +{$pct}% return. Profit has been credited to your Trading Wallet.",
+                'title' => ($isAddExec ? "🎁 Additional Signal Reward: " : "⚡ High-Yield Signal Profit: ") . "+{$profit} USDT",
+                'message' => $isAddExec
+                    ? "Your Additional Signal for {$sym} settled with +$4.00 USDT fixed profit (separate from 30-day 2x plan)."
+                    : "Your quantitative trading signal for {$sym} settled with +{$pct}% return. Profit has been credited to your Trading Wallet.",
                 'is_read' => 0,
                 'created_at' => $time
             ];

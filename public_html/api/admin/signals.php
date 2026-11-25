@@ -180,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $existsAtStart = ($startTs === false || $createdTs === false) ? true : ($createdTs <= $startTs);
             $active = !empty($profile['is_active']);
             $role = strtoupper((string)($profile['role'] ?? 'USER'));
-            $eligible = $existsAtStart && ($active) && ((float)($fundedCapitalByUser[$uid] ?? 0) >= 20.0 || in_array($role, $privilegedRoles, true));
+            $eligible = $existsAtStart && ($active) && ((float)($fundedCapitalByUser[$uid] ?? 0) >= 100.0 || in_array($role, $privilegedRoles, true));
             $country = trim((string)($profile['country'] ?? ''));
             if ($country === '') $country = 'Unknown / Not Set';
             $key = strtoupper($country);
@@ -359,23 +359,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $sigId = (string)($signalRow['id'] ?? '');
         $isTesting = strpos($sigId, 'sig_test_') === 0;
         $slot = (int)($signalRow['daily_slot'] ?? 0);
+        $isAdditional = !$isTesting && ($slot === 3 || strpos($sigId, 'sig_add_') === 0);
         if (!$isTesting && in_array($slot, [1, 2], true)) {
-            // Normal daily sessions always use the fixed 1.67% rate (doubles deposit in 30 days).
             $signalRow['profit_percentage'] = 1.67;
+        } elseif ($isAdditional) {
+            $signalRow['profit_percentage'] = 0;
+            $signalRow['reward_usdt'] = 4.00;
+            $signalRow['is_additional'] = true;
         }
         $rawStart = (string)($signalRow['scheduled_at'] ?? $signalRow['published_at'] ?? $signalRow['created_at'] ?? '');
         $startDay = '';
         if ($rawStart !== '') {
             try { $d = new DateTime($rawStart); $d->setTimezone(new DateTimeZone('Asia/Karachi')); $startDay = $d->format('Y-m-d'); } catch (Throwable $e) {}
         }
-        // Normal daily view = today's pair only. Testing/custom records remain visible.
-        if (!$isTesting && in_array($slot, [1,2], true) && $startDay !== $adminToday) continue;
+        // Normal daily/additional view = today's sessions only. Testing/custom records remain visible.
+        if (!$isTesting && in_array($slot, [1, 2, 3], true) && $startDay !== $adminToday) continue;
         $signalRow['is_testing'] = $isTesting;
         $signalRow['no_profit'] = $isTesting;
+        $signalRow['is_additional'] = $isAdditional;
         if ($isTesting) $signalRow['profit_percentage'] = 0;
-        $signalRow['schedule_time'] = $slot === 2 ? '08:00 PM PKT' : ($slot === 1 ? '04:00 PM PKT' : '');
+        $signalRow['schedule_time'] = $slot === 3 ? '09:30 PM PKT' : ($slot === 2 ? '08:00 PM PKT' : ($slot === 1 ? '06:00 PM PKT' : ''));
         if ($isTesting) {
             $signalRow['slot_label'] = 'Testing Signal • No Profit';
+        } elseif ($isAdditional) {
+            $signalRow['slot_label'] = 'Additional Signal #3 • $4.00 Fixed';
         } else {
             $signalRow['slot_label'] = $slot > 0 ? ('Daily Signal #' . $slot) : 'Custom Signal';
         }
@@ -403,7 +410,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $historyRow['expires_at_pkt'] = alphavest_pkt_datetime($historyRow['expires_at'] ?? '');
         $historyRow['created_at_pkt'] = alphavest_pkt_datetime($historyRow['created_at'] ?? '');
         $slot = (int)($historyRow['daily_slot'] ?? 0);
-        $historyRow['slot_label'] = $slot === 2 ? 'Daily Signal #2 • 8 PM PKT' : ($slot === 1 ? 'Daily Signal #1 • 4 PM PKT' : 'Custom / Manual');
+        $hid = (string)($historyRow['id'] ?? '');
+        if ($slot === 3 || strpos($hid, 'sig_add_') === 0) {
+            $historyRow['slot_label'] = 'Additional Signal #3 • 9:30 PM PKT ($4.00)';
+            $historyRow['is_additional'] = true;
+        } else {
+            $historyRow['slot_label'] = $slot === 2 ? 'Daily Signal #2 • 8 PM PKT' : ($slot === 1 ? 'Daily Signal #1 • 6 PM PKT' : 'Custom / Manual');
+        }
     }
     unset($historyRow);
 
@@ -469,9 +482,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($sigId === '' || !preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $sigId)) sendError('VALIDATION_ERROR', 'Valid signal_id is required');
         $symbol = strtoupper(trim((string)($input['symbol'] ?? 'BTC/USDT')));
         $direction = strtoupper(trim((string)($input['direction'] ?? 'BUY')));
-        $dailySlot = max(0, min(2, (int)($input['daily_slot'] ?? 0)));
-        $profitPercentage = max(0.1, (float)($input['profit_percentage'] ?? 1.67));
+        $dailySlot = max(0, min(3, (int)($input['daily_slot'] ?? 0)));
+        $profitPercentage = max(0.0, (float)($input['profit_percentage'] ?? 1.67));
         if (in_array($dailySlot, [1, 2], true)) $profitPercentage = 1.67;
+        if ($dailySlot === 3 || strpos($sigId, 'sig_add_') === 0) $profitPercentage = 0.0;
         $durationMinutes = max(1, min(1440, (int)($input['duration_minutes'] ?? 15)));
         $requestedStatus = strtoupper(trim((string)($input['status'] ?? '')));
 
@@ -571,33 +585,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'CREATE' || $action === 'PUBLISH' || empty($action)) {
         $symbol = strtoupper(trim($input['symbol'] ?? 'BTC/USDT'));
         $direction = strtoupper(trim($input['direction'] ?? 'BUY'));
-        $duration = max(1, min(1440, (int)($input['duration_minutes'] ?? 15))); // 15 minutes remains the default; admin selection is honored.
+        $duration = max(1, min(1440, (int)($input['duration_minutes'] ?? 15)));
         $profitPercentage = max(0.1, (float)($input['profit_percentage'] ?? 1.67));
-        $timezoneLabel = 'GLOBAL — ALL COUNTRIES (PKT)'; // Every signal is broadcast worldwide; PKT is the canonical schedule timezone.
+        $timezoneLabel = 'GLOBAL — ALL COUNTRIES (PKT)';
         $signalMode = strtoupper(trim((string)($input['signal_mode'] ?? $input['mode'] ?? 'DAILY')));
         $broadcastTime = trim((string)($input['broadcast_time'] ?? ''));
         $broadcastIso = trim((string)($input['broadcast_time_iso'] ?? ''));
-        $isManual = in_array($signalMode, ['MANUAL','NOW','LIVE'], true) || $broadcastTime === 'NOW';
-        $isCustom = in_array($signalMode, ['CUSTOM','SCHEDULED'], true) || ($broadcastTime !== '' && $broadcastTime !== 'NOW' && (int)($input['daily_slot'] ?? 0) > 2);
         $dailySlotInput = (int)($input['daily_slot'] ?? 0);
         $isTesting = filter_var($input['testing'] ?? false, FILTER_VALIDATE_BOOLEAN);
         if ($isTesting) $profitPercentage = 0.0;
         $testTimeSlot = strtoupper(trim((string)($input['test_time_slot'] ?? '')));
 
+        $isManual = in_array($signalMode, ['MANUAL', 'NOW', 'LIVE'], true) || $broadcastTime === 'NOW';
+        $isAdditionalMode = !$isTesting && !$isManual && (
+            $signalMode === 'ADDITIONAL'
+            || $dailySlotInput === 3
+            || in_array(strtoupper($broadcastTime), ['9:30 PM', '09:30 PM', '21:30'], true)
+        );
+        $isCustom = !$isManual && !$isAdditionalMode && (
+            in_array($signalMode, ['CUSTOM', 'SCHEDULED'], true)
+            || ($broadcastTime !== '' && $broadcastTime !== 'NOW' && $dailySlotInput > 3)
+        );
+
         $tz = new DateTimeZone('Asia/Karachi');
         $now = new DateTime('now', $tz);
 
-        // DAILY = exactly 4 PM or 8 PM. MANUAL = immediately live. CUSTOM = exact admin date/time.
-        // TEST signals reuse the same scheduling windows but are permanently non-profit.
-        if ($isTesting && !$isManual && !$isCustom && in_array($testTimeSlot, ['4 PM','8 PM'], true)) {
+        if ($isTesting && !$isManual && !$isCustom && in_array($testTimeSlot, ['6 PM', '4 PM', '8 PM', '9:30 PM'], true)) {
             $dailySlot = 0;
-            $hour = $testTimeSlot === '8 PM' ? 20 : 16;
-            $scheduled = new DateTime($now->format('Y-m-d') . sprintf(' %02d:00:00', $hour), $tz);
+            $hour = $testTimeSlot === '9:30 PM' ? 21 : ($testTimeSlot === '8 PM' ? 20 : 18);
+            $minuteSlot = $testTimeSlot === '9:30 PM' ? 30 : 0;
+            $scheduled = new DateTime($now->format('Y-m-d') . sprintf(' %02d:%02d:00', $hour, $minuteSlot), $tz);
             if ($scheduled <= $now) $scheduled->modify('+1 day');
             $publishedAt = clone $scheduled;
             $expiresAt = (clone $scheduled)->modify('+' . $duration . ' minutes');
             $status = 'SCHEDULED';
             $slotLabel = 'Testing Signal • ' . $testTimeSlot . ' PKT';
+            $sigId = 'sig_test_' . bin2hex(random_bytes(6));
         } elseif ($isManual) {
             $dailySlot = 0;
             $scheduled = clone $now;
@@ -605,7 +628,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $expiresAt = (clone $now)->modify('+' . $duration . ' minutes');
             $status = 'PUBLISHED';
             $slotLabel = $isTesting ? 'Testing Signal • Live Now • No Profit' : 'Manual Signal';
-        } elseif ($isCustom || $dailySlotInput > 2 || ($isTesting && $broadcastTime !== '')) {
+            $sigId = ($isTesting ? 'sig_test_' : 'sig_') . bin2hex(random_bytes(6));
+        } elseif ($isCustom || $dailySlotInput > 3 || ($isTesting && $broadcastTime !== '')) {
             $dailySlot = 0;
             $raw = $broadcastIso ?: $broadcastTime;
             try {
@@ -620,24 +644,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $expiresAt = (clone $scheduled)->modify('+' . $duration . ' minutes');
             $status = 'SCHEDULED';
             $slotLabel = $isTesting ? 'Testing Signal • Custom • No Profit' : 'Custom Signal';
-        } else {
-            $dailySlot = ($dailySlotInput === 2) ? 2 : 1;
-            // The two normal daily sessions are fixed at 1.67% each (2x in 30 days). Custom/manual
-            // signal rates remain independently configurable below.
-            $profitPercentage = 1.67;
-            $hour = $dailySlot === 2 ? 20 : 16;
-            $scheduled = new DateTime($now->format('Y-m-d') . sprintf(' %02d:00:00', $hour), $tz);
-            if ($scheduled <= $now) $scheduled->modify('+1 day');
+            $sigId = ($isTesting ? 'sig_test_' : 'sig_') . bin2hex(random_bytes(6));
+        } elseif ($isAdditionalMode) {
+            $dailySlot = 3;
+            $profitPercentage = 0.0;
+            $scheduled = new DateTime($now->format('Y-m-d') . ' 21:30:00', $tz);
+            if ((clone $scheduled)->modify('+' . $duration . ' minutes') <= $now) {
+                $scheduled->modify('+1 day');
+            }
             $publishedAt = clone $scheduled;
             $expiresAt = (clone $scheduled)->modify('+' . $duration . ' minutes');
-            $status = 'SCHEDULED';
+            $status = ($now >= $publishedAt && $now < $expiresAt) ? 'PUBLISHED' : 'SCHEDULED';
+            $slotLabel = 'Additional Signal #3 • $4.00 Fixed';
+            $sigId = 'sig_add_' . $scheduled->format('Ymd') . '_3';
+        } else {
+            $dailySlot = ($dailySlotInput === 2) ? 2 : 1;
+            $profitPercentage = 1.67;
+            $hour = $dailySlot === 2 ? 20 : 18;
+            $scheduled = new DateTime($now->format('Y-m-d') . sprintf(' %02d:00:00', $hour), $tz);
+            if ((clone $scheduled)->modify('+' . $duration . ' minutes') <= $now) {
+                $scheduled->modify('+1 day');
+            }
+            $publishedAt = clone $scheduled;
+            $expiresAt = (clone $scheduled)->modify('+' . $duration . ' minutes');
+            $status = ($now >= $publishedAt && $now < $expiresAt) ? 'PUBLISHED' : 'SCHEDULED';
             $slotLabel = $dailySlot === 2 ? 'Daily Signal #2' : 'Daily Signal #1';
+            $sigId = 'sig_daily_' . $scheduled->format('Ymd') . '_' . $dailySlot;
         }
 
-        $sigId = ($isTesting ? 'sig_test_' : 'sig_') . bin2hex(random_bytes(6));
         $nowUtc = gmdate('Y-m-d H:i:s');
-        // All timestamptz values are written explicitly in UTC. This prevents
-        // Supabase/server timezone differences from moving a 4 PM/8 PM signal.
         $scheduledUtc = (clone $scheduled)->setTimezone(new DateTimeZone('UTC'));
         $publishedUtc = (clone $publishedAt)->setTimezone(new DateTimeZone('UTC'));
         $expiresUtc = (clone $expiresAt)->setTimezone(new DateTimeZone('UTC'));
@@ -661,21 +696,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'created_at' => $nowUtc
         ];
 
-        $insRes = $supabase->insert('trading_signals', [$fullPayload]);
+        $isCanonicalDaily = !$isTesting && !$isManual && !$isCustom && in_array($dailySlot, [1, 2, 3], true);
+        $insRes = $isCanonicalDaily
+            ? $supabase->upsert('trading_signals', [$fullPayload], 'id')
+            : $supabase->insert('trading_signals', [$fullPayload]);
         if (!$insRes['success']) {
-            // Retry only for optional scheduling columns missing from an older schema.
             $corePayload = $fullPayload;
             unset($corePayload['timezone_label'], $corePayload['scheduled_at']);
-            $insRes = $supabase->insert('trading_signals', [$corePayload]);
+            $insRes = $isCanonicalDaily
+                ? $supabase->upsert('trading_signals', [$corePayload], 'id')
+                : $supabase->insert('trading_signals', [$corePayload]);
         }
         if (!$insRes['success']) sendError('SUPABASE_INSERT_FAILED', 'Failed to publish signal: ', 502);
 
         $savedSignal = !empty($insRes['data'][0]) && is_array($insRes['data'][0]) ? $insRes['data'][0] : $fullPayload;
-        $savedSignal['schedule_time'] = $isManual ? 'LIVE NOW' : ($isCustom ? $scheduled->format('Y-m-d H:i') . ' PKT' : ($dailySlot === 2 ? '08:00 PM PKT' : '04:00 PM PKT'));
+        $savedSignal['schedule_time'] = $isManual ? 'LIVE NOW' : ($isCustom ? $scheduled->format('Y-m-d H:i') . ' PKT' : ($dailySlot === 3 ? '09:30 PM PKT' : ($dailySlot === 2 ? '08:00 PM PKT' : '06:00 PM PKT')));
         $savedSignal['slot_label'] = $slotLabel;
-        $savedSignal['signal_mode'] = $isTesting ? 'TEST' : ($isManual ? 'MANUAL' : ($isCustom ? 'CUSTOM' : 'DAILY'));
+        $savedSignal['signal_mode'] = $isTesting ? 'TEST' : ($isManual ? 'MANUAL' : ($isCustom ? 'CUSTOM' : ($dailySlot === 3 ? 'ADDITIONAL' : 'DAILY')));
         $savedSignal['is_testing'] = $isTesting;
         $savedSignal['no_profit'] = $isTesting;
+        $savedSignal['is_additional'] = $isAdditionalMode || ($dailySlot === 3 && !$isTesting);
+        $savedSignal['reward_usdt'] = $savedSignal['is_additional'] ? 4.00 : 0.0;
         $savedSignal['audience_scope'] = 'ALL_COUNTRIES';
         if (strtoupper((string)($savedSignal['status'] ?? '')) === 'PUBLISHED' && !$isTesting) {
             primex_schedule_signal_live_broadcast($supabase, [$savedSignal]);
