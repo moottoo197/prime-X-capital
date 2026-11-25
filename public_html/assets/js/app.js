@@ -3068,7 +3068,24 @@ const App = {
     }
   },
 
-  /* Withdrawal: 5% early deduction rule if withdrawing before doubling deposit */
+  /* Withdrawal: 30% early fee before 2x/30d (waived to 5%/$100 tier when Deposit+DepositBonus+ReferralBonus >= 2x Deposit or 30d + 2x met) */
+  computeClientWithdrawalFee(amount) {
+    const amt = Math.max(0, Number(amount) || 0);
+    const info = this.state.withdrawInfo;
+    const isEarly = info ? Boolean(info.is_early_withdrawal) : true;
+    if (amt <= 0) {
+      return { feePct: isEarly ? 30 : 0, feeAmt: 0, netAmt: 0, isEarly };
+    }
+    if (isEarly) {
+      const feeAmt = Math.round(amt * 0.30 * 100) / 100;
+      return { feePct: 30, feeAmt, netAmt: Math.max(0, Math.round((amt - feeAmt) * 100) / 100), isEarly: true };
+    }
+    const blocks = Math.max(1, Math.ceil((amt - 0.00001) / 100));
+    const feePct = Math.min(100, blocks * 5);
+    const feeAmt = Math.round(amt * (feePct / 100) * 100) / 100;
+    return { feePct, feeAmt, netAmt: Math.max(0, Math.round((amt - feeAmt) * 100) / 100), isEarly: false };
+  },
+
   async openWithdrawModal() {
     this.openModal('modal-withdraw');
     
@@ -3096,19 +3113,43 @@ const App = {
           availEl.textContent = `$${liveAvail.toFixed(2)} USDT`;
         }
         const depEl = document.getElementById('with-stat-deposited');
+        const bonusTotEl = document.getElementById('with-stat-bonus-total');
         const targetEl = document.getElementById('with-stat-target');
         const penaltyEl = document.getElementById('with-penalty-alert');
+        const noticeBox = document.getElementById('with-deduction-notice');
 
-        if (depEl) depEl.textContent = `$${res.data.total_deposited.toFixed(2)} USDT`;
-        if (targetEl) targetEl.textContent = `$${res.data.double_target.toFixed(2)} USDT`;
+        const totalDep = Number(res.data.total_deposited || 0);
+        const depPlusBonuses = Number(res.data.deposit_plus_bonuses ?? totalDep);
+        const doubleTarget = Number(res.data.double_target || 0);
+
+        if (depEl) depEl.textContent = `$${totalDep.toFixed(2)} USDT`;
+        if (bonusTotEl) bonusTotEl.textContent = `$${depPlusBonuses.toFixed(2)} USDT`;
+        if (targetEl) targetEl.textContent = `$${doubleTarget.toFixed(2)} USDT`;
 
         if (penaltyEl) {
           if (res.data.is_early_withdrawal) {
-            penaltyEl.innerHTML = `⚠️ <strong>5% Early Deduction Active:</strong> Withdrawing before reaching the 2x deposit target ($${res.data.double_target.toFixed(2)} USDT) will incur a mandatory 5% fee deduction from your requested amount.`;
-            penaltyEl.style.color = 'var(--warning)';
+            const daysRem = Number(res.data.days_remaining_30 ?? 30);
+            const daysNote = daysRem > 0 ? ` (${daysRem} day${daysRem === 1 ? '' : 's'} remaining until 30-day unlock)` : '';
+            penaltyEl.innerHTML = `⚠️ <strong>30% Early Withdrawal Fee Active:</strong> Withdrawing before doubling your deposit ($${doubleTarget.toFixed(2)} USDT) after 30 days${daysNote} incurs a <strong>30% fee</strong>—unless your Deposit + Deposit Bonus + Referral Bonus reaches $${doubleTarget.toFixed(2)} USDT.`;
+            penaltyEl.style.color = '#B45309';
+            if (noticeBox) {
+              noticeBox.style.background = '#FFFBEB';
+              noticeBox.style.borderColor = '#FDE68A';
+            }
+          } else if (res.data.doubled_by_bonuses && !res.data.has_passed_30_days) {
+            penaltyEl.innerHTML = `✅ <strong>2× Bonus Threshold Met:</strong> Deposit + Deposit Bonus + Referral Bonus ($${depPlusBonuses.toFixed(2)}) reached 2× your deposit ($${doubleTarget.toFixed(2)}). Tiered fee applies: <strong>5% per $100 USD</strong> ($100 = 5%, $200 = 10%, etc.).`;
+            penaltyEl.style.color = '#065F46';
+            if (noticeBox) {
+              noticeBox.style.background = '#ECFDF5';
+              noticeBox.style.borderColor = '#A7F3D0';
+            }
           } else {
-            penaltyEl.innerHTML = `✅ <strong>Full Payout:</strong> You have met the 2x deposit turnover threshold ($${res.data.total_deposited.toFixed(2)} deposit). No 5% early deduction will be applied!`;
-            penaltyEl.style.color = 'var(--primary)';
+            penaltyEl.innerHTML = `✅ <strong>30-Day 2× Goal Completed:</strong> Tiered withdrawal fee applies: <strong>5% per $100 USD</strong> ($100 = 5%, $200 = 10%, $300 = 15%, etc.).`;
+            penaltyEl.style.color = '#065F46';
+            if (noticeBox) {
+              noticeBox.style.background = '#ECFDF5';
+              noticeBox.style.borderColor = '#A7F3D0';
+            }
           }
         }
       }
@@ -3135,20 +3176,27 @@ const App = {
 
   onWithdrawAmountInput(val) {
     const amount = parseFloat(val) || 0;
-    const fee = 1.00;
-    const isEarly = this.state.withdrawInfo ? this.state.withdrawInfo.is_early_withdrawal : true;
-    const earlyDeduction = isEarly ? (amount * 0.05) : 0;
-    const net = Math.max(0, amount - fee - earlyDeduction);
+    const calc = this.computeClientWithdrawalFee(amount);
 
     const calcAmount = document.getElementById('with-calc-amount');
+    const calcFeeLabel = document.getElementById('with-calc-fee-label');
     const calcFee = document.getElementById('with-calc-fee');
+    const calcDedLabel = document.getElementById('with-calc-deduction-label');
     const calcDeduction = document.getElementById('with-calc-deduction');
     const calcNet = document.getElementById('with-calc-net');
 
     if (calcAmount) calcAmount.textContent = `$${amount.toFixed(2)} USDT`;
-    if (calcFee) calcFee.textContent = `$${fee.toFixed(2)} USDT`;
-    if (calcDeduction) calcDeduction.textContent = `$${earlyDeduction.toFixed(2)} USDT`;
-    if (calcNet) calcNet.textContent = `$${net.toFixed(2)} USDT`;
+    if (calcFeeLabel) calcFeeLabel.textContent = calc.isEarly ? 'Withdrawal Fee (30% Early)' : `Withdrawal Fee (${calc.feePct}% · 5%/$100 Tier)`;
+    if (calcFee) {
+      calcFee.textContent = `$${calc.feeAmt.toFixed(2)} USDT`;
+      calcFee.style.color = calc.isEarly ? '#DC2626' : '#0F172A';
+    }
+    if (calcDedLabel) calcDedLabel.textContent = calc.isEarly ? 'Early Fee Rate' : 'Tiered Fee Rate';
+    if (calcDeduction) {
+      calcDeduction.textContent = calc.isEarly ? '30% (Before 2× / 30d)' : `${calc.feePct}% (5% per $100)`;
+      calcDeduction.style.color = calc.isEarly ? '#F6465D' : '#0052FF';
+    }
+    if (calcNet) calcNet.textContent = `$${calc.netAmt.toFixed(2)} USDT`;
   },
 
   async submitWithdrawal() {
@@ -4317,6 +4365,8 @@ const App = {
     const minReq = Math.max(100, Number(data.min_deposit_required || 100) || 100);
     const addStatus = data.additional_signals || {};
     const addRemaining = Number(addStatus.remaining ?? 0);
+    const addUsedToday = Number(addStatus.used_today ?? 0);
+    const addCanToday = Boolean(addStatus.can_use_today ?? (addRemaining > 0 && addUsedToday < 1));
     const addTotalEarned = Number(addStatus.total_earned ?? 0);
     const addUsed = Number(addStatus.used ?? 0);
     const addDepositCredits = Number(addStatus.deposit_credits ?? 0);
@@ -4337,11 +4387,13 @@ const App = {
         : `Minimum $${minReq.toFixed(0)} USDT Future Balance required for daily signals`;
     }
     if (kpiAddEl) {
-      kpiAddEl.textContent = `${addRemaining} Remaining`;
+      kpiAddEl.textContent = addRemaining > 1
+        ? `${addRemaining} Remaining (1/Day)`
+        : `${addRemaining} Remaining`;
     }
     if (kpiAddMetaEl) {
       kpiAddMetaEl.textContent = addTotalEarned > 0
-        ? `Earned ${addTotalEarned} (${addDepositCredits} deposit + ${addReferralCredits} referral) · Used ${addUsed} · $4.00/signal`
+        ? `Earned ${addTotalEarned} (${addDepositCredits} deposit + ${addReferralCredits} referral) · Used ${addUsed} · 1/day · $4.00/signal`
         : `Deposit $300+ or invite a $300+ depositor to unlock $4.00 signals`;
     }
 
@@ -4427,7 +4479,7 @@ const App = {
                   Future Balance ($${tradingUsdt.toFixed(2)} USDT) &bull; Daily 6:00 PM &amp; 8:00 PM PKT Unlocked
                 </span>
               </div>
-              <span style="font-size: 11px; color: #059669; font-weight: 700;">Additional Credits: ${addRemaining} (@ $4.00 USDT Fixed)</span>
+              <span style="font-size: 11px; color: #059669; font-weight: 700;">Additional Credits: ${addRemaining} (1/Day · ${addCanToday ? 'Ready Today' : (addRemaining > 0 ? 'Daily Limit Used' : 'Locked')})</span>
             </div>
           </div>
         `;
@@ -4644,6 +4696,7 @@ const App = {
       const sigData = this.state.signalsData || {};
       const minReq = Math.max(100, Number(sigData.min_deposit_required || 100) || 100);
       const addRemaining = Number(sigData.additional_signals?.remaining ?? 0);
+      const addUsedToday = Number(sigData.additional_signals?.used_today ?? 0);
       const hasUsed = Boolean(activeSig && (activeSig.has_used || activeSig.has_confirmed));
       const isTest = Boolean(activeSig && (activeSig.is_testing || activeSig.no_profit || String(activeSig.id || '').startsWith('sig_test_')));
       if (activeSig && isLive) {
@@ -4653,8 +4706,10 @@ const App = {
         } else if (hasUsed) {
           actionWrap.innerHTML = `<span class="badge badge-positive" style="padding:8px 14px;">✅ Confirmed (${isAdditional ? '+$4.00 Fixed' : `+${levels.pct}%`})</span>`;
         } else if (isAdditional) {
-          if (addRemaining > 0) {
+          if (addRemaining > 0 && addUsedToday < 1) {
             actionWrap.innerHTML = `<button type="button" class="btn-primary" style="padding:10px 18px;font-size:13px;font-weight:800;border-radius:999px;" data-alpha-action="signal:${this.escapeHtml(activeSig.id)}" onclick="App.confirmSignalDirectly('${this.escapeHtml(activeSig.id)}')">🎁 Confirm Additional Signal (+$4.00 USDT Fixed)</button>`;
+          } else if (addRemaining > 0 && addUsedToday >= 1) {
+            actionWrap.innerHTML = `<span class="badge badge-positive" style="padding:8px 14px;">✅ Today's Additional Signal (1/Day) Used · ${addRemaining} Remaining</span>`;
           } else {
             actionWrap.innerHTML = `<button type="button" class="btn-secondary" style="padding:9px 16px;font-size:12px;font-weight:700;border-radius:999px;" onclick="App.openDepositModal()">🔒 Deposit $300+ or Invite Friend to Unlock Additional Signal</button>`;
           }
@@ -10703,20 +10758,8 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   },
 
   updateWithdrawalFee() {
-    const net = (document.getElementById('with-network')?.value || 'TRC20').toUpperCase();
-    const feeMap = { TRC20: 1.0, BEP20: 0.8, ERC20: 5.0, SOLANA: 0.5 };
-    const fee = feeMap[net] ?? 1.0;
-    const feeEl = document.getElementById('with-calc-fee');
-    if (feeEl) feeEl.textContent = `$${fee.toFixed(2)} USDT`;
     const amountEl = document.getElementById('with-amount');
-    if (amountEl) {
-      const amount = parseFloat(amountEl.value) || 0;
-      const isEarly = this.state.withdrawInfo ? this.state.withdrawInfo.is_early_withdrawal : true;
-      const earlyDeduction = isEarly ? (amount * 0.05) : 0;
-      const netOut = Math.max(0, amount - fee - earlyDeduction);
-      const calcNet = document.getElementById('with-calc-net');
-      if (calcNet) calcNet.textContent = `$${netOut.toFixed(2)} USDT`;
-    }
+    this.onWithdrawAmountInput(amountEl ? amountEl.value : '');
   },
 
   onWithdrawAssetChange() {

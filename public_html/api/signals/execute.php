@@ -85,7 +85,7 @@ if ($isAdditionalSignal) {
         );
     }
 
-    // Check existing single-use execution row
+    // Check existing single-use execution row for this signal first
     $dupCheck = $supabase->select('user_signal_executions', [
         'user_id' => 'eq.' . $userId,
         'signal_id' => 'eq.' . $signalId,
@@ -94,6 +94,15 @@ if ($isAdditionalSignal) {
     ]);
     if (!empty($dupCheck['success']) && !empty($dupCheck['data'][0])) {
         sendError('SIGNAL_ALREADY_USED', 'Each user can confirm a signal one time only.');
+    }
+
+    // Enforce maximum 1 Additional Signal per PKT day when user holds > 1 credits
+    if ((int)($addStatus['used_today'] ?? 0) >= 1) {
+        sendError(
+            'DAILY_ADDITIONAL_SIGNAL_LIMIT_REACHED',
+            'You can only receive and confirm 1 Additional Signal per day. Your remaining Additional Signal credits will unlock on upcoming days (1 per day).',
+            409
+        );
     }
 
     $fixedReward = 4.00;

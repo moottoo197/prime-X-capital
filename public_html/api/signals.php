@@ -229,7 +229,7 @@ foreach ($slotSchedules as $ensureSlot => $cfg) {
 $executedMap = [];
 $userExecutions = [];
 $userSignalProfitTotal = 0.0;
-$executedSignalIds = [];
+$executedSignalItems = [];
 if ($userId) {
     $executionBatch = $supabase->selectMany([
         'executions' => [
@@ -248,7 +248,10 @@ if ($userId) {
                 $executionSignalId = (string)$ex['signal_id'];
                 if (strpos($executionSignalId, 'sig_test_') === 0) continue;
                 $executedMap[$executionSignalId] = $ex;
-                $executedSignalIds[] = $executionSignalId;
+                $executedSignalItems[] = [
+                    'signal_id' => $executionSignalId,
+                    'executed_at' => (string)($ex['executed_at'] ?? $ex['created_at'] ?? ''),
+                ];
                 $userExecutions[] = $ex;
             }
         }
@@ -265,7 +268,10 @@ if ($userId) {
                 if (!isset($executedMap[$signalRef])) {
                     $marker = ['signal_id'=>$signalRef,'profit_amount'=>(float)($entry['amount'] ?? 0),'executed_at'=>$entry['created_at'] ?? null];
                     $executedMap[$signalRef] = $marker;
-                    $executedSignalIds[] = $signalRef;
+                    $executedSignalItems[] = [
+                        'signal_id' => $signalRef,
+                        'executed_at' => (string)($entry['created_at'] ?? ''),
+                    ];
                     $userExecutions[] = $marker;
                 }
             }
@@ -274,9 +280,10 @@ if ($userId) {
 }
 
 $additionalStatus = $userId
-    ? primex_get_additional_signal_status($supabase, (string)$userId, $executedSignalIds)
+    ? primex_get_additional_signal_status($supabase, (string)$userId, $executedSignalItems)
     : primex_summarize_additional_signal_record(['grants' => [], 'usages' => []], []);
 $additionalRemaining = (int)($additionalStatus['remaining'] ?? 0);
+$additionalCanToday = !empty($additionalStatus['can_use_today']);
 
 $tzLabel = $now->format('T');
 if ($tzLabel === 'GMT') $tzLabel = 'UTC';
@@ -295,8 +302,8 @@ foreach ($allSignals as $s) {
     $slot = (int)($s['daily_slot'] ?? 0);
     $isAdditional = (!$isTesting) && ($slot === 3 || strpos($sigId, 'sig_add_') === 0);
 
-    // Additional Signals are unlocked only by $300+ deposit or referral deposit tiers
-    if ($isAdditional && $additionalRemaining <= 0 && !$isAdminOrVip) {
+    // Additional Signals are unlocked by $300+ deposit or referral tiers, capped at 1 per PKT day
+    if ($isAdditional && ($additionalRemaining <= 0 || !$additionalCanToday) && !$isAdminOrVip) {
         continue;
     }
 
@@ -350,7 +357,7 @@ foreach ($allSignals as $s) {
         $liveDailyCount++;
     }
 
-    $canExec = $isAdditional ? ($additionalRemaining > 0 && !$isTesting) : ($isEligible && !$isTesting);
+    $canExec = $isAdditional ? ($additionalRemaining > 0 && $additionalCanToday && !$isTesting) : ($isEligible && !$isTesting);
     $liveSignals[] = array_merge($s, [
         'status' => 'PUBLISHED',
         'is_live' => true,

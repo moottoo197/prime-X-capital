@@ -97,23 +97,57 @@ if (!function_exists('primex_save_additional_signal_record')) {
     }
 }
 
+if (!function_exists('primex_additional_signal_pkt_date')) {
+    function primex_additional_signal_pkt_date(?string $timestamp = null): string {
+        $tz = new DateTimeZone('Asia/Karachi');
+        if ($timestamp !== null && trim($timestamp) !== '') {
+            try {
+                $dt = new DateTime($timestamp, new DateTimeZone('UTC'));
+                $dt->setTimezone($tz);
+                return $dt->format('Y-m-d');
+            } catch (Throwable $e) {
+                // fallback below
+            }
+        }
+        return (new DateTime('now', $tz))->format('Y-m-d');
+    }
+}
+
 if (!function_exists('primex_summarize_additional_signal_record')) {
-    function primex_summarize_additional_signal_record(array $record, array $executedAddIds = []): array {
+    function primex_summarize_additional_signal_record(array $record, array $executedAddItems = [], ?string $targetPktDate = null): array {
+        $todayPkt = $targetPktDate ?: primex_additional_signal_pkt_date();
         $grants = is_array($record['grants'] ?? null) ? $record['grants'] : [];
         $usages = is_array($record['usages'] ?? null) ? $record['usages'] : [];
 
         // Reconcile any executed sig_add_* rows from user_signal_executions into usages
-        foreach ($executedAddIds as $sigId) {
-            $sigId = trim((string)$sigId);
+        foreach ($executedAddItems as $item) {
+            if (is_array($item)) {
+                $sigId = trim((string)($item['signal_id'] ?? ''));
+                $execAt = trim((string)($item['executed_at'] ?? $item['created_at'] ?? ''));
+            } else {
+                $sigId = trim((string)$item);
+                $execAt = '';
+            }
             if ($sigId === '') continue;
             $uKey = 'EXEC:' . $sigId;
+            $inferredPktDate = '';
+            if ($execAt !== '') {
+                $inferredPktDate = primex_additional_signal_pkt_date($execAt);
+            } elseif (preg_match('/^sig_add_(\d{4})(\d{2})(\d{2})_/', $sigId, $m)) {
+                $inferredPktDate = "{$m[1]}-{$m[2]}-{$m[3]}";
+            } else {
+                $inferredPktDate = $todayPkt;
+            }
             if (!isset($usages[$uKey])) {
                 $usages[$uKey] = [
                     'signal_id' => $sigId,
                     'credits' => 1,
                     'reward_usdt' => 4.00,
-                    'used_at' => gmdate('Y-m-d H:i:s'),
+                    'used_at' => $execAt !== '' ? $execAt : gmdate('Y-m-d H:i:s'),
+                    'pkt_date' => $inferredPktDate,
                 ];
+            } elseif (empty($usages[$uKey]['pkt_date'])) {
+                $usages[$uKey]['pkt_date'] = $inferredPktDate;
             }
         }
 
@@ -135,23 +169,46 @@ if (!function_exists('primex_summarize_additional_signal_record')) {
         }
 
         $usedTotal = 0;
+        $usedToday = 0;
         foreach ($usages as $u) {
             if (!is_array($u)) continue;
-            $usedTotal += max(0, (int)($u['credits'] ?? 1));
+            $cnt = max(0, (int)($u['credits'] ?? 1));
+            $usedTotal += $cnt;
+
+            $uPktDate = trim((string)($u['pkt_date'] ?? ''));
+            if ($uPktDate === '') {
+                $uSigId = trim((string)($u['signal_id'] ?? ''));
+                if (!empty($u['used_at'])) {
+                    $uPktDate = primex_additional_signal_pkt_date((string)$u['used_at']);
+                } elseif (preg_match('/^sig_add_(\d{4})(\d{2})(\d{2})_/', $uSigId, $m)) {
+                    $uPktDate = "{$m[1]}-{$m[2]}-{$m[3]}";
+                }
+            }
+            if ($uPktDate === $todayPkt) {
+                $usedToday += $cnt;
+            }
         }
 
         $remaining = max(0, $grantedTotal - $usedTotal);
+        $dailyLimit = 1;
+        $remainingToday = ($remaining > 0 && $usedToday < $dailyLimit) ? 1 : 0;
 
         return [
             'remaining' => $remaining,
             'granted_total' => $grantedTotal,
             'used_total' => $usedTotal,
+            'daily_limit' => $dailyLimit,
+            'used_today' => $usedToday,
+            'remaining_today' => $remainingToday,
+            'can_use_today' => $remainingToday > 0,
+            'pkt_date' => $todayPkt,
             'from_deposits' => $fromDeposits,
             'from_referrals' => $fromReferrals,
             'reward_usdt' => 4.00,
             'earned_additional_usdt' => round($usedTotal * 4.00, 2),
             'separate_from_30d_plan' => true,
             'schedule_time_pkt' => '09:30 PM',
+            'daily_rule' => 'Maximum 1 Additional Signal per day when holding multiple credits',
             'grants' => array_slice(array_reverse($grantList), 0, 20),
             'tiers' => primex_additional_signal_tiers(),
         ];
@@ -159,26 +216,38 @@ if (!function_exists('primex_summarize_additional_signal_record')) {
 }
 
 if (!function_exists('primex_get_additional_signal_status')) {
-    function primex_get_additional_signal_status(SupabaseClient $supabase, string $userId, array $executedSignalIds = []): array {
+    function primex_get_additional_signal_status(SupabaseClient $supabase, string $userId, array $executedSignalItems = []): array {
         $record = primex_load_additional_signal_record($supabase, $userId);
         $addExecuted = [];
-        foreach ($executedSignalIds as $sid) {
-            $sid = trim((string)$sid);
-            if ($sid !== '' && strpos($sid, 'sig_add_') === 0) {
-                $addExecuted[] = $sid;
+        foreach ($executedSignalItems as $item) {
+            if (is_array($item)) {
+                $sid = trim((string)($item['signal_id'] ?? ''));
+                if ($sid !== '' && (strpos($sid, 'sig_add_') === 0 || (int)($item['daily_slot'] ?? 0) === 3)) {
+                    $addExecuted[] = $item;
+                }
+            } else {
+                $sid = trim((string)$item);
+                if ($sid !== '' && strpos($sid, 'sig_add_') === 0) {
+                    $addExecuted[] = ['signal_id' => $sid, 'executed_at' => ''];
+                }
             }
         }
-        if (empty($addExecuted) && $userId !== '' && $supabase->isConfigured()) {
+        if ($userId !== '' && $supabase->isConfigured()) {
             $exRes = $supabase->select('user_signal_executions', [
                 'user_id' => 'eq.' . $userId,
-                'select' => 'signal_id',
-                'limit' => '200'
+                'select' => 'signal_id,executed_at,created_at',
+                'limit' => '300'
             ]);
             if (!empty($exRes['success']) && is_array($exRes['data'])) {
+                $seen = [];
+                foreach ($addExecuted as $existing) {
+                    $seen[(string)($existing['signal_id'] ?? '')] = true;
+                }
                 foreach ($exRes['data'] as $row) {
                     $sid = trim((string)($row['signal_id'] ?? ''));
-                    if ($sid !== '' && strpos($sid, 'sig_add_') === 0) {
-                        $addExecuted[] = $sid;
+                    if ($sid !== '' && strpos($sid, 'sig_add_') === 0 && empty($seen[$sid])) {
+                        $addExecuted[] = $row;
+                        $seen[$sid] = true;
                     }
                 }
             }
@@ -221,20 +290,25 @@ if (!function_exists('primex_consume_additional_signal_credit')) {
         $record = primex_load_additional_signal_record($supabase, $userId);
         $uKey = 'EXEC:' . $signalId;
         if (isset($record['usages'][$uKey])) {
-            return ['consumed' => true, 'already_used' => true, 'status' => primex_summarize_additional_signal_record($record)];
+            return ['consumed' => true, 'already_used' => true, 'daily_limit_reached' => false, 'status' => primex_summarize_additional_signal_record($record)];
         }
         $summary = primex_summarize_additional_signal_record($record);
         if (($summary['remaining'] ?? 0) <= 0) {
-            return ['consumed' => false, 'already_used' => false, 'status' => $summary];
+            return ['consumed' => false, 'already_used' => false, 'daily_limit_reached' => false, 'status' => $summary];
         }
+        if ((int)($summary['used_today'] ?? 0) >= 1) {
+            return ['consumed' => false, 'already_used' => false, 'daily_limit_reached' => true, 'status' => $summary];
+        }
+        $todayPkt = primex_additional_signal_pkt_date();
         $record['usages'][$uKey] = [
             'signal_id' => $signalId,
             'credits' => 1,
             'reward_usdt' => 4.00,
             'used_at' => gmdate('Y-m-d H:i:s'),
+            'pkt_date' => $todayPkt,
         ];
         $saved = primex_save_additional_signal_record($supabase, $userId, $record);
-        return ['consumed' => $saved, 'already_used' => false, 'status' => primex_summarize_additional_signal_record($record)];
+        return ['consumed' => $saved, 'already_used' => false, 'daily_limit_reached' => false, 'status' => primex_summarize_additional_signal_record($record)];
     }
 }
 
@@ -287,10 +361,11 @@ if (!function_exists('primex_grant_additional_signals_for_deposit')) {
         // Notify depositor of unlocked Additional Signals
         if ($depositorGranted) {
             try {
+                $dailyNote = $credits > 1 ? ' (1 Additional Signal per day at 9:30 PM PKT, $4.00 USDT fixed each, separate from your 30-day 2x plan)' : ' ($4.00 USDT fixed profit at 9:30 PM PKT, separate from your 30-day 2x plan)';
                 $supabase->insert('user_notifications', [[
                     'user_id' => $depositorUserId,
                     'title' => "⚡ +{$credits} Additional Signal" . ($credits > 1 ? 's' : '') . " Unlocked",
-                    'message' => "Your $" . number_format($amount, 2) . " deposit unlocked {$credits} Additional Signal credit" . ($credits > 1 ? 's' : '') . " ($4.00 USDT fixed profit each at 9:30 PM PKT, separate from your 30-day 2x plan).",
+                    'message' => "Your $" . number_format($amount, 2) . " deposit unlocked {$credits} Additional Signal credit" . ($credits > 1 ? 's' : '') . "{$dailyNote}.",
                     'type' => 'SIGNAL_AVAILABLE',
                     'is_read' => false,
                     'created_at' => gmdate('Y-m-d H:i:s'),
@@ -327,7 +402,7 @@ if (!function_exists('primex_grant_additional_signals_for_deposit')) {
                             $supabase->insert('user_notifications', [[
                                 'user_id' => $inviterId,
                                 'title' => "🎁 Referral Additional Signal Reward (+{$credits})",
-                                'message' => "Your invited team member completed a $" . number_format($amount, 2) . " deposit. Both accounts received {$credits} Additional Signal credit" . ($credits > 1 ? 's' : '') . " ($4.00 USDT fixed each at 9:30 PM PKT).",
+                                'message' => "Your invited team member completed a $" . number_format($amount, 2) . " deposit. Both accounts received {$credits} Additional Signal credit" . ($credits > 1 ? 's' : '') . " (1 per day at 9:30 PM PKT, $4.00 USDT fixed each).",
                                 'type' => 'SIGNAL_AVAILABLE',
                                 'is_read' => false,
                                 'created_at' => gmdate('Y-m-d H:i:s'),

@@ -4191,7 +4191,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261125_v133_signals_redesign_100min_additional">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261125_v134_withdraw_fee_and_daily_add_sig">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -5821,17 +5821,14 @@ window.gtranslateSettings = {
         <div class="av-sig-kpi-card">
           <span class="av-sig-kpi-label">Future Balance Gate</span>
           <strong id="sig-kpi-future-bal" class="av-sig-kpi-val">$0.00</strong>
-          <span id="sig-kpi-future-meta" class="av-sig-kpi-meta">Minimum $100.00 USDT required for daily 6 PM &amp; 8 PM signals</span>
         </div>
         <div class="av-sig-kpi-card">
-          <span class="av-sig-kpi-label">Additional Signals ($4.00 Fixed)</span>
+          <span class="av-sig-kpi-label">Additional Signals</span>
           <strong id="sig-kpi-add-remaining" class="av-sig-kpi-val" style="color:#0052FF;">0 Remaining</strong>
-          <span id="sig-kpi-add-meta" class="av-sig-kpi-meta">Unlocked on $300+ deposits &amp; friend invites · Separate from 30d 2× plan</span>
         </div>
         <div class="av-sig-kpi-card">
           <span class="av-sig-kpi-label">Cumulative Signal Profit</span>
           <strong class="av-sig-kpi-val positive" data-user-signal-profit-total>+$0.00 USDT</strong>
-          <span id="sig-kpi-plan-meta" class="av-sig-kpi-meta">30-Day 2× Daily Plan (1.67% &times; 2/day) + $4.00 Additional</span>
         </div>
       </div>
 
@@ -5883,7 +5880,6 @@ window.gtranslateSettings = {
             <button type="button" class="sig-tf-btn" data-tf="5m" onclick="App.setSignalChartInterval('5m')">5m</button>
             <button type="button" class="sig-tf-btn" data-tf="15m" onclick="App.setSignalChartInterval('15m')">15m</button>
           </div>
-          <div id="sig-term-session-note" class="av-sig-term-session-note">Daily: 6:00 PM &amp; 8:00 PM PKT &middot; Additional: 9:30 PM PKT ($4.00)</div>
         </div>
 
         <div class="av-sig-term-canvas-wrap">
@@ -5891,58 +5887,6 @@ window.gtranslateSettings = {
         </div>
 
         <div id="sig-term-action-wrap" style="display:none;justify-content:flex-end;margin-top:12px;"></div>
-      </div>
-
-      <div class="av-sig-info-grid">
-        <div class="av-sig-panel-card">
-          <div class="av-sig-panel-head">
-            <div>
-              <h4 class="av-sig-panel-title">Globally Synchronized Trading Schedule</h4>
-              <p class="av-sig-panel-sub">Signal broadcast times synchronized to Pakistan Time (PKT UTC+5)</p>
-            </div>
-          </div>
-          <div class="av-sig-sched-tabs" role="tablist">
-            <button type="button" class="av-sig-sched-tab active" data-sig-sched="first" onclick="App.setSignalScheduleTab('first')">First Signal<span>6:00 PM PKT</span></button>
-            <button type="button" class="av-sig-sched-tab" data-sig-sched="second" onclick="App.setSignalScheduleTab('second')">Second Signal<span>8:00 PM PKT</span></button>
-            <button type="button" class="av-sig-sched-tab" data-sig-sched="additional" onclick="App.setSignalScheduleTab('additional')">Additional ($4)<span>9:30 PM PKT</span></button>
-          </div>
-          <div id="sig-schedule-countries" class="av-sig-country-grid"></div>
-        </div>
-
-        <div class="av-sig-panel-card">
-          <div class="av-sig-panel-head">
-            <div>
-              <h4 class="av-sig-panel-title">Additional Signal Rewards Program</h4>
-              <p class="av-sig-panel-sub">Fixed $4.00 USDT per 9:30 PM PKT signal &middot; Separate from 30-day 2&times; plan</p>
-            </div>
-          </div>
-          <div class="table-responsive">
-            <table class="av-sig-tier-table">
-              <thead>
-                <tr>
-                  <th>Deposit Amount</th>
-                  <th>Additional Signals</th>
-                  <th>Fixed Reward</th>
-                </tr>
-              </thead>
-              <tbody id="sig-additional-tiers-body">
-                <tr data-tier="100"><td>$100 (Minimum)</td><td>0 Signals</td><td>&mdash;</td></tr>
-                <tr data-tier="300"><td>$300</td><td>1 Signal</td><td class="positive">+$4.00 USDT</td></tr>
-                <tr data-tier="500"><td>$500</td><td>2 Signals</td><td class="positive">+$8.00 USDT</td></tr>
-                <tr data-tier="700"><td>$700</td><td>3 Signals</td><td class="positive">+$12.00 USDT</td></tr>
-                <tr data-tier="1000"><td>$1,000</td><td>4 Signals</td><td class="positive">+$16.00 USDT</td></tr>
-                <tr data-tier="1500"><td>$1,500</td><td>5 Signals</td><td class="positive">+$20.00 USDT</td></tr>
-                <tr data-tier="3000"><td>$3,000</td><td>6 Signals</td><td class="positive">+$24.00 USDT</td></tr>
-                <tr data-tier="5000"><td>$5,000</td><td>7 Signals</td><td class="positive">+$28.00 USDT</td></tr>
-                <tr data-tier="7000"><td>$7,000</td><td>8 Signals</td><td class="positive">+$32.00 USDT</td></tr>
-                <tr data-tier="10000"><td>$10,000</td><td>10 Signals</td><td class="positive">+$40.00 USDT</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="av-sig-ref-note">
-            <strong style="color:#0052FF;">Dual Invite Bonus:</strong> When a friend you invite deposits $300 or more, <strong>both you and your friend</strong> receive that tier&rsquo;s Additional Signal credits ($4.00 USDT per signal). Minimum platform deposit is 100 USD.
-          </div>
-        </div>
       </div>
 
       <div id="signals-user-history-wrap" class="card" style="margin-bottom: 16px;">
@@ -9277,18 +9221,22 @@ window.gtranslateSettings = {
           <div style="font-size:12.5px; color:#6B7280; margin-top:6px;">Available <strong id="with-avail-bal" style="color:#111827;">0.00 USDT</strong></div>
         </div>
 
-        <!-- 2x Deposit Turnover & 5% Early Deduction Info Box (Preserved for Backend Policy) -->
+        <!-- 2x Deposit & 30-Day Fee Policy Info Box -->
         <div id="with-deduction-notice" style="background:#FFFBEB; border:1px solid #FDE68A; padding:10px 12px; font-size:12px; border-radius:12px;">
           <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
             <span style="color:#6B7280;">Total Deposited:</span>
             <strong id="with-stat-deposited" style="color:#111827;">$0.00 USDT</strong>
           </div>
           <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-            <span style="color:#6B7280;">2x Turnover Target:</span>
+            <span style="color:#6B7280;">Deposit + Deposit Bonus + Referral:</span>
+            <strong id="with-stat-bonus-total" style="color:#111827;">$0.00 USDT</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="color:#6B7280;">2x Deposit Target:</span>
             <strong id="with-stat-target" style="color:#0052FF;">$0.00 USDT</strong>
           </div>
-          <div id="with-penalty-alert" style="color:#B45309; line-height:1.4; border-top:1px dashed #FCD34D; padding-top:6px; margin-top:4px;">
-            Loading turnover status...
+          <div id="with-penalty-alert" style="color:#B45309; line-height:1.45; border-top:1px dashed #FCD34D; padding-top:6px; margin-top:4px;">
+            Loading withdrawal fee policy...
           </div>
         </div>
 
@@ -9296,19 +9244,19 @@ window.gtranslateSettings = {
         <div style="background:#FFFFFF; border:1px solid #EEF1F6; padding:12px 14px; font-size:13px; border-radius:14px; display:flex; flex-direction:column; gap:8px;">
           <div style="display:flex; justify-content:space-between;">
             <span style="color:#6B7280;">Receivable Amount</span>
-            <strong id="with-calc-net" class="mono" style="color:#111827;">0.00 USDT</strong>
+            <strong id="with-calc-net" class="mono" style="color:#111827;">$0.00 USDT</strong>
           </div>
           <div style="display:flex; justify-content:space-between;">
-            <span style="color:#6B7280;">Withdrawal Fee</span>
-            <span id="with-calc-fee" class="mono" style="color:#111827; font-weight:600;">1.00 USDT</span>
+            <span id="with-calc-fee-label" style="color:#6B7280;">Withdrawal Fee (30%)</span>
+            <span id="with-calc-fee" class="mono" style="color:#DC2626; font-weight:700;">$0.00 USDT</span>
           </div>
           <div style="display:flex; justify-content:space-between;">
             <span style="color:#6B7280;">Requested Amount</span>
             <span id="with-calc-amount" class="mono" style="color:#4B5563;">$0.00 USDT</span>
           </div>
           <div style="display:flex; justify-content:space-between;">
-            <span style="color:#6B7280;">Early Deduction (5%)</span>
-            <span id="with-calc-deduction" class="mono" style="color:#F6465D; font-weight:600;">$0.00 USDT</span>
+            <span id="with-calc-deduction-label" style="color:#6B7280;">Applied Fee Rate</span>
+            <span id="with-calc-deduction" class="mono" style="color:#F6465D; font-weight:600;">30%</span>
           </div>
         </div>
 
@@ -11185,7 +11133,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261125_v133_signals_redesign_100min_additional";
+  const CACHE_VERSION = "20261125_v134_withdraw_fee_and_daily_add_sig";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -11217,18 +11165,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261125_v133_signals_redesign_100min_additional"></script>
-  <script defer src="/assets/js/chart.js?v=20261125_v133_signals_redesign_100min_additional"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261125_v134_withdraw_fee_and_daily_add_sig"></script>
+  <script defer src="/assets/js/chart.js?v=20261125_v134_withdraw_fee_and_daily_add_sig"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261125_v133_signals_redesign_100min_additional"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261125_v133_signals_redesign_100min_additional"></script>
+  <script defer src="/assets/js/app.js?v=20261125_v134_withdraw_fee_and_daily_add_sig"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261125_v134_withdraw_fee_and_daily_add_sig"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261125_v133_signals_redesign_100min_additional";
+      var SW_BUILD = "20261125_v134_withdraw_fee_and_daily_add_sig";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

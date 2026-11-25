@@ -5,6 +5,7 @@
 require_once dirname(__DIR__) . '/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/mailer.php';
 require_once dirname(__DIR__) . '/lib/email_templates.php';
+require_once dirname(__DIR__) . '/lib/withdrawal_policy.php';
 
 $user = requireAuth();
 
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $input = getJsonBody();
-$amount = (float)($input['amount'] ?? 0);
+$amount = round((float)($input['amount'] ?? 0), 2);
 $asset = strtoupper(trim($input['asset'] ?? 'USDT'));
 $network = strtoupper(trim($input['network'] ?? 'TRC20'));
 $destination = trim($input['destination_address'] ?? $input['destination'] ?? '');
@@ -83,10 +84,9 @@ if ($idempotencyKey === '') {
     sendError('IDEMPOTENCY_KEY_REQUIRED', 'Please submit the withdrawal once using the current button.');
 }
 
-// The wallet deduction, withdrawal row, and ledger entry are now performed in one
-// PostgreSQL transaction. Duplicate clicks/retries with the same idempotency key
-// return the original result without a second debit.
-$fee = 1.0;
+// Compute withdrawal fee strictly server-side from user deposit/bonus/30-day policy
+$policy = primex_compute_withdrawal_policy($supabase, (string)$user['id'], $amount);
+$fee = round((float)($policy['fee_amount'] ?? 0.0), 2);
 $withId = 'with_' . bin2hex(random_bytes(8));
 
 $rpc = $supabase->rpc('submit_withdrawal_once', [
@@ -122,6 +122,15 @@ $finalFee = (float)($result['fee'] ?? $fee);
 $finalNet = (float)($result['net_amount'] ?? max(0, $amount - $fee));
 
 if (!$alreadyProcessed) {
+    if (!empty($policy['is_early_withdrawal'])) {
+        try {
+            $supabase->update('withdrawals', [
+                'early_deduction' => $finalFee,
+                'is_early_withdrawal' => true
+            ], ['id' => 'eq.' . $finalWithdrawalId]);
+        } catch (Throwable $e) {}
+    }
+
     $recipientEmail = trim((string)($prof['email'] ?? $user['email'] ?? ''));
     if ($recipientEmail !== '' && filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
         try {
@@ -156,6 +165,9 @@ sendSuccess([
     'withdrawal_id' => $finalWithdrawalId,
     'amount' => $finalAmount,
     'fee' => $finalFee,
+    'fee_percentage' => (float)($policy['fee_percentage'] ?? 0.0),
+    'fee_mode' => (string)($policy['fee_mode'] ?? 'TIERED_5_PER_100'),
+    'is_early_withdrawal' => !empty($policy['is_early_withdrawal']),
     'net_amount' => $finalNet,
     'status' => $result['status'] ?? 'REQUESTED',
     'new_balance' => (float)($result['new_balance'] ?? 0),
