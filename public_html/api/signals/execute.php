@@ -178,24 +178,25 @@ if ($futureWalletBalance > 0.0 && $capitalBasis > $futureWalletBalance && !$priv
 $isDailySignal = in_array($slot, [1, 2], true);
 
 // Daily 4 PM / 8 PM signals use one fixed rate so two confirmed sessions
-// produce exactly 5% of funded principal per day (2.5% each) without compounding.
+// produce ~3.33% of funded principal per day (1.67% each) without compounding,
+// doubling the user's funded deposit in 30 days (60 sessions, capped at 100%).
 // Referral rewards and all other bonus/PNL categories remain outside this principal.
-$profitPercentage = $isTestingSignal ? 0.0 : ($isDailySignal ? 2.5 : max(0.0, (float)($signal['profit_percentage'] ?? 2.5)));
+$profitPercentage = $isTestingSignal ? 0.0 : ($isDailySignal ? 1.67 : max(0.0, (float)($signal['profit_percentage'] ?? 1.67)));
 
-// Keep the stored daily signal rate aligned with the fixed daily-doubler rule so
-// the existing atomic execution RPC reads the same 2.5% rate. This does not alter
+// Keep the stored daily signal rate aligned with the fixed 30-day doubler rule so
+// the existing atomic execution RPC reads the same 1.67% rate. This does not alter
 // scheduling, duration, direction, or any other signal fields.
-if ($isDailySignal && !$isTestingSignal && abs((float)($signal['profit_percentage'] ?? 2.5) - 2.5) > 0.000001) {
-    $rateSync = $supabase->update('trading_signals', ['profit_percentage' => 2.5], ['id' => 'eq.' . $signalId]);
+if ($isDailySignal && !$isTestingSignal && abs((float)($signal['profit_percentage'] ?? 1.67) - 1.67) > 0.000001) {
+    $rateSync = $supabase->update('trading_signals', ['profit_percentage' => 1.67], ['id' => 'eq.' . $signalId]);
     if (!$rateSync['success']) {
-        sendError('DAILY_SIGNAL_RATE_NOT_READY', 'Daily signal rate could not be synchronized to the fixed 2.5% rate. Please retry this signal.', 503);
+        sendError('DAILY_SIGNAL_RATE_NOT_READY', 'Daily signal rate could not be synchronized to the fixed 1.67% rate. Please retry this signal.', 503);
     }
-    $signal['profit_percentage'] = 2.5;
+    $signal['profit_percentage'] = 1.67;
 }
 
 // A funded deposit/administrative capital amount can earn at most 100% of that
-// principal from the two normal daily signals. At 2.5% per session, two sessions
-// per day = 5% per day, so the full principal cannot double before 20 daily cycles.
+// principal from the two normal daily signals. At 1.67% per session, two sessions
+// per day = 3.33% per day, so the full principal doubles over 30 daily cycles.
 // The cap is calculated from each daily signal's execution profit plus any explicit
 // principal-reconciliation credits for that same signal. Referral commissions,
 // promotional bonuses, custom/manual signal PNL, and other credits remain separate.
@@ -377,7 +378,7 @@ sendSuccess([
     'execution_id' => $result['execution_id'] ?? null,
     'signal_id' => $signalId,
     'profit_amount' => $profitAmount,
-    'profit_percentage' => (float)($result['profit_percentage'] ?? ($signal['profit_percentage'] ?? 2.5)),
+    'profit_percentage' => (float)($result['profit_percentage'] ?? ($signal['profit_percentage'] ?? 1.67)),
     'principal_balance' => round($capitalBasis, 2),
     'balance_before' => round($currentBalance, 2),
     'expected_profit' => $expectedProfit,

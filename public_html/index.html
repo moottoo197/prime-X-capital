@@ -4191,7 +4191,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261124_v131_avatar_click_debit_wallet">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261125_v132_live_charts_signals_30d">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -4865,11 +4865,21 @@ window.gtranslateSettings = {
 
         <div class="home-col-markets" style="padding:0 16px;">
           <!-- Trending Markets Header + View More -->
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <h2 style="font-size:20px;font-weight:800;color:#111827;margin:0;">Trending Markets</h2>
             <button type="button" onclick="App.navigate('market')" style="background:none;border:none;color:#0052FF;font-size:13.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
-              View More <span>→</span>
+              Live Charts <span>→</span>
             </button>
+          </div>
+
+          <!-- Asset Class Filter Pills on Home -->
+          <div class="av-home-cat-pills">
+            <button type="button" class="av-home-cat-pill cat-tab-btn active" data-cat="HOT" onclick="App.setMarketCategory('HOT')">Trending</button>
+            <button type="button" class="av-home-cat-pill cat-tab-btn" data-cat="CRYPTO" onclick="App.setMarketCategory('CRYPTO')">Crypto</button>
+            <button type="button" class="av-home-cat-pill cat-tab-btn" data-cat="FOREX" onclick="App.setMarketCategory('FOREX')">Forex</button>
+            <button type="button" class="av-home-cat-pill cat-tab-btn" data-cat="FUTURES" onclick="App.setMarketCategory('FUTURES')">Futures</button>
+            <button type="button" class="av-home-cat-pill cat-tab-btn" data-cat="STOCKS" onclick="App.setMarketCategory('STOCKS')">Stocks</button>
+            <button type="button" class="av-home-cat-pill cat-tab-btn" data-cat="ALL" onclick="App.setMarketCategory('ALL')">All</button>
           </div>
 
           <!-- Trending Market Card Rows Container -->
@@ -5417,14 +5427,56 @@ window.gtranslateSettings = {
           <span style="font-size:12px;color:#6B7280;">Live Markets</span>
         </div>
 
+        <!-- Live Interactive Market Chart Terminal (Crypto / Forex / Futures / Stocks) -->
+        <div id="market-preview-card-wrap" class="av-mkt-live-chart-card">
+          <div class="av-mkt-chart-head">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <strong id="mkt-preview-sym" style="font-size:17px;font-weight:900;color:#0F172A;">BTC/USDT</strong>
+              <span id="mkt-preview-cat" class="badge" style="background:#EFF4FF;color:#0052FF;font-size:10px;font-weight:800;">CRYPTO</span>
+              <span id="mkt-preview-badge" class="badge badge-positive">+1.63%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span id="mkt-preview-price" class="mono" style="font-size:18px;font-weight:900;color:#00B87C;">$77,915.82</span>
+              <button type="button" id="mkt-preview-trade-btn" class="btn-primary" style="padding:7px 14px;font-size:12px;font-weight:700;border-radius:999px;min-height:32px;" onclick="App.tradePreviewPair()">Trade →</button>
+            </div>
+          </div>
+
+          <div class="av-mkt-chart-controls">
+            <div id="mkt-preview-quick-pairs" class="av-mkt-pair-strip">
+              <button type="button" class="mkt-preview-chip active" data-pair="BTC/USDT" onclick="App.setMarketPreviewPair('BTC/USDT')">BTC/USDT</button>
+              <button type="button" class="mkt-preview-chip" data-pair="ETH/USDT" onclick="App.setMarketPreviewPair('ETH/USDT')">ETH/USDT</button>
+              <button type="button" class="mkt-preview-chip" data-pair="EUR/USD" onclick="App.setMarketPreviewPair('EUR/USD')">EUR/USD</button>
+              <button type="button" class="mkt-preview-chip" data-pair="GOLD/USD" onclick="App.setMarketPreviewPair('GOLD/USD')">GOLD/USD</button>
+              <button type="button" class="mkt-preview-chip" data-pair="AAPL/USD" onclick="App.setMarketPreviewPair('AAPL/USD')">AAPL/USD</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <div class="av-mkt-tf-group">
+                <button type="button" class="mkt-tf-btn" data-tf="1m" onclick="App.setMarketChartInterval('1m')">1m</button>
+                <button type="button" class="mkt-tf-btn active" data-tf="5m" onclick="App.setMarketChartInterval('5m')">5m</button>
+                <button type="button" class="mkt-tf-btn" data-tf="15m" onclick="App.setMarketChartInterval('15m')">15m</button>
+                <button type="button" class="mkt-tf-btn" data-tf="1h" onclick="App.setMarketChartInterval('1h')">1h</button>
+                <button type="button" class="mkt-tf-btn" data-tf="4h" onclick="App.setMarketChartInterval('4h')">4h</button>
+              </div>
+              <div class="av-mkt-tf-group">
+                <button type="button" id="mkt-mode-candle" class="mkt-tf-btn" style="background:#EFF4FF;color:#0052FF;" onclick="App.setMarketChartType('candlestick')">Candles</button>
+                <button type="button" id="mkt-mode-line" class="mkt-tf-btn" onclick="App.setMarketChartType('line')">Line</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="av-mkt-canvas-wrap">
+            <canvas id="market-overview-chart-canvas" class="chart-canvas"></canvas>
+          </div>
+
+          <div class="av-mkt-chart-stats">
+            <span>24h High: <strong id="mkt-preview-high" class="mono" style="color:#0F172A;">$79,863.72</strong></span>
+            <span>24h Low: <strong id="mkt-preview-low" class="mono" style="color:#0F172A;">$76,201.67</strong></span>
+            <span style="margin-left:auto;color:#00B87C;font-weight:700;">● Real-Time Feed Active</span>
+          </div>
+        </div>
+
         <!-- Market Cards Container -->
         <div id="market-discovery-rows" class="market-list" style="padding-left: 0; padding-right: 0;"></div>
-
-        <!-- Collapsible Featured Chart (Preserved IDs for JS chart compatibility) -->
-        <div id="market-preview-card-wrap" style="display:none;">
-          <canvas id="market-overview-chart-canvas" class="chart-canvas"></canvas>
-          <span id="mkt-preview-sym"></span><span id="mkt-preview-badge"></span><span id="mkt-preview-price"></span><span id="mkt-preview-high"></span><span id="mkt-preview-low"></span><button type="button" id="mkt-preview-trade-btn" onclick="App.tradePreviewPair()"></button>
-        </div>
       </div>
     </main>
 
@@ -5766,6 +5818,61 @@ window.gtranslateSettings = {
       </div>
 
       <div id="signals-eligibility-banner" style="margin-bottom: 16px;"></div>
+
+      <!-- Live Directional Signal Trading Terminal -->
+      <div id="signals-live-terminal" class="av-sig-terminal-card">
+        <div id="sig-term-selector-pills" class="av-sig-selector-pills" style="display:none;"></div>
+        <div class="av-sig-term-top">
+          <div>
+            <div class="av-sig-term-title-row">
+              <span id="sig-term-pulse-dot" class="av-sig-pulse-dot is-waiting"></span>
+              <strong id="sig-term-symbol" style="font-size:18px;font-weight:900;color:#0F172A;">BTC/USDT</strong>
+              <span id="sig-term-dir-badge" class="badge badge-positive">▲ UP / BUY (LONG)</span>
+              <span id="sig-term-status-pill" class="badge" style="background:#EFF4FF;color:#0052FF;font-weight:800;">STANDBY</span>
+            </div>
+          </div>
+          <div class="av-sig-term-price-box">
+            <div id="sig-term-price" class="mono" style="font-size:19px;font-weight:900;color:#0F172A;">$77,915.82</div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:2px;">
+              <span id="sig-term-move-pct" class="mono" style="font-size:12px;font-weight:800;color:#00B87C;">+0.00%</span>
+              <span id="sig-term-countdown" class="mono" style="font-size:11.5px;font-weight:800;color:#DC2626;"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="av-sig-term-levels">
+          <div class="av-sig-lvl-cell">
+            <span class="av-sig-lvl-label">Entry Price</span>
+            <strong id="sig-term-entry" class="av-sig-lvl-val">—</strong>
+          </div>
+          <div class="av-sig-lvl-cell">
+            <span class="av-sig-lvl-label" style="color:#059669;">Target 1 (TP1)</span>
+            <strong id="sig-term-tp1" class="av-sig-lvl-val" style="color:#059669;">—</strong>
+          </div>
+          <div class="av-sig-lvl-cell">
+            <span class="av-sig-lvl-label" style="color:#059669;">Target 2 (TP2)</span>
+            <strong id="sig-term-tp2" class="av-sig-lvl-val" style="color:#059669;">—</strong>
+          </div>
+          <div class="av-sig-lvl-cell">
+            <span class="av-sig-lvl-label" style="color:#DC2626;">Stop Loss (SL)</span>
+            <strong id="sig-term-sl" class="av-sig-lvl-val" style="color:#DC2626;">—</strong>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <div class="av-mkt-tf-group">
+            <button type="button" class="sig-tf-btn active" data-tf="1m" onclick="App.setSignalChartInterval('1m')">1m Live</button>
+            <button type="button" class="sig-tf-btn" data-tf="5m" onclick="App.setSignalChartInterval('5m')">5m</button>
+            <button type="button" class="sig-tf-btn" data-tf="15m" onclick="App.setSignalChartInterval('15m')">15m</button>
+          </div>
+        </div>
+
+        <div class="av-sig-term-canvas-wrap">
+          <canvas id="signals-live-chart-canvas" class="chart-canvas"></canvas>
+        </div>
+
+        <div id="sig-term-action-wrap" style="display:none;justify-content:flex-end;margin-top:10px;"></div>
+      </div>
 
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <h3 style="font-size: 16px; font-weight: 700;">Today's Signals (Max 2 Daily)</h3>
@@ -6359,62 +6466,118 @@ window.gtranslateSettings = {
             </div>
           </div>
 
-          <!-- Admin Tab: Signal Dispatcher & Scheduling Studio (Matches Image 5) -->
+          <!-- Admin Tab: Signal Dispatcher & Scheduling Studio (Redesigned) -->
           <div id="adm-sec-signals" class="admin-panel-sec" style="display:none;">
-            <div class="card" style="margin-bottom:14px; padding:14px 16px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                  <span id="adm-signals-active-pill" class="badge badge-positive" style="font-size:12px; padding:6px 11px;">Active Signals: 0</span>
-                  <span style="font-size:13px; color:#4B5563; font-weight:600;">4 PM &amp; 8 PM PKT Worldwide Broadcast Studio</span>
+            <div class="av-adm-sig-hero">
+              <div>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+                  <span id="adm-signals-active-pill" class="badge badge-positive" style="font-size:11.5px; padding:5px 10px;">Active Signals: 0</span>
+                  <span class="badge" style="background:#EFF4FF; color:#0052FF; border:1px solid #DBEAFE; font-size:11px; font-weight:800;">30-Day 2× Plan &bull; 1.67% / Session</span>
+                  <span class="badge" style="background:#ECFDF5; color:#059669; border:1px solid #A7F3D0; font-size:11px; font-weight:800;">Push + Email Broadcast</span>
                 </div>
-                <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-                  <button type="button" class="btn-secondary" style="font-size:11.5px; padding:6px 10px;" onclick="App.fillSignalPreset('BTC')">BTC/USDT</button>
-                  <button type="button" class="btn-secondary" style="font-size:11.5px; padding:6px 10px;" onclick="App.fillSignalPreset('ETH')">ETH/USDT</button>
-                  <button type="button" class="btn-secondary" style="font-size:11.5px; padding:6px 10px;" onclick="App.fillSignalPreset('SOL')">SOL/USDT</button>
-                  <button type="button" class="btn-secondary" style="font-size:11.5px; padding:6px 10px;" onclick="App.fillSignalPreset('GOLD')">GOLD/USD</button>
-                  <button type="button" class="btn-primary" style="font-size:12px; padding:7px 14px;" onclick="App.applyAdminSignalSession(0, 'NOW'); App.dispatchAdminSignal('MANUAL')">+ Broadcast Live Now</button>
-                </div>
+                <h3 class="av-adm-sig-hero-title">Institutional Signal Command Studio</h3>
+                <p class="av-adm-sig-hero-sub">Dispatch worldwide 4 PM &amp; 8 PM PKT signals across Crypto, Forex, Futures, and Stocks with instant dashboard &amp; email alerts.</p>
+              </div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                <button type="button" class="btn-secondary" style="font-size:11.5px; padding:6px 10px;" onclick="App.fillSignalPreset('BTC')">BTC/USDT</button>
+                <button type="button" class="btn-secondary" style="font-size:11.5px; padding:6px 10px;" onclick="App.fillSignalPreset('EUR')">EUR/USD</button>
+                <button type="button" class="btn-secondary" style="font-size:11.5px; padding:6px 10px;" onclick="App.fillSignalPreset('GOLD')">GOLD/USD</button>
+                <button type="button" class="btn-secondary" style="font-size:11.5px; padding:6px 10px;" onclick="App.fillSignalPreset('NVDA')">NVDA/USD</button>
+                <button type="button" class="btn-primary" style="font-size:12px; padding:8px 15px; border-radius:10px; font-weight:800;" onclick="App.applyAdminSignalSession(0, 'NOW'); App.dispatchAdminSignal('MANUAL')">+ Broadcast Live Now</button>
+              </div>
+            </div>
+
+            <div class="av-adm-sig-kpis">
+              <div class="av-adm-sig-kpi-card">
+                <span class="av-adm-sig-kpi-label">Live Windows</span>
+                <strong id="adm-sig-kpi-live" class="av-adm-sig-kpi-val" style="color:#00B87C;">0</strong>
+                <span class="av-adm-sig-kpi-meta">Currently actionable worldwide</span>
+              </div>
+              <div class="av-adm-sig-kpi-card">
+                <span class="av-adm-sig-kpi-label">Scheduled Queue</span>
+                <strong id="adm-sig-kpi-scheduled" class="av-adm-sig-kpi-val" style="color:#0052FF;">0</strong>
+                <span class="av-adm-sig-kpi-meta">4 PM / 8 PM PKT &amp; Custom</span>
+              </div>
+              <div class="av-adm-sig-kpi-card">
+                <span class="av-adm-sig-kpi-label">Total Profit Paid</span>
+                <strong id="adm-sig-kpi-paid" class="av-adm-sig-kpi-val">$0.00</strong>
+                <span class="av-adm-sig-kpi-meta">1.67% &times; 2 = 3.33%/day (30d 2×)</span>
+              </div>
+              <div class="av-adm-sig-kpi-card">
+                <span class="av-adm-sig-kpi-label">Archived Sessions</span>
+                <strong id="adm-sig-kpi-archived" class="av-adm-sig-kpi-val">0</strong>
+                <span class="av-adm-sig-kpi-meta">Completed &amp; expired audit trail</span>
               </div>
             </div>
 
             <div class="av-adm-sig-split">
               <!-- Left Card: Create New Signal Form -->
-              <div class="card" style="padding:18px;">
-                <h3 style="margin:0 0 4px; font-size:16px; font-weight:800;">Create New Signal</h3>
-                <p style="font-size:12px; color:#6B7280; margin:0 0 14px;">Configure market pair, target profit, and 4 PM / 8 PM PKT broadcast window.</p>
+              <div class="card av-adm-sig-composer">
+                <div class="av-adm-sig-composer-head">
+                  <div>
+                    <h3 style="margin:0 0 3px; font-size:16px; font-weight:800; color:#0F172A;">Signal Dispatcher</h3>
+                    <p style="font-size:12px; color:#64748B; margin:0;">Configure asset class, directional chart trend, and live broadcast window.</p>
+                  </div>
+                  <span class="badge badge-demo" style="font-size:10px;">PKT UTC+5</span>
+                </div>
 
                 <div style="display:flex; flex-direction:column; gap:12px;">
                   <div class="form-group">
-                    <label class="form-label">Asset Pair Selector</label>
-                    <select id="adm-sig-symbol" style="width:100%;">
-                      <option value="BTC/USDT">BTC/USDT (Bitcoin)</option>
-                      <option value="ETH/USDT">ETH/USDT (Ethereum)</option>
-                      <option value="SOL/USDT">SOL/USDT (Solana)</option>
-                      <option value="BNB/USDT">BNB/USDT (Binance Coin)</option>
-                      <option value="XRP/USDT">XRP/USDT (Ripple)</option>
-                      <option value="DOGE/USDT">DOGE/USDT (Dogecoin)</option>
-                      <option value="TRX/USDT">TRX/USDT (TRON)</option>
-                      <option value="ADA/USDT">ADA/USDT (Cardano)</option>
-                      <option value="OIL/USD">OIL/USD (Crude Oil)</option>
-                      <option value="GOLD/USD">GOLD/USD (Spot Gold)</option>
+                    <label class="form-label">Asset Pair Selector (Crypto · Forex · Futures · Stocks)</label>
+                    <select id="adm-sig-symbol" style="width:100%;" onchange="App.updateAdminSignalPreview()">
+                      <optgroup label="Crypto">
+                        <option value="BTC/USDT">BTC/USDT (Bitcoin)</option>
+                        <option value="ETH/USDT">ETH/USDT (Ethereum)</option>
+                        <option value="SOL/USDT">SOL/USDT (Solana)</option>
+                        <option value="BNB/USDT">BNB/USDT (BNB)</option>
+                        <option value="XRP/USDT">XRP/USDT (Ripple)</option>
+                        <option value="DOGE/USDT">DOGE/USDT (Dogecoin)</option>
+                        <option value="ADA/USDT">ADA/USDT (Cardano)</option>
+                        <option value="AVAX/USDT">AVAX/USDT (Avalanche)</option>
+                        <option value="LINK/USDT">LINK/USDT (Chainlink)</option>
+                      </optgroup>
+                      <optgroup label="Forex">
+                        <option value="EUR/USD">EUR/USD (Euro / USD)</option>
+                        <option value="GBP/USD">GBP/USD (British Pound / USD)</option>
+                        <option value="USD/JPY">USD/JPY (USD / Japanese Yen)</option>
+                        <option value="USD/CHF">USD/CHF (USD / Swiss Franc)</option>
+                        <option value="AUD/USD">AUD/USD (Australian Dollar / USD)</option>
+                      </optgroup>
+                      <optgroup label="Futures &amp; Commodities">
+                        <option value="GOLD/USD">GOLD/USD (Spot Gold Futures)</option>
+                        <option value="OIL/USD">OIL/USD (WTI Crude Oil)</option>
+                        <option value="NGAS/USD">NGAS/USD (Natural Gas)</option>
+                        <option value="ES1/USD">ES1/USD (S&amp;P 500 E-Mini)</option>
+                        <option value="NQ1/USD">NQ1/USD (Nasdaq 100 E-Mini)</option>
+                      </optgroup>
+                      <optgroup label="US Stocks">
+                        <option value="AAPL/USD">AAPL/USD (Apple Inc.)</option>
+                        <option value="NVDA/USD">NVDA/USD (NVIDIA Corp.)</option>
+                        <option value="TSLA/USD">TSLA/USD (Tesla Inc.)</option>
+                        <option value="MSFT/USD">MSFT/USD (Microsoft Corp.)</option>
+                        <option value="AMZN/USD">AMZN/USD (Amazon.com)</option>
+                      </optgroup>
                     </select>
                   </div>
 
                   <div class="form-group">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                       <label class="form-label" style="margin:0;">Target Profit Return (%)</label>
-                      <strong id="adm-sig-profit-readout" style="font-size:13px; color:#0052FF; font-family:var(--font-mono);">2.5%</strong>
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <button type="button" class="av-adm-btn-chip soft-blue" style="padding:2px 8px; font-size:10px;" onclick="App.syncAdminSignalProfitInput('1.67'); document.getElementById('adm-sig-profit-pct').value='1.67';">30d 2× (1.67%)</button>
+                        <strong id="adm-sig-profit-readout" style="font-size:13px; color:#0052FF; font-family:var(--font-mono);">1.67%</strong>
+                      </div>
                     </div>
-                    <input type="range" id="adm-sig-profit-slider" class="av-adm-range" min="0.5" max="10" step="0.1" value="2.5" oninput="App.syncAdminSignalProfitSlider(this.value)">
-                    <input type="number" id="adm-sig-profit-pct" value="2.5" step="0.1" min="0.5" style="width:100%; margin-top:6px;" oninput="App.syncAdminSignalProfitInput(this.value)">
-                    <span style="font-size:11px; color:#6B7280; margin-top:4px; display:block;">2.5% × 2 daily signals = 5% daily target</span>
+                    <input type="range" id="adm-sig-profit-slider" class="av-adm-range" min="0.5" max="10" step="0.01" value="1.67" oninput="App.syncAdminSignalProfitSlider(this.value)">
+                    <input type="number" id="adm-sig-profit-pct" value="1.67" step="0.01" min="0.5" style="width:100%; margin-top:6px;" oninput="App.syncAdminSignalProfitInput(this.value)">
+                    <span style="font-size:11px; color:#64748B; margin-top:4px; display:block;">1.67% &times; 2 daily signals = 3.33%/day &rarr; Doubles deposit in 30 days</span>
                   </div>
 
                   <div class="form-group">
-                    <label class="form-label">Signal Direction</label>
+                    <label class="form-label">Signal Direction (Controls Live Chart Trend)</label>
                     <div class="av-adm-dir-toggle">
-                      <button type="button" id="adm-sig-dir-buy" class="av-adm-dir-btn active-buy" onclick="App.setAdminSignalDirection('BUY')">▲ Buy / Long</button>
-                      <button type="button" id="adm-sig-dir-sell" class="av-adm-dir-btn" onclick="App.setAdminSignalDirection('SELL')">▼ Sell / Short</button>
+                      <button type="button" id="adm-sig-dir-buy" class="av-adm-dir-btn active-buy" onclick="App.setAdminSignalDirection('BUY')">▲ UP / Buy (Long)</button>
+                      <button type="button" id="adm-sig-dir-sell" class="av-adm-dir-btn" onclick="App.setAdminSignalDirection('SELL')">▼ DOWN / Sell (Short)</button>
                     </div>
                     <select id="adm-sig-direction" style="display:none;" onchange="App.syncAdminSignalDirectionSelect()">
                       <option value="BUY">BUY / LONG</option>
@@ -6422,7 +6585,22 @@ window.gtranslateSettings = {
                     </select>
                   </div>
 
-                  <div style="background:#F7F8FA; padding:10px 12px; border-radius:12px; border:1px solid #EEF1F6;">
+                  <div id="adm-sig-preview-strip" class="av-adm-sig-preview-strip">
+                    <div class="av-adm-sig-preview-item">
+                      <span>Est. Entry</span>
+                      <strong id="adm-sig-prev-entry">—</strong>
+                    </div>
+                    <div class="av-adm-sig-preview-item">
+                      <span style="color:#059669;">Target (TP)</span>
+                      <strong id="adm-sig-prev-tp" style="color:#059669;">—</strong>
+                    </div>
+                    <div class="av-adm-sig-preview-item">
+                      <span style="color:#DC2626;">Stop (SL)</span>
+                      <strong id="adm-sig-prev-sl" style="color:#DC2626;">—</strong>
+                    </div>
+                  </div>
+
+                  <div style="background:#F8FAFC; padding:10px 12px; border-radius:12px; border:1px solid #E5EAF2;">
                     <span style="font-size:11px; font-weight:700; color:#0052FF; display:block; margin-bottom:7px;">Quick Session Presets</span>
                     <div class="preset-chip-group" style="margin-bottom:0;">
                       <button type="button" class="preset-chip" onclick="App.applyAdminSignalSession(1, '4 PM')">4 PM PKT</button>
@@ -6497,18 +6675,18 @@ window.gtranslateSettings = {
                     <span style="font-size:12px; font-weight:700; color:#92400E;">Testing Signal — Worldwide / NO PROFIT</span>
                   </label>
 
-                  <button type="button" class="btn-primary" style="padding:12px 18px; font-weight:800; font-size:14px; width:100%;" onclick="App.dispatchAdminSignal()">
+                  <button type="button" class="btn-primary" style="padding:12px 18px; font-weight:800; font-size:14px; width:100%; border-radius:12px;" onclick="App.dispatchAdminSignal()">
                     Publish / Schedule Signal
                   </button>
                 </div>
               </div>
 
               <!-- Right Card: Active Signals Status & Feeds -->
-              <div class="card" style="padding:18px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+              <div class="card av-adm-sig-composer">
+                <div class="av-adm-sig-composer-head">
                   <div>
-                    <h3 style="margin:0 0 3px; font-size:16px; font-weight:800;">Active Signals Status &amp; Feeds</h3>
-                    <p style="margin:0; font-size:12px; color:#6B7280;">Live and scheduled worldwide signal lanes by session</p>
+                    <h3 style="margin:0 0 3px; font-size:16px; font-weight:800; color:#0F172A;">Active Signals Status &amp; Feeds</h3>
+                    <p style="margin:0; font-size:12px; color:#64748B;">Live and scheduled worldwide signal lanes by session</p>
                   </div>
                   <button type="button" class="btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="App.loadAdminSignals()">Refresh</button>
                 </div>
@@ -6516,14 +6694,14 @@ window.gtranslateSettings = {
                 <div id="adm-signal-lanes" class="signal-admin-lanes" style="margin-bottom:0;">
                   <section class="signal-admin-lane signal-admin-lane-4pm">
                     <div class="signal-admin-lane-head">
-                      <div><span class="signal-lane-icon">◷</span><div><strong>4:00 PM PKT</strong><small>Daily Signal #1 • Worldwide</small></div></div>
+                      <div><span class="signal-lane-icon">◷</span><div><strong>4:00 PM PKT</strong><small>Daily Signal #1 &bull; Worldwide</small></div></div>
                       <span class="signal-lane-tag">DAILY</span>
                     </div>
                     <div id="adm-signal-lane-4pm" class="signal-admin-lane-body"><div class="signal-lane-empty">Loading 4 PM signal…</div></div>
                   </section>
                   <section class="signal-admin-lane signal-admin-lane-8pm">
                     <div class="signal-admin-lane-head">
-                      <div><span class="signal-lane-icon">◷</span><div><strong>8:00 PM PKT</strong><small>Daily Signal #2 • Worldwide</small></div></div>
+                      <div><span class="signal-lane-icon">◷</span><div><strong>8:00 PM PKT</strong><small>Daily Signal #2 &bull; Worldwide</small></div></div>
                       <span class="signal-lane-tag">DAILY</span>
                     </div>
                     <div id="adm-signal-lane-8pm" class="signal-admin-lane-body"><div class="signal-lane-empty">Loading 8 PM signal…</div></div>
@@ -6537,7 +6715,7 @@ window.gtranslateSettings = {
                   </section>
                   <section class="signal-admin-lane signal-admin-lane-test">
                     <div class="signal-admin-lane-head">
-                      <div><span class="signal-lane-icon">T</span><div><strong>Testing Signals</strong><small>4 PM / 8 PM / Custom • No Profit</small></div></div>
+                      <div><span class="signal-lane-icon">T</span><div><strong>Testing Signals</strong><small>4 PM / 8 PM / Custom &bull; No Profit</small></div></div>
                       <span class="signal-lane-tag">TEST ONLY</span>
                     </div>
                     <div id="adm-signal-lane-test" class="signal-admin-lane-body"><div class="signal-lane-empty">No testing signals</div></div>
@@ -9532,13 +9710,25 @@ window.gtranslateSettings = {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="form-group">
             <label class="form-label">Symbol / Market</label>
-            <input type="text" id="edit-sig-symbol" placeholder="BTC/USDT" style="background:#F8FAFC; color:#0F172A; border:1px solid #E2E8F0; border-radius:6px; padding:9px 10px; width:100%; font-weight:700;">
+            <input type="text" id="edit-sig-symbol" list="edit-sig-symbol-list" placeholder="BTC/USDT" style="background:#F8FAFC; color:#0F172A; border:1px solid #E2E8F0; border-radius:6px; padding:9px 10px; width:100%; font-weight:700;">
+            <datalist id="edit-sig-symbol-list">
+              <option value="BTC/USDT"></option>
+              <option value="ETH/USDT"></option>
+              <option value="SOL/USDT"></option>
+              <option value="EUR/USD"></option>
+              <option value="GBP/USD"></option>
+              <option value="GOLD/USD"></option>
+              <option value="OIL/USD"></option>
+              <option value="AAPL/USD"></option>
+              <option value="NVDA/USD"></option>
+              <option value="TSLA/USD"></option>
+            </datalist>
           </div>
           <div class="form-group">
             <label class="form-label">Signal Direction</label>
             <select id="edit-sig-direction" style="background:#F8FAFC; color:#0F172A; border:1px solid #E2E8F0; border-radius:6px; padding:9px 10px; width:100%;">
-              <option value="BUY">BUY / LONG</option>
-              <option value="SELL">SELL / SHORT</option>
+              <option value="BUY">BUY / LONG (UP)</option>
+              <option value="SELL">SELL / SHORT (DOWN)</option>
             </select>
           </div>
         </div>
@@ -9550,7 +9740,7 @@ window.gtranslateSettings = {
           </div>
           <div class="form-group">
             <label class="form-label">Profit % (Return)</label>
-            <input type="number" id="edit-sig-profit" min="0.1" step="0.1" style="background:#F8FAFC; color:#0F172A; border:1px solid #E2E8F0; border-radius:6px; padding:9px 10px; width:100%;">
+            <input type="number" id="edit-sig-profit" min="0.1" step="0.01" style="background:#F8FAFC; color:#0F172A; border:1px solid #E2E8F0; border-radius:6px; padding:9px 10px; width:100%;">
           </div>
         </div>
 
@@ -10917,7 +11107,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261124_v131_avatar_click_debit_wallet";
+  const CACHE_VERSION = "20261125_v132_live_charts_signals_30d";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -10949,18 +11139,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261124_v131_avatar_click_debit_wallet"></script>
-  <script defer src="/assets/js/chart.js?v=20261124_v131_avatar_click_debit_wallet"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261125_v132_live_charts_signals_30d"></script>
+  <script defer src="/assets/js/chart.js?v=20261125_v132_live_charts_signals_30d"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261124_v131_avatar_click_debit_wallet"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261124_v131_avatar_click_debit_wallet"></script>
+  <script defer src="/assets/js/app.js?v=20261125_v132_live_charts_signals_30d"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261125_v132_live_charts_signals_30d"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261124_v131_avatar_click_debit_wallet";
+      var SW_BUILD = "20261125_v132_live_charts_signals_30d";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

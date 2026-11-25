@@ -81,12 +81,33 @@ for ($slot=1; $slot<=2; $slot++) {
           'entry_price_min'=>(float)($template['entry_price_min']??0),'entry_price_max'=>(float)($template['entry_price_max']??0),
           'target_price_1'=>(float)($template['target_price_1']??0),'target_price_2'=>(float)($template['target_price_2']??0),
           'stop_loss'=>(float)($template['stop_loss']??0),'status'=>$live?'PUBLISHED':'SCHEDULED',
-          'duration_minutes'=>15,'daily_slot'=>$slot,'profit_percentage'=>(float)($template['profit_percentage']??2.5),
-          'timezone_label'=>'Asia/Karachi','scheduled_at'=>$utcStart->format('Y-m-d H:i:sP'),'published_at'=>$utcStart->format('Y-m-d H:i:sP'),
+          'duration_minutes'=>15,'daily_slot'=>$slot,'profit_percentage'=>1.67,
+          'timezone_label'=>'GLOBAL — ALL COUNTRIES (PKT)','scheduled_at'=>$utcStart->format('Y-m-d H:i:sP'),'published_at'=>$utcStart->format('Y-m-d H:i:sP'),
           'expires_at'=>$utcEnd->format('Y-m-d H:i:sP'),'created_at'=>gmdate('Y-m-d H:i:s')
         ];
         $ins=$supabase->insert('trading_signals',[$payload]);
         if($ins['success']) $signals[]=$payload;
+    }
+}
+
+// Promote any due SCHEDULED signal entering its live window and trigger email broadcast
+$broadcastHelper = dirname(__DIR__, 2) . '/public_html/api/lib/signal_broadcast.php';
+if (file_exists($broadcastHelper)) {
+    require_once $broadcastHelper;
+    $nowTs = time();
+    foreach ($signals as $row) {
+        $st = strtoupper((string)($row['status'] ?? ''));
+        $pubRaw = (string)($row['published_at'] ?? $row['scheduled_at'] ?? '');
+        $expRaw = (string)($row['expires_at'] ?? '');
+        $pubTs = $pubRaw !== '' ? strtotime($pubRaw) : false;
+        $expTs = $expRaw !== '' ? strtotime($expRaw) : false;
+        if ($st === 'SCHEDULED' && $pubTs !== false && $nowTs >= $pubTs && ($expTs === false || $nowTs < $expTs)) {
+            $supabase->update('trading_signals', ['status' => 'PUBLISHED'], ['id' => 'eq.' . (string)$row['id']]);
+            $row['status'] = 'PUBLISHED';
+        }
+        if (function_exists('primex_broadcast_signal_live_if_needed')) {
+            primex_broadcast_signal_live_if_needed($supabase, $row);
+        }
     }
 }
 

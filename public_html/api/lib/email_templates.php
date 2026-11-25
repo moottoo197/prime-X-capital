@@ -633,3 +633,64 @@ if (!function_exists('primex_email_template_kyc_status')) {
     }
 }
 
+if (!function_exists('primex_email_template_signal_live')) {
+    function primex_email_template_signal_live(
+        string $recipientName,
+        string $symbol,
+        string $direction,
+        float $profitPct,
+        int $durationMinutes,
+        string $expiresAtPkt,
+        string $signalsUrl
+    ): array {
+        $dirNorm = strtoupper(trim($direction));
+        $isBuy = in_array($dirNorm, ['BUY', 'LONG', 'UP'], true);
+        $dirDisplay = $isBuy ? 'UP / BUY (LONG)' : 'DOWN / SELL (SHORT)';
+        $dirColor = $isBuy ? '#00B87C' : '#DC2626';
+        $dirBg = $isBuy ? '#ECFDF5' : '#FEF2F2';
+        $greeting = $recipientName !== '' ? ('Hello ' . $recipientName . ',') : 'Hello Trader,';
+        $safeGreeting = primex_email_escape($greeting);
+        $safeSymbol = primex_email_escape(strtoupper(trim($symbol ?: 'BTC/USDT')));
+        $safeDir = primex_email_escape($dirDisplay);
+        $profitStr = '+' . number_format(max(0.0, $profitPct), 2) . '%';
+        $safeProfit = primex_email_escape($profitStr);
+        $safeDur = (int)max(1, $durationMinutes) . ' minutes';
+        $safeExp = primex_email_escape($expiresAtPkt);
+        $safeUrl = primex_email_escape($signalsUrl);
+
+        $subject = "Live Trading Signal: {$symbol} ({$dirDisplay}) — Prime X Capital";
+        $bodyHtml = ''
+            . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+            . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">A new institutional trading signal is <strong>now LIVE</strong> on Prime X Capital. Open your Signals Terminal before the confirmation window closes.</p>'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#F7F8FA;border:1px solid #EEF1F6;border-radius:12px;">'
+            . '<tr><td style="padding:16px;font-size:13.5px;line-height:1.8;color:#374151;">'
+            . '<strong>Market Pair:</strong> <span style="font-weight:800;color:#111827;">' . $safeSymbol . '</span><br>'
+            . '<strong>Direction:</strong> <span style="font-weight:800;color:' . $dirColor . ';">' . $safeDir . '</span><br>'
+            . '<strong>Target Return:</strong> <span style="font-weight:800;color:#0052FF;">' . $safeProfit . '</span><br>'
+            . '<strong>Confirmation Window:</strong> ' . primex_email_escape($safeDur) . '<br>'
+            . ($safeExp !== '' ? '<strong>Expires At:</strong> ' . $safeExp . '<br>' : '')
+            . '</td></tr></table>'
+            . '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td>'
+            . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 28px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Open Live Signal Terminal</a>'
+            . '</td></tr></table>';
+
+        $html = primex_email_layout(
+            "Live Signal: {$symbol}",
+            "{$dirDisplay} signal window is open now for {$safeDur}.",
+            $bodyHtml,
+            'Ensure at least 20 USDT is in your Future Balance to confirm live signals.',
+            $isBuy ? 'LIVE • BUY / UP' : 'LIVE • SELL / DOWN',
+            $dirColor,
+            $dirBg
+        );
+
+        $text = "{$greeting}\n\nA new trading signal is now LIVE on Prime X Capital:\n"
+            . "Market: {$symbol}\nDirection: {$dirDisplay}\nTarget Return: {$profitStr}\nWindow: {$safeDur}\n"
+            . ($expiresAtPkt !== '' ? "Expires: {$expiresAtPkt}\n" : '')
+            . "\nOpen Signals: {$signalsUrl}\n\nPrime X Capital";
+
+        return ['subject' => $subject, 'html' => $html, 'text' => $text];
+    }
+}
+
+

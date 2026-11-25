@@ -2,11 +2,37 @@
 /**
  * Market Candlesticks Endpoint
  * Returns canonical OHLCV candle objects compatible with FinancialChart
+ * Supports Crypto, Forex, Futures, and Stocks pairs.
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 
 $symbol = strtoupper(trim((string)($_GET['symbol'] ?? 'BTC/USDT')));
 $interval = strtolower(trim((string)($_GET['interval'] ?? '1h')));
+
+$pairMap = [
+    'EUR/USD'   => 1.0845,
+    'EUR/USDT'  => 1.0845,
+    'GBP/USD'   => 1.2712,
+    'USD/JPY'   => 152.38,
+    'USD/CHF'   => 0.8814,
+    'AUD/USD'   => 0.6542,
+    'EUR/GBP'   => 0.8531,
+    'GOLD/USD'  => 2748.33,
+    'GOLD/USDT' => 2748.33,
+    'OIL/USD'   => 74.82,
+    'OIL/USDT'  => 74.82,
+    'NGAS/USD'  => 2.84,
+    'NGAS/USDT' => 2.84,
+    'ES1/USD'   => 5984.50,
+    'NQ1/USD'   => 21142.00,
+    'SILVER/USD'=> 33.42,
+    'AAPL/USD'  => 229.40,
+    'NVDA/USD'  => 141.60,
+    'TSLA/USD'  => 342.15,
+    'MSFT/USD'  => 428.70,
+    'AMZN/USD'  => 209.85,
+    'GOOGL/USD' => 178.30
+];
 
 $priceMap = [
     'BTC' => 77915.82,
@@ -15,8 +41,8 @@ $priceMap = [
     'BNB' => 723.07,
     'XRP' => 1.4001,
     'XNO' => 0.3510,
-    'APE' => 0.1370,
-    'APT' => 0.6160,
+    'APE' => 0.1334,
+    'APT' => 0.5910,
     'AAVE' => 127.04,
     'DOGE' => 0.1842,
     'ADA' => 0.6840,
@@ -36,25 +62,36 @@ $priceMap = [
     'OP' => 1.42,
     'SHIB' => 0.000019,
     'PEPE' => 0.000012,
-    'GOLD' => 4348.33,
-    'XAU' => 4348.33,
+    'GOLD' => 2748.33,
+    'XAU' => 2748.33,
+    'SILVER' => 33.42,
     'OIL' => 74.82,
     'CRUDE' => 74.82,
-    'NGAS' => 2.80,
+    'NGAS' => 2.84,
     'ES1' => 5984.50,
+    'NQ1' => 21142.00,
     'EUR' => 1.0845,
     'GBP' => 1.2712,
+    'AUD' => 0.6542,
     'USD' => 152.38,
     'AAPL' => 229.40,
     'TSLA' => 342.15,
-    'NVDA' => 141.60
+    'NVDA' => 141.60,
+    'MSFT' => 428.70,
+    'AMZN' => 209.85,
+    'GOOGL' => 178.30
 ];
 
 $baseAsset = explode('/', $symbol)[0] ?: 'BTC';
-$basePrice = $priceMap[$baseAsset] ?? 0.0;
-if ($basePrice <= 0) {
-    $hintPrice = isset($_GET['price']) ? (float)$_GET['price'] : 0.0;
-    $basePrice = $hintPrice > 0 ? $hintPrice : 125.50;
+$hintPrice = isset($_GET['price']) ? (float)$_GET['price'] : 0.0;
+if ($hintPrice > 0) {
+    $basePrice = $hintPrice;
+} elseif (isset($pairMap[$symbol])) {
+    $basePrice = $pairMap[$symbol];
+} elseif (isset($priceMap[$baseAsset])) {
+    $basePrice = $priceMap[$baseAsset];
+} else {
+    $basePrice = 125.50;
 }
 
 $stepSecondsMap = [
@@ -68,24 +105,23 @@ $stepSecondsMap = [
 ];
 $stepSeconds = $stepSecondsMap[$interval] ?? 3600;
 
-$decimals = $basePrice >= 1000 ? 2 : ($basePrice >= 1 ? 4 : ($basePrice >= 0.01 ? 5 : 6));
+$decimals = $basePrice >= 1000 ? 2 : ($basePrice >= 10 ? 2 : ($basePrice >= 1 ? 4 : ($basePrice >= 0.01 ? 5 : 6)));
 $count = 60;
 $now = time();
 $bucketEnd = (int)(floor($now / $stepSeconds) * $stepSeconds);
 
-// Deterministic per-symbol/interval pseudo-random seed anchored so final close tracks live ticker
+$isForex = in_array($baseAsset, ['EUR', 'GBP', 'AUD'], true) || strpos($symbol, '/JPY') !== false || strpos($symbol, '/CHF') !== false || strpos($symbol, '/GBP') !== false;
+$volScale = $isForex ? 0.0022 : 0.011;
+
 $seedInt = crc32($symbol . '|' . $interval . '|' . floor($now / $stepSeconds));
 $candles = [];
-$closes = [];
-$curr = $basePrice;
 
-// Walk backward to build coherent series ending near $basePrice
 $deltas = [];
 for ($i = 0; $i < $count; $i++) {
     $h = crc32($seedInt . ':' . $i);
     $u1 = (($h & 0xffff) / 65535.0) - 0.49;
-    $wave = sin(($i + ($h % 13)) * 0.38) * 0.0045;
-    $deltas[] = $wave + ($u1 * 0.014);
+    $wave = sin(($i + ($h % 13)) * 0.38) * ($volScale * 0.35);
+    $deltas[] = $wave + ($u1 * $volScale);
 }
 
 $prices = [$basePrice];
@@ -99,8 +135,8 @@ for ($i = 0; $i < $count; $i++) {
     $open = round($prices[$i], $decimals);
     $close = round($prices[$i + 1], $decimals);
     $h = crc32($seedInt . ':wick:' . $i);
-    $wickUp = (0.15 + (($h & 0xff) / 255.0) * 0.55) * max(abs($close - $open), $basePrice * 0.0018);
-    $wickDn = (0.15 + ((($h >> 8) & 0xff) / 255.0) * 0.55) * max(abs($close - $open), $basePrice * 0.0018);
+    $wickUp = (0.15 + (($h & 0xff) / 255.0) * 0.55) * max(abs($close - $open), $basePrice * ($volScale * 0.16));
+    $wickDn = (0.15 + ((($h >> 8) & 0xff) / 255.0) * 0.55) * max(abs($close - $open), $basePrice * ($volScale * 0.16));
     $high = round(max($open, $close) + $wickUp, $decimals);
     $low = round(max($basePrice * 0.01, min($open, $close) - $wickDn), $decimals);
     $volume = round(12000 + ((($h >> 16) & 0xffff) / 65535.0) * 68000, 2);

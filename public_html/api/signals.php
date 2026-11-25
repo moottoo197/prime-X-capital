@@ -7,6 +7,7 @@
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/lib/signal_lifecycle.php';
 require_once __DIR__ . '/lib/wallet_breakdown.php';
+require_once __DIR__ . '/lib/signal_broadcast.php';
 
 $supabase = getSupabaseClient();
 if (!$supabase->isConfigured()) {
@@ -64,7 +65,7 @@ $allSignals = ($sigRes['success'] && is_array($sigRes['data'])) ? $sigRes['data'
 foreach ($allSignals as &$dailyDisplaySignal) {
     if (in_array((int)($dailyDisplaySignal['daily_slot'] ?? 0), [1, 2], true)
         && strpos((string)($dailyDisplaySignal['id'] ?? ''), 'sig_test_') !== 0) {
-        $dailyDisplaySignal['profit_percentage'] = 2.5;
+        $dailyDisplaySignal['profit_percentage'] = 1.67;
     }
 }
 unset($dailyDisplaySignal);
@@ -147,7 +148,7 @@ for ($ensureSlot = 1; $ensureSlot <= 2; $ensureSlot++) {
                 'target_price_1' => 0,
                 'target_price_2' => 0,
                 'stop_loss' => 0,
-                'profit_percentage' => 2.5,
+                'profit_percentage' => 1.67,
                 'duration_minutes' => 15,
             ];
         }
@@ -177,8 +178,8 @@ for ($ensureSlot = 1; $ensureSlot <= 2; $ensureSlot++) {
                 'status' => $isLiveNow ? 'PUBLISHED' : 'SCHEDULED',
                 'duration_minutes' => $templateDuration,
                 'daily_slot' => $ensureSlot,
-                // Both normal daily sessions are fixed at 2.5% per confirmation.
-                'profit_percentage' => 2.5,
+                // Both normal daily sessions are fixed at 1.67% per confirmation (2x deposit in 30 days).
+                'profit_percentage' => 1.67,
                 'timezone_label' => 'GLOBAL — ALL COUNTRIES (PKT)',
                 'scheduled_at' => $utcStart->format('Y-m-d H:i:sP'),
                 'published_at' => $utcStart->format('Y-m-d H:i:sP'),
@@ -329,12 +330,16 @@ foreach ($allSignals as $s) {
     $liveSignals[] = array_merge($s, [
         'status' => 'PUBLISHED', 'is_live' => true, 'is_expired' => false,
         'is_scheduled' => false, 'is_executed' => false, 'user_executed' => false,
-        'has_used' => false, 'can_execute' => ($isEligible && !$isTesting), 'visible_to_user' => true, 'is_testing' => $isTesting, 'no_profit' => $isTesting, 'profit_percentage' => $isTesting ? 0 : (float)($s['profit_percentage'] ?? 2.5), 'time_left_seconds' => $timeLeft,
+        'has_used' => false, 'can_execute' => ($isEligible && !$isTesting), 'visible_to_user' => true, 'is_testing' => $isTesting, 'no_profit' => $isTesting, 'profit_percentage' => $isTesting ? 0 : (float)($s['profit_percentage'] ?? 1.67), 'time_left_seconds' => $timeLeft,
         'time_until_start_seconds' => 0,
         'published_at' => $published->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
         'expires_at' => $expires->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
         'schedule_time' => $schedule, 'slot_label' => $label, 'timezone_label' => 'PKT'
     ]);
+}
+
+if (!empty($liveSignals)) {
+    primex_schedule_signal_live_broadcast($supabase, $liveSignals);
 }
 
 sendSuccess([

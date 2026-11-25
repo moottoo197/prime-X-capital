@@ -8389,3 +8389,379 @@ body.lang-feature-disabled #google_translate_element {
   }
 }
 
+/* ================================================================
+ * MULTI-ASSET LIVE CHARTS (CRYPTO / FOREX / FUTURES / STOCKS)
+ * ================================================================ */
+.av-home-cat-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 12px;
+  padding-bottom: 2px;
+}
+.av-home-cat-pills::-webkit-scrollbar { display: none; }
+
+.av-home-cat-pill {
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid #E2E8F0;
+  background: #FFFFFF;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+}
+.av-home-cat-pill.active,
+.av-home-cat-pill:hover {
+  background: #EFF4FF;
+  border-color: #0052FF;
+  color: #0052FF;
+}
+
+.av-mkt-live-chart-card {
+  background: #FFFFFF;
+  border: 1px solid #E5EAF2;
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
+}
+.av-mkt-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.av-mkt-chart-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.av-mkt-pair-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.av-mkt-pair-strip::-webkit-scrollbar { display: none; }
+.mkt-preview-chip {
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mkt-preview-chip.active {
+  background: #0052FF;
+  border-color: #0052FF;
+  color: #FFFFFF;
+}
+.av-mkt-tf-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #F8FAFC;
+  border: 1px solid #E5EAF2;
+  padding: 3px;
+  border-radius: 10px;
+}
+.mkt-tf-btn,
+.sig-tf-btn {
+  padding: 4px 9px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: #64748B;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mkt-tf-btn.active,
+.sig-tf-btn.active {
+  background: #FFFFFF;
+  color: #0052FF;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.av-mkt-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 245px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #EEF2F7;
+  background: #FFFFFF;
+}
+.av-mkt-canvas-wrap canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.av-mkt-chart-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: #64748B;
+  margin-top: 8px;
+}
+
+/* ================================================================
+ * LIVE DIRECTIONAL SIGNAL TRADING TERMINAL (#view-signals)
+ * ================================================================ */
+.av-sig-terminal-card {
+  background: #FFFFFF;
+  border: 1px solid #DCE5F5;
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 16px rgba(0, 82, 255, 0.05);
+}
+.av-sig-term-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.av-sig-term-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.av-sig-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00B87C;
+  box-shadow: 0 0 0 4px rgba(0, 184, 124, 0.18);
+  display: inline-block;
+  flex-shrink: 0;
+}
+.av-sig-pulse-dot.is-waiting {
+  background: #0052FF;
+  box-shadow: 0 0 0 4px rgba(0, 82, 255, 0.14);
+}
+.av-sig-term-price-box {
+  text-align: right;
+}
+.av-sig-term-levels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.av-sig-lvl-cell {
+  background: #F8FAFC;
+  border: 1px solid #E5EAF2;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.av-sig-lvl-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748B;
+}
+.av-sig-lvl-val {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #0F172A;
+  font-family: var(--font-mono);
+}
+.av-sig-term-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #E5EAF2;
+  background: #FFFFFF;
+}
+.av-sig-term-canvas-wrap canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.av-sig-selector-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.av-sig-sel-pill {
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.av-sig-sel-pill.active {
+  background: #EFF4FF;
+  border-color: #0052FF;
+  color: #0052FF;
+}
+.av-sig-doubler-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #F8FAFC;
+  border: 1px solid #E5EAF2;
+  font-size: 11.5px;
+  color: #475569;
+}
+
+@media (max-width: 640px) {
+  .av-sig-term-levels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .av-sig-term-canvas-wrap {
+    height: 240px;
+  }
+  .av-mkt-canvas-wrap {
+    height: 215px;
+  }
+}
+
+/* ================================================================
+ * REDESIGNED ADMIN SIGNALS COMMAND STUDIO (#adm-sec-signals)
+ * ================================================================ */
+.av-adm-sig-hero {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F4F7FF 100%);
+  border: 1px solid #DCE5F5;
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  box-shadow: 0 2px 10px rgba(0, 82, 255, 0.04);
+}
+.av-adm-sig-hero-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: #0F172A;
+  letter-spacing: -0.01em;
+}
+.av-adm-sig-hero-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #64748B;
+}
+.av-adm-sig-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.av-adm-sig-kpi-card {
+  background: #FFFFFF;
+  border: 1px solid #E5EAF2;
+  border-radius: 14px;
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.av-adm-sig-kpi-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748B;
+}
+.av-adm-sig-kpi-val {
+  font-size: 20px;
+  font-weight: 900;
+  color: #0F172A;
+  font-family: var(--font-mono);
+}
+.av-adm-sig-kpi-meta {
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 600;
+}
+.av-adm-sig-composer {
+  border: 1px solid #DCE5F5 !important;
+  border-radius: 16px !important;
+  padding: 18px !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.03) !important;
+}
+.av-adm-sig-composer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #EEF2F7;
+}
+.av-adm-sig-preview-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  background: #F8FAFC;
+  border: 1px solid #E5EAF2;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.av-adm-sig-preview-item span {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748B;
+}
+.av-adm-sig-preview-item strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #0F172A;
+  font-family: var(--font-mono);
+}
+@media (max-width: 960px) {
+  .av-adm-sig-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .av-adm-sig-preview-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+

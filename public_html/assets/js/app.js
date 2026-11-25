@@ -144,30 +144,45 @@ const App = {
       { symbol: 'BTC/USDT', base: 'BTC', quote: 'USDT', category: 'CRYPTO', price: 77915.82, change_24h: 1.63, halt: false, volume_24h: 142000000 },
       { symbol: 'ETH/USDT', base: 'ETH', quote: 'USDT', category: 'CRYPTO', price: 2514.43, change_24h: 1.58, halt: false, volume_24h: 98000000 },
       { symbol: 'SOL/USDT', base: 'SOL', quote: 'USDT', category: 'CRYPTO', price: 101.84, change_24h: 2.35, halt: false, volume_24h: 88400000 },
-      { symbol: 'XRP/USDT', base: 'XRP', quote: 'USDT', category: 'CRYPTO', price: 1.4001, change_24h: 4.59, halt: false, volume_24h: 64200000 },
       { symbol: 'BNB/USDT', base: 'BNB', quote: 'USDT', category: 'CRYPTO', price: 723.07, change_24h: 1.15, halt: false, volume_24h: 53100000 },
-      { symbol: 'XNO/USDT', base: 'XNO', quote: 'USDT', category: 'CRYPTO', price: 0.3510, change_24h: 7.02, halt: false, volume_24h: 362230 },
-      { symbol: 'APE/USDT', base: 'APE', quote: 'USDT', category: 'CRYPTO', price: 0.1370, change_24h: 4.57, halt: false, volume_24h: 9820000 },
-      { symbol: 'APT/USDT', base: 'APT', quote: 'USDT', category: 'CRYPTO', price: 0.6160, change_24h: -4.05, halt: false, volume_24h: 14500000 },
-      { symbol: 'AAVE/USDT', base: 'AAVE', quote: 'USDT', category: 'CRYPTO', price: 127.04, change_24h: 2.29, halt: false, volume_24h: 22100000 },
-      { symbol: 'GOLD/USDT', base: 'GOLD', quote: 'USDT', category: 'FUTURES', price: 4348.33, change_24h: 0.42, halt: false, volume_24h: 45200000 },
-      { symbol: 'OIL/USDT', base: 'OIL', quote: 'USDT', category: 'FUTURES', price: 74.82, change_24h: 3.15, halt: false, volume_24h: 18700000 },
-      { symbol: 'NGAS/USDT', base: 'NGAS', quote: 'USDT', category: 'FUTURES', price: 2.80, change_24h: -0.85, halt: false, volume_24h: 12800000 },
-      { symbol: 'ES1/USD', base: 'ES1', quote: 'USD', category: 'FUTURES', price: 5984.50, change_24h: 0.84, halt: false, volume_24h: 74000000 },
+      { symbol: 'XRP/USDT', base: 'XRP', quote: 'USDT', category: 'CRYPTO', price: 1.4001, change_24h: 4.58, halt: false, volume_24h: 64200000 },
+      { symbol: 'DOGE/USDT', base: 'DOGE', quote: 'USDT', category: 'CRYPTO', price: 0.1842, change_24h: 3.12, halt: false, volume_24h: 41500000 },
+      { symbol: 'ADA/USDT', base: 'ADA', quote: 'USDT', category: 'CRYPTO', price: 0.6840, change_24h: -1.18, halt: false, volume_24h: 29400000 },
+      { symbol: 'AVAX/USDT', base: 'AVAX', quote: 'USDT', category: 'CRYPTO', price: 28.45, change_24h: 2.04, halt: false, volume_24h: 24600000 },
+      { symbol: 'LINK/USDT', base: 'LINK', quote: 'USDT', category: 'CRYPTO', price: 15.85, change_24h: 1.92, halt: false, volume_24h: 21300000 },
+      { symbol: 'AAVE/USDT', base: 'AAVE', quote: 'USDT', category: 'CRYPTO', price: 127.04, change_24h: 2.28, halt: false, volume_24h: 22100000 },
+      { symbol: 'APE/USDT', base: 'APE', quote: 'USDT', category: 'CRYPTO', price: 0.1334, change_24h: -0.74, halt: false, volume_24h: 9820000 },
+      { symbol: 'APT/USDT', base: 'APT', quote: 'USDT', category: 'CRYPTO', price: 0.5910, change_24h: 1.37, halt: false, volume_24h: 14500000 },
       { symbol: 'EUR/USD', base: 'EUR', quote: 'USD', category: 'FOREX', price: 1.0845, change_24h: 0.32, halt: false, volume_24h: 51200000 },
       { symbol: 'GBP/USD', base: 'GBP', quote: 'USD', category: 'FOREX', price: 1.2712, change_24h: -0.18, halt: false, volume_24h: 39400000 },
       { symbol: 'USD/JPY', base: 'USD', quote: 'JPY', category: 'FOREX', price: 152.38, change_24h: 0.45, halt: false, volume_24h: 42800000 },
+      { symbol: 'USD/CHF', base: 'USD', quote: 'CHF', category: 'FOREX', price: 0.8814, change_24h: -0.14, halt: false, volume_24h: 28600000 },
+      { symbol: 'AUD/USD', base: 'AUD', quote: 'USD', category: 'FOREX', price: 0.6542, change_24h: 0.27, halt: false, volume_24h: 26100000 },
+      { symbol: 'EUR/GBP', base: 'EUR', quote: 'GBP', category: 'FOREX', price: 0.8531, change_24h: 0.19, halt: false, volume_24h: 22900000 },
+      { symbol: 'GOLD/USD', base: 'GOLD', quote: 'USD', category: 'FUTURES', price: 2748.33, change_24h: 0.68, halt: false, volume_24h: 68200000 },
+      { symbol: 'OIL/USD', base: 'OIL', quote: 'USD', category: 'FUTURES', price: 74.82, change_24h: 1.85, halt: false, volume_24h: 45700000 },
+      { symbol: 'NGAS/USD', base: 'NGAS', quote: 'USD', category: 'FUTURES', price: 2.84, change_24h: -0.92, halt: false, volume_24h: 19800000 },
+      { symbol: 'ES1/USD', base: 'ES1', quote: 'USD', category: 'FUTURES', price: 5984.50, change_24h: 0.84, halt: false, volume_24h: 74000000 },
+      { symbol: 'NQ1/USD', base: 'NQ1', quote: 'USD', category: 'FUTURES', price: 21142.00, change_24h: 1.12, halt: false, volume_24h: 69500000 },
+      { symbol: 'SILVER/USD', base: 'SILVER', quote: 'USD', category: 'FUTURES', price: 33.42, change_24h: 1.04, halt: false, volume_24h: 24300000 },
       { symbol: 'AAPL/USD', base: 'AAPL', quote: 'USD', category: 'STOCKS', price: 229.40, change_24h: 1.24, halt: false, volume_24h: 61500000 },
+      { symbol: 'NVDA/USD', base: 'NVDA', quote: 'USD', category: 'STOCKS', price: 141.60, change_24h: 3.42, halt: false, volume_24h: 94600000 },
       { symbol: 'TSLA/USD', base: 'TSLA', quote: 'USD', category: 'STOCKS', price: 342.15, change_24h: 2.87, halt: false, volume_24h: 82300000 },
-      { symbol: 'NVDA/USD', base: 'NVDA', quote: 'USD', category: 'STOCKS', price: 141.60, change_24h: 3.42, halt: false, volume_24h: 94600000 }
+      { symbol: 'MSFT/USD', base: 'MSFT', quote: 'USD', category: 'STOCKS', price: 428.70, change_24h: 0.94, halt: false, volume_24h: 48200000 },
+      { symbol: 'AMZN/USD', base: 'AMZN', quote: 'USD', category: 'STOCKS', price: 209.85, change_24h: 1.56, halt: false, volume_24h: 54900000 },
+      { symbol: 'GOOGL/USD', base: 'GOOGL', quote: 'USD', category: 'STOCKS', price: 178.30, change_24h: -0.46, halt: false, volume_24h: 39700000 }
     ],
     selectedMarket: 'BTC/USDT',
-    selectedCategory: 'HOT',
+    selectedCategory: 'CRYPTO',
     chartInterval: '1h',
     chartType: 'candles',
     marketOverviewSymbol: 'BTC/USDT',
     marketChartInterval: '5m',
     marketChartType: 'candlestick',
+    signalChartInterval: '1m',
+    activeTerminalSignalId: null,
+    signalLiveChartTimer: null,
+    signalTerminalPrices: {},
     marketSearchQuery: '',
     favorites: JSON.parse(localStorage.getItem('alphavest_favorites') || '["BTC/USDT", "ETH/USDT", "SOL/USDT"]'),
     balances: null,
@@ -202,6 +217,7 @@ const App = {
 
   chart: null,
   marketChart: null,
+  signalChart: null,
 
   purgeObsoleteCache() {
     try {
@@ -1236,6 +1252,7 @@ const App = {
     } else if (view === 'referrals') {
       this.loadReferrals();
     } else if (view === 'signals') {
+      setTimeout(() => this.initSignalsTerminal(), 30);
       this.loadSignals();
     } else if (view === 'home') {
       this.updateHomeHeroBalance();
@@ -1358,8 +1375,14 @@ const App = {
     if (s.includes('GOLD')) {
       return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.5"/><rect x="9" y="10" width="14" height="12" rx="2" fill="#F59E0B"/><path d="M11 14h10M11 18h7" stroke="#FFFFFF" stroke-width="1.5"/></svg>`;
     }
+    if (s.includes('SILVER')) {
+      return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#F1F5F9" stroke="#64748B" stroke-width="1.5"/><rect x="9" y="10" width="14" height="12" rx="2" fill="#64748B"/><path d="M11 14h10M11 18h7" stroke="#FFFFFF" stroke-width="1.5"/></svg>`;
+    }
     if (s.includes('NGAS')) {
       return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#FFEDD5" stroke="#EA580C" stroke-width="1.5"/><path d="M16 7c0 0-6 7-6 12a6 6 0 0 0 12 0c0-5-6-12-6-12z" fill="#F97316"/></svg>`;
+    }
+    if (s.includes('ES1') || s.includes('NQ1')) {
+      return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#EFF4FF" stroke="#0052FF" stroke-width="1.5"/><path d="M8 21l5-5 4 3 7-8" stroke="#0052FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     }
     if (s.includes('APE')) {
       return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#EFF4FF" stroke="#0052FF" stroke-width="1.5"/><circle cx="12" cy="14" r="2.2" fill="#0052FF"/><circle cx="20" cy="14" r="2.2" fill="#0052FF"/><path d="M11 21c2.5 2.5 7.5 2.5 10 0" stroke="#0052FF" stroke-width="2" stroke-linecap="round"/></svg>`;
@@ -1370,8 +1393,21 @@ const App = {
     if (s.includes('EUR')) {
       return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#EFF4FF" stroke="#0284C7" stroke-width="1.5"/><path d="M19 11c-4 0-6 2.5-6 5s2 5 6 5M10 15h8M10 17h8" stroke="#0284C7" stroke-width="2" stroke-linecap="round"/></svg>`;
     }
+    if (s.includes('GBP')) {
+      return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#EEF2FF" stroke="#4F46E5" stroke-width="1.5"/><text x="16" y="21" text-anchor="middle" fill="#4F46E5" font-size="14" font-weight="800" font-family="sans-serif">£</text></svg>`;
+    }
+    if (s.includes('AUD') || s.startsWith('USD/')) {
+      return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#ECFDF5" stroke="#059669" stroke-width="1.5"/><text x="16" y="21" text-anchor="middle" fill="#059669" font-size="13" font-weight="800" font-family="sans-serif">$</text></svg>`;
+    }
+    if (s.includes('AAPL') || s.includes('MSFT') || s.includes('NVDA') || s.includes('TSLA') || s.includes('AMZN') || s.includes('GOOGL')) {
+      const stkCode = s.split('/')[0].slice(0, 3);
+      return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#0F172A" stroke="#334155" stroke-width="1.5"/><text x="16" y="20" text-anchor="middle" fill="#FFFFFF" font-size="8.5" font-weight="800" font-family="sans-serif">${stkCode}</text></svg>`;
+    }
     if (s.includes('SOL')) {
       return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#F5F3FF" stroke="#7C3AED" stroke-width="1.5"/><path d="M9 21l14-2.5M11 16l14-2.5M9 11l14-2.5" stroke="#00B87C" stroke-width="2" stroke-linecap="round"/></svg>`;
+    }
+    if (s.includes('BNB')) {
+      return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#FEFCE8" stroke="#EAB308" stroke-width="1.5"/><path d="M16 9l5 5-5 5-5-5 5-5z" fill="#EAB308"/></svg>`;
     }
     if (s.includes('AAVE')) {
       return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#FDF2F8" stroke="#DB2777" stroke-width="1.5"/><path d="M16 9l-6 14h3l1.8-4.5h4.4L21 23h3L16 9z" fill="#0EA5E9"/></svg>`;
@@ -1391,8 +1427,8 @@ const App = {
     if (s.includes('XNO')) {
       return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#EFF4FF" stroke="#0052FF" stroke-width="1.5"/><path d="M10 10l12 12M22 10L10 22" stroke="#0052FF" stroke-width="2.6" stroke-linecap="round"/></svg>`;
     }
-    const label = (s.split('/')[0] || 'AV').slice(0, 2);
-    return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#EFF4FF" stroke="#DBEAFE" stroke-width="1.5"/><text x="16" y="20" text-anchor="middle" fill="#0052FF" font-size="10" font-weight="800" font-family="sans-serif">${label}</text></svg>`;
+    const label = (s.split('/')[0] || 'AV').slice(0, 3);
+    return `<svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="15" fill="#EFF4FF" stroke="#DBEAFE" stroke-width="1.5"/><text x="16" y="20" text-anchor="middle" fill="#0052FF" font-size="9" font-weight="800" font-family="sans-serif">${label}</text></svg>`;
   },
 
   renderTickerBar() {
@@ -1436,19 +1472,19 @@ const App = {
 
   renderMarketList() {
     let list = [...(this.state.tickers || [])];
-    const cat = this.state.selectedCategory || 'ALL';
+    const cat = this.state.selectedCategory || 'CRYPTO';
 
     if (cat === 'CRYPTO') {
-      const filtered = list.filter(t => t.category === 'CRYPTO' || ['BTC', 'ETH', 'SOL', 'XRP', 'BNB', 'XNO', 'APE', 'APT', 'AAVE'].some(k => t.symbol.includes(k)));
+      const filtered = list.filter(t => t.category === 'CRYPTO' || ['BTC', 'ETH', 'SOL', 'XRP', 'BNB', 'DOGE', 'ADA', 'AVAX', 'LINK', 'XNO', 'APE', 'APT', 'AAVE'].some(k => t.symbol.includes(k)));
       if (filtered.length) list = filtered;
     } else if (cat === 'FOREX') {
-      const filtered = list.filter(t => t.category === 'FOREX' || t.symbol.includes('EUR') || t.symbol.includes('GBP') || t.symbol.includes('JPY'));
+      const filtered = list.filter(t => t.category === 'FOREX' || t.symbol.includes('EUR') || t.symbol.includes('GBP') || t.symbol.includes('JPY') || t.symbol.includes('CHF') || t.symbol.includes('AUD'));
       if (filtered.length) list = filtered;
     } else if (cat === 'FUTURES') {
-      const filtered = list.filter(t => t.category === 'FUTURES' || t.symbol.includes('GOLD') || t.symbol.includes('OIL') || t.symbol.includes('NGAS') || t.symbol.includes('ES1'));
+      const filtered = list.filter(t => t.category === 'FUTURES' || t.symbol.includes('GOLD') || t.symbol.includes('SILVER') || t.symbol.includes('OIL') || t.symbol.includes('NGAS') || t.symbol.includes('ES1') || t.symbol.includes('NQ1'));
       if (filtered.length) list = filtered;
     } else if (cat === 'STOCKS') {
-      const filtered = list.filter(t => t.category === 'STOCKS' || t.symbol.includes('AAPL') || t.symbol.includes('TSLA') || t.symbol.includes('NVDA'));
+      const filtered = list.filter(t => t.category === 'STOCKS' || t.symbol.includes('AAPL') || t.symbol.includes('TSLA') || t.symbol.includes('NVDA') || t.symbol.includes('MSFT') || t.symbol.includes('AMZN') || t.symbol.includes('GOOGL'));
       if (filtered.length) list = filtered;
     } else if (cat === 'OPTIONS') {
       const filtered = list.filter(t => t.category === 'OIL' || t.category === 'COMMODITIES' || t.category === 'FUTURES' || t.symbol.includes('OIL') || t.symbol.includes('BTC') || t.symbol.includes('GOLD') || t.symbol.includes('NGAS'));
@@ -1462,7 +1498,7 @@ const App = {
         if (filtered.length) list = filtered;
       }
     } else if (cat === 'HOT') {
-      const filtered = list.filter(t => t.symbol.includes('BTC') || t.symbol.includes('ETH') || t.symbol.includes('SOL') || t.symbol.includes('XRP') || t.symbol.includes('BNB') || t.symbol.includes('XNO') || t.symbol.includes('APE') || t.symbol.includes('APT'));
+      const filtered = list.filter(t => t.symbol.includes('BTC') || t.symbol.includes('ETH') || t.symbol.includes('SOL') || t.symbol.includes('EUR') || t.symbol.includes('GOLD') || t.symbol.includes('NVDA') || t.symbol.includes('AAPL') || t.symbol.includes('XRP'));
       if (filtered.length) list = filtered;
     } else if (cat === 'GAINERS') {
       list.sort((a, b) => (Number(b.change_24h) || 0) - (Number(a.change_24h) || 0));
@@ -1475,16 +1511,16 @@ const App = {
     const searchInput = document.getElementById('market-discovery-search') || document.getElementById('header-search-input') || document.getElementById('market-search');
     const query = (this.state.marketSearchQuery || (searchInput ? searchInput.value : '')).toUpperCase().trim();
     if (query) {
-      list = list.filter(t => t.symbol.toUpperCase().includes(query) || (t.base && t.base.toUpperCase().includes(query)));
+      list = list.filter(t => t.symbol.toUpperCase().includes(query) || (t.base && t.base.toUpperCase().includes(query)) || (t.name && t.name.toUpperCase().includes(query)));
     }
 
     const currSym = this.getDisplayCurrency().symbol;
     const currRate = this.getDisplayCurrency().rate;
 
-    // Render Trending 3 Cards on Market Discover (Matches 003505)
+    // Render Trending 3 Cards on Market Discover
     const trendingEl = document.getElementById('market-trending-3-cards');
     if (trendingEl) {
-      const top3 = [...(this.state.tickers || [])].slice(0, 3);
+      const top3 = [...(list.length ? list : (this.state.tickers || []))].slice(0, 3);
       trendingEl.innerHTML = top3.map((t, idx) => {
         const isUp = Number(t.change_24h || 0) >= 0;
         const basePart = t.base || t.symbol.split('/')[0];
@@ -1492,7 +1528,7 @@ const App = {
         const dotColors = ['#F59E0B', '#0052FF', '#111827'];
         const formattedPrice = this.formatPrice(t.price);
         return `
-          <div class="av-trending-mini-card" onclick="App.selectMarket('${t.symbol}')">
+          <div class="av-trending-mini-card" onclick="App.setMarketPreviewPair('${t.symbol}')">
             <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
               <span style="width:9px;height:9px;border-radius:50%;background:${dotColors[idx % dotColors.length]};display:inline-block;"></span>
               <span style="font-size:12px;font-weight:800;color:#111827;">${basePart}</span>
@@ -1504,7 +1540,7 @@ const App = {
       }).join('');
     }
 
-    // Render Home Page Trending Markets Cards (Matches 003451)
+    // Render Home Page Trending Markets Cards
     const homeContainer = document.getElementById('market-list-rows');
     if (homeContainer) {
       if (!list.length) {
@@ -1514,14 +1550,22 @@ const App = {
           </div>
         `;
       } else {
-        const nameMap = { BTC: 'Bitcoin', ETH: 'Ethereum', SOL: 'Solana', XRP: 'Ripple', BNB: 'BNB', ADA: 'Cardano', DOGE: 'Dogecoin', LTC: 'Litecoin' };
+        const nameMap = {
+          BTC: 'Bitcoin', ETH: 'Ethereum', SOL: 'Solana', XRP: 'Ripple', BNB: 'BNB',
+          DOGE: 'Dogecoin', ADA: 'Cardano', AVAX: 'Avalanche', LINK: 'Chainlink', AAVE: 'Aave',
+          APE: 'ApeCoin', APT: 'Aptos', EUR: 'Euro / USD', GBP: 'British Pound', USD: 'US Dollar',
+          AUD: 'Australian Dollar', GOLD: 'Spot Gold', SILVER: 'Silver Futures', OIL: 'WTI Crude Oil',
+          NGAS: 'Natural Gas', ES1: 'S&P 500 E-Mini', NQ1: 'Nasdaq 100 Futures',
+          AAPL: 'Apple Inc.', NVDA: 'NVIDIA Corp.', TSLA: 'Tesla Inc.', MSFT: 'Microsoft Corp.',
+          AMZN: 'Amazon.com', GOOGL: 'Alphabet Inc.'
+        };
         homeContainer.innerHTML = list.map(t => {
           const isHalt = Boolean(t.halt);
           const isUp = Number(t.change_24h || 0) >= 0;
           const chgStr = isHalt ? 'Halt' : `${isUp ? '+' : ''}${Number(t.change_24h || 0).toFixed(2)}% ${isUp ? '▲' : '▼'}`;
           const iconSvg = this.getCoinIcon(t.base || t.symbol);
           const basePart = t.base || t.symbol.split('/')[0];
-          const displayName = nameMap[basePart] || basePart;
+          const displayName = t.name || nameMap[basePart] || basePart;
           const formattedPrice = this.formatPrice(t.price);
           const volUsd = t.volume_24h ? Number(t.volume_24h) : 84200000;
           const volStr = `${currSym}${((volUsd * currRate) / 1000000).toFixed(1)}M`;
@@ -1534,9 +1578,9 @@ const App = {
                 </div>
                 <div style="min-width:0;">
                   <div style="font-size: 15px; font-weight: 800; color: #111827;">
-                    ${displayName} <span style="font-size: 12px; color: #6B7280; font-weight: 600;">${basePart}</span>
+                    ${displayName} <span style="font-size: 12px; color: #6B7280; font-weight: 600;">${t.symbol}</span>
                   </div>
-                  <div style="font-size: 11.5px; color: #9CA3AF; margin-top:2px;">Vol ${volStr}</div>
+                  <div style="font-size: 11.5px; color: #9CA3AF; margin-top:2px;">${t.category || 'MARKET'} • Vol ${volStr}</div>
                 </div>
               </div>
               <div style="text-align: right; flex-shrink:0;">
@@ -1549,7 +1593,7 @@ const App = {
       }
     }
 
-    // Render Market Discovery Page Cards (Matches 003505)
+    // Render Market Discovery Page Cards
     const discoveryContainer = document.getElementById('market-discovery-rows');
     if (discoveryContainer) {
       if (!list.length) {
@@ -1582,19 +1626,21 @@ const App = {
                   ${iconSvg}
                 </div>
                 <div style="min-width:0;">
-                  <div style="font-size: 15px; font-weight: 800; color: #111827; display: flex; align-items: baseline; gap: 3px;">
+                  <div style="font-size: 15px; font-weight: 800; color: #111827; display: flex; align-items: baseline; gap: 4px;">
                     ${basePart}<span style="font-size: 11.5px; color: #6B7280; font-weight: 600;">/${quotePart}</span>
+                    <span style="font-size:9.5px;font-weight:700;color:#0052FF;background:#EFF4FF;padding:1px 5px;border-radius:4px;">${t.category || 'SPOT'}</span>
                   </div>
                   <div style="font-size: 11.5px; color: #9CA3AF; margin-top:2px;">Vol ${volStr}</div>
                 </div>
               </div>
 
-              <div style="display: flex; align-items: center; gap: 12px; flex-shrink:0;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-shrink:0;">
                 <div style="text-align: right;">
                   <div class="mono" style="font-size: 15px; font-weight: 800; color: #111827;">${rawUsdtPrice}</div>
                   <div style="font-size: 11.5px; color: #6B7280;">${currSym}${formattedPrice} <span class="mono ${isUp ? 'positive' : 'negative'}" style="font-weight:700;color:${isUp ? '#00B87C' : '#F6465D'};">${chgStr}</span></div>
                 </div>
-                <button type="button" onclick="App.toggleFavoritePair('${t.symbol}', event)" style="width:30px;height:30px;border-radius:50%;background:${isFav ? '#FEF3C7' : '#F3F4F6'};border:none;cursor:pointer;color:${isFav ? '#F59E0B' : '#9CA3AF'};font-size:15px;display:inline-flex;align-items:center;justify-content:center;" aria-label="Favorite ${t.symbol}">
+                <button type="button" onclick="event.stopPropagation(); App.setMarketPreviewPair('${t.symbol}')" style="height:28px;padding:0 9px;border-radius:8px;background:#EFF4FF;border:1px solid #DBEAFE;color:#0052FF;font-size:11px;font-weight:700;cursor:pointer;" title="Load live chart">Chart</button>
+                <button type="button" onclick="App.toggleFavoritePair('${t.symbol}', event)" style="width:28px;height:28px;border-radius:50%;background:${isFav ? '#FEF3C7' : '#F3F4F6'};border:none;cursor:pointer;color:${isFav ? '#F59E0B' : '#9CA3AF'};font-size:14px;display:inline-flex;align-items:center;justify-content:center;" aria-label="Favorite ${t.symbol}">
                   ${isFav ? '★' : '☆'}
                 </button>
               </div>
@@ -1672,8 +1718,8 @@ const App = {
   setMarketCategory(cat) {
     this.state.selectedCategory = cat;
 
-    // Update Market Page category tab buttons and filter pills
-    document.querySelectorAll('.cat-tab-btn, .av-market-cat-tab, .market-filter-pill').forEach(btn => {
+    // Update Market Page category tab buttons, filter pills, and Home category pills
+    document.querySelectorAll('.cat-tab-btn, .av-market-cat-tab, .market-filter-pill, .av-home-cat-pill').forEach(btn => {
       const btnCat = btn.getAttribute('data-cat');
       const onclickStr = btn.getAttribute('onclick') || '';
       const matched = btnCat ? btnCat === cat : onclickStr.includes(`'${cat}'`);
@@ -1694,7 +1740,43 @@ const App = {
       if (tabEl) tabEl.classList.add('active');
     }
 
+    // Automatically select top pair & quick strip when switching between asset classes
+    if (['CRYPTO', 'FOREX', 'FUTURES', 'STOCKS', 'ALL'].includes(cat)) {
+      const catTickers = cat === 'ALL'
+        ? (this.state.tickers || [])
+        : (this.state.tickers || []).filter(t => (t.category || '').toUpperCase() === cat);
+      if (catTickers.length) {
+        const currentInCat = catTickers.some(t => t.symbol === this.state.marketOverviewSymbol);
+        if (!currentInCat || cat !== 'ALL') {
+          this.state.marketOverviewSymbol = catTickers[0].symbol;
+        }
+      }
+      this.renderMarketQuickPairs(cat);
+      if (document.getElementById('market-overview-chart-canvas') && this.state.currentView === 'market') {
+        this.updateMarketFeaturedBanner();
+        this.loadMarketKlines();
+      }
+    }
+
     this.renderMarketList();
+  },
+
+  renderMarketQuickPairs(cat = 'CRYPTO') {
+    const strip = document.getElementById('mkt-preview-quick-pairs');
+    if (!strip) return;
+    let pairs = [];
+    if (['CRYPTO', 'FOREX', 'FUTURES', 'STOCKS'].includes(cat)) {
+      pairs = (this.state.tickers || [])
+        .filter(t => (t.category || '').toUpperCase() === cat)
+        .slice(0, 6)
+        .map(t => t.symbol);
+    } else {
+      pairs = ['BTC/USDT', 'ETH/USDT', 'EUR/USD', 'GOLD/USD', 'AAPL/USD', 'NVDA/USD'];
+    }
+    const activeSym = this.state.marketOverviewSymbol || pairs[0] || 'BTC/USDT';
+    strip.innerHTML = pairs.map(p => `
+      <button type="button" class="mkt-preview-chip ${p === activeSym ? 'active' : ''}" data-pair="${p}" onclick="App.setMarketPreviewPair('${p}')">${p}</button>
+    `).join('');
   },
 
   handleGlobalSearch(query) {
@@ -1755,30 +1837,41 @@ const App = {
     if (!this.state.marketOverviewSymbol) {
       this.state.marketOverviewSymbol = this.state.selectedMarket || 'BTC/USDT';
     }
+    const activeTicker = (this.state.tickers || []).find(t => t.symbol === this.state.marketOverviewSymbol);
+    const activeCat = activeTicker?.category || this.state.selectedCategory || 'CRYPTO';
+    this.renderMarketQuickPairs(['CRYPTO', 'FOREX', 'FUTURES', 'STOCKS'].includes(activeCat) ? activeCat : 'CRYPTO');
+
     const canvas = document.getElementById('market-overview-chart-canvas');
-    if (canvas) {
-      if (!this.marketChart) {
+    if (canvas && typeof FinancialChart === 'function') {
+      if (!this.marketChart || this.marketChart.canvas !== canvas) {
         this.marketChart = new FinancialChart(canvas);
       } else {
         this.marketChart.resize();
         this.marketChart.render();
       }
+      const seedPrice = activeTicker && Number(activeTicker.price) > 0 ? Number(activeTicker.price) : 77915.82;
+      if (!this.marketChart.candles || !this.marketChart.candles.length) {
+        this.marketChart.setData(this.marketChart.generateSeedCandles(seedPrice), this.state.marketChartType || 'candlestick');
+      }
     }
     this.updateMarketFeaturedBanner();
     await this.loadMarketKlines();
     this.renderMarketList();
+    this.startLiveChartTicker();
   },
 
   updateMarketFeaturedBanner() {
     const sym = this.state.marketOverviewSymbol || 'BTC/USDT';
     const ticker = this.state.tickers.find(t => t.symbol === sym) || {
       symbol: sym,
+      category: 'CRYPTO',
       price: 77915.82,
       change_24h: 1.63,
       volume_24h: 142000000
     };
     const isUp = (Number(ticker.change_24h) || 0) >= 0;
     const symEl = document.getElementById('mkt-preview-sym');
+    const catEl = document.getElementById('mkt-preview-cat');
     const badgeEl = document.getElementById('mkt-preview-badge');
     const priceEl = document.getElementById('mkt-preview-price');
     const highEl = document.getElementById('mkt-preview-high');
@@ -1787,16 +1880,18 @@ const App = {
 
     const currSym = this.getDisplayCurrency().symbol;
     if (symEl) symEl.textContent = sym;
+    if (catEl) catEl.textContent = String(ticker.category || 'MARKET').toUpperCase();
     if (badgeEl) {
       badgeEl.className = `badge ${isUp ? 'badge-positive' : 'badge-negative'}`;
       badgeEl.textContent = `${isUp ? '+' : ''}${Number(ticker.change_24h).toFixed(2)}%`;
     }
     if (priceEl) {
       priceEl.textContent = `${currSym}${this.formatPrice(ticker.price)}`;
-      priceEl.style.color = isUp ? '#00c087' : '#ff4d4f';
+      priceEl.style.color = isUp ? '#00B87C' : '#F6465D';
     }
-    const highVal = (ticker.price * 1.025).toFixed(2);
-    const lowVal = (ticker.price * 0.978).toFixed(2);
+    const dec = Number(ticker.price) >= 100 ? 2 : 4;
+    const highVal = Number(ticker.high_24h || (Number(ticker.price) * 1.025)).toFixed(dec);
+    const lowVal = Number(ticker.low_24h || (Number(ticker.price) * 0.978)).toFixed(dec);
     if (highEl) highEl.textContent = `${currSym}${this.formatPrice(highVal)}`;
     if (lowEl) lowEl.textContent = `${currSym}${this.formatPrice(lowVal)}`;
     if (tradeBtn) tradeBtn.textContent = `Trade ${sym} →`;
@@ -1832,7 +1927,7 @@ const App = {
   setMarketChartInterval(interval) {
     this.state.marketChartInterval = interval;
     document.querySelectorAll('.mkt-tf-btn').forEach(b => {
-      b.classList.toggle('active', b.getAttribute('data-tf') === interval);
+      if (b.dataset.tf) b.classList.toggle('active', b.getAttribute('data-tf') === interval);
     });
     this.loadMarketKlines();
   },
@@ -1852,6 +1947,38 @@ const App = {
     if (this.marketChart) {
       this.marketChart.setChartType(type);
     }
+  },
+
+  startLiveChartTicker() {
+    if (this._liveChartTickTimer) clearInterval(this._liveChartTickTimer);
+    this._liveChartTickTimer = setInterval(() => {
+      if (document.hidden || !this.state.tickers || !this.state.tickers.length) return;
+      const view = this.state.currentView;
+      if (view !== 'market' && view !== 'futures') return;
+
+      const targetSym = view === 'market' ? (this.state.marketOverviewSymbol || 'BTC/USDT') : (this.state.selectedMarket || 'BTC/USDT');
+      const ticker = this.state.tickers.find(t => t.symbol === targetSym);
+      if (!ticker) return;
+
+      const isForex = ticker.category === 'FOREX';
+      const stepScale = isForex ? 0.00028 : 0.0011;
+      const jitter = (Math.random() - 0.495) * stepScale;
+      const nextPrice = Math.max(0.0001, Number(ticker.price) * (1 + jitter));
+      ticker.price = nextPrice;
+
+      if (view === 'market' && this.marketChart) {
+        const tfSec = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400 }[this.state.marketChartInterval || '5m'] || 300;
+        this.marketChart.updateLiveCandleTick(nextPrice, Math.random() * 14000, tfSec);
+        const priceEl = document.getElementById('mkt-preview-price');
+        if (priceEl) {
+          priceEl.textContent = `${this.getDisplayCurrency().symbol}${this.formatPrice(nextPrice)}`;
+        }
+      } else if (view === 'futures' && this.chart) {
+        const tfSec = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 }[this.state.chartInterval || '1h'] || 3600;
+        this.chart.updateLiveCandleTick(nextPrice, Math.random() * 18000, tfSec);
+        this.updateFuturesBanner();
+      }
+    }, 1500);
   },
 
   tradePreviewPair() {
@@ -1897,6 +2024,7 @@ const App = {
     await this.loadKlines();
     await this.loadOrderBook();
     await this.loadPositions();
+    this.startLiveChartTicker();
   },
 
   updateFuturesBanner() {
@@ -3644,10 +3772,11 @@ const App = {
     if (!container) return;
     if (!this.state.activeSignals.length) {
       container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-dim);">No active signals published currently.</div>`;
+      if (this.state.currentView === 'signals') this.initSignalsTerminal();
       return;
     }
     container.innerHTML = this.state.activeSignals.map(s => {
-      const isBuy = s.direction === 'BUY' || s.direction === 'LONG';
+      const isBuy = ['BUY', 'LONG', 'UP'].includes(String(s.direction || 'BUY').toUpperCase());
       const dirBadge = isBuy ? 'badge-positive' : 'badge-negative';
       const isLive = Boolean(s.is_live);
       const isExpired = Boolean(s.is_expired);
@@ -3657,11 +3786,12 @@ const App = {
       const timerText = isLive ? `<span class="signal-live-countdown" data-expires-at="${expiresMs}" style="color:#ff4757;font-weight:900;letter-spacing:.2px;">⏳ Expires in: ${this.formatCountdown(secondsLeft)}</span>` : (isExpired ? `<span style="color:var(--text-muted);">⌛ Signal Expired</span>` : '');
       const slotLabel = s.slot_label || 'Global Signal';
       return `<div class="card" style="margin-bottom:10px;border:1px solid #E5E9F0;border-left:4px solid ${isLive ? '#00B87C' : '#0052FF'};border-radius:12px;background:#FFFFFF;box-shadow:0 2px 8px rgba(17,24,39,0.04);">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:9px;"><div><div style="font-size:15px;font-weight:900;color:#111827;">${s.symbol}</div><div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap;"><span class="badge ${dirBadge}">${s.direction}</span><span class="badge badge-demo">🌍 Worldwide</span><span class="badge badge-demo">${slotLabel}</span></div></div><span class="badge badge-positive">+${s.profit_percentage || 2.5}%</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:9px;"><div><div style="font-size:15px;font-weight:900;color:#111827;">${s.symbol}</div><div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap;"><span class="badge ${dirBadge}">${s.direction}</span><span class="badge badge-demo">🌍 Worldwide</span><span class="badge badge-demo">${slotLabel}</span></div></div><span class="badge badge-positive">+${s.profit_percentage || 1.67}%</span></div>
         <div style="display:flex;justify-content:space-between;align-items:center;background:#F8FAFC;border:1px solid #EEF1F6;padding:10px 12px;border-radius:9px;font-size:12px;"><span style="color:#6B7280;">Validity: ${Number(s.duration_minutes || 15)} min</span><div>${timerText}</div></div>
       </div>`;
     }).join('');
     this.startSignalLiveCountdown();
+    if (this.state.currentView === 'signals') this.initSignalsTerminal();
   },
 
   openCopyModal(planId, planName) {
@@ -4197,10 +4327,10 @@ const App = {
         `;
       } else {
         container.innerHTML = this.state.signals.map(s => {
-          const isBuy = s.direction === 'BUY' || s.direction === 'LONG';
+          const isBuy = ['BUY', 'LONG', 'UP'].includes(String(s.direction || 'BUY').toUpperCase());
           const dirBadge = isBuy ? 'badge-positive' : 'badge-negative';
           const isTesting = Boolean(s.is_testing || s.no_profit || String(s.id || '').startsWith('sig_test_'));
-          const profitPct = isTesting ? 0 : (s.profit_percentage || 2.5);
+          const profitPct = isTesting ? 0 : (s.profit_percentage || 1.67);
           const hasUsed = Boolean(s.has_used || s.has_confirmed);
           const isExpired = Boolean(s.is_expired || (s.time_left_seconds !== undefined && s.time_left_seconds <= 0 && s.status === 'PUBLISHED'));
           const isScheduled = Boolean(s.is_scheduled || s.status === 'SCHEDULED');
@@ -4377,7 +4507,273 @@ const App = {
     }
 
     this.renderHomeSignals();
+    if (this.state.currentView === 'signals') this.initSignalsTerminal();
     if (this.state.adminPreviewUserId) this.ensureAdminUserDepositAction();
+  },
+
+  /* Live Directional Signal Trading Terminal (#view-signals) */
+  getSignalTerminalPriceDecimals(sym, price) {
+    const s = String(sym || '').toUpperCase();
+    if (s.includes('EUR/') || s.includes('GBP/') || s.includes('AUD/') || s.includes('/CHF')) return 4;
+    if (Number(price) >= 1000) return 2;
+    if (Number(price) >= 10) return 2;
+    return 4;
+  },
+
+  computeSignalTerminalLevels(sig) {
+    const sym = String(sig?.symbol || 'BTC/USDT').toUpperCase();
+    const dirRaw = String(sig?.direction || 'BUY').toUpperCase();
+    const isBuy = ['BUY', 'LONG', 'UP'].includes(dirRaw);
+    const ticker = (this.state.tickers || []).find(t => t.symbol.toUpperCase() === sym);
+    const savedEntry = Number(sig?.entry_price_min || sig?.entry_price_max || 0);
+    const baseEntry = savedEntry > 0 ? savedEntry : (ticker && Number(ticker.price) > 0 ? Number(ticker.price) : 77915.82);
+    const isForex = ticker?.category === 'FOREX' || sym.includes('EUR/') || sym.includes('GBP/') || sym.includes('AUD/');
+    const pct = Math.max(0.5, Number(sig?.profit_percentage || 1.67));
+    const step1Pct = isForex ? Math.max(0.0025, pct * 0.0022) : Math.max(0.0065, pct * 0.005);
+    const step2Pct = isForex ? Math.max(0.0048, pct * 0.0042) : Math.max(0.0125, pct * 0.0095);
+    const slPct = isForex ? 0.003 : 0.0075;
+
+    const tp1Saved = Number(sig?.target_price_1 || 0);
+    const tp2Saved = Number(sig?.target_price_2 || 0);
+    const slSaved = Number(sig?.stop_loss || 0);
+
+    const tp1 = tp1Saved > 0 ? tp1Saved : (isBuy ? baseEntry * (1 + step1Pct) : baseEntry * (1 - step1Pct));
+    const tp2 = tp2Saved > 0 ? tp2Saved : (isBuy ? baseEntry * (1 + step2Pct) : baseEntry * (1 - step2Pct));
+    const sl = slSaved > 0 ? slSaved : (isBuy ? baseEntry * (1 - slPct) : baseEntry * (1 + slPct));
+
+    return { sym, isBuy, isForex, entry: baseEntry, tp1, tp2, sl, pct };
+  },
+
+  setSignalTerminalSignal(sigId) {
+    this.state.activeTerminalSignalId = sigId;
+    this.initSignalsTerminal();
+  },
+
+  setSignalChartInterval(tf) {
+    this.state.signalChartInterval = tf || '1m';
+    document.querySelectorAll('.sig-tf-btn').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-tf') === this.state.signalChartInterval);
+    });
+    this.initSignalsTerminal();
+  },
+
+  initSignalsTerminal() {
+    const canvas = document.getElementById('signals-live-chart-canvas');
+    if (!canvas || typeof FinancialChart !== 'function') return;
+
+    if (!this.signalChart || this.signalChart.canvas !== canvas) {
+      this.signalChart = new FinancialChart(canvas);
+    } else {
+      this.signalChart.resize();
+    }
+
+    const pool = (Array.isArray(this.state.signals) && this.state.signals.length)
+      ? this.state.signals
+      : (Array.isArray(this.state.activeSignals) ? this.state.activeSignals : []);
+    const liveCandidates = pool.filter(s => !s.is_expired && !s.is_scheduled && (s.status === 'PUBLISHED' || s.status === 'ACTIVE'));
+    const allCandidates = liveCandidates.length ? liveCandidates : pool;
+
+    let activeSig = allCandidates.find(s => s.id === this.state.activeTerminalSignalId) || allCandidates[0] || null;
+    if (activeSig) this.state.activeTerminalSignalId = activeSig.id;
+
+    // Render selector pills if more than 1 signal exists
+    const pillsEl = document.getElementById('sig-term-selector-pills');
+    if (pillsEl) {
+      if (allCandidates.length > 1) {
+        pillsEl.style.display = 'flex';
+        pillsEl.innerHTML = allCandidates.map(s => {
+          const isBuy = ['BUY', 'LONG', 'UP'].includes(String(s.direction || 'BUY').toUpperCase());
+          const selected = activeSig && s.id === activeSig.id;
+          return `<button type="button" class="av-sig-sel-pill ${selected ? 'active' : ''}" onclick="App.setSignalTerminalSignal('${this.escapeHtml(s.id)}')">${this.escapeHtml(s.symbol)} ${isBuy ? '▲ UP' : '▼ DOWN'}</button>`;
+        }).join('');
+      } else {
+        pillsEl.style.display = 'none';
+        pillsEl.innerHTML = '';
+      }
+    }
+
+    const fallbackSig = activeSig || {
+      id: 'standby',
+      symbol: 'BTC/USDT',
+      direction: 'BUY',
+      profit_percentage: 1.67,
+      duration_minutes: 15,
+      status: 'STANDBY'
+    };
+
+    const isLive = Boolean(activeSig && !activeSig.is_expired && !activeSig.is_scheduled && (activeSig.status === 'PUBLISHED' || activeSig.status === 'ACTIVE'));
+    const levels = this.computeSignalTerminalLevels(fallbackSig);
+    const dec = this.getSignalTerminalPriceDecimals(levels.sym, levels.entry);
+    const currSym = '$';
+
+    const dotEl = document.getElementById('sig-term-pulse-dot');
+    const symEl = document.getElementById('sig-term-symbol');
+    const dirEl = document.getElementById('sig-term-dir-badge');
+    const statEl = document.getElementById('sig-term-status-pill');
+    const entryEl = document.getElementById('sig-term-entry');
+    const tp1El = document.getElementById('sig-term-tp1');
+    const tp2El = document.getElementById('sig-term-tp2');
+    const slEl = document.getElementById('sig-term-sl');
+    const actionWrap = document.getElementById('sig-term-action-wrap');
+
+    if (dotEl) dotEl.className = `av-sig-pulse-dot ${isLive ? 'is-live' : 'is-waiting'}`;
+    if (symEl) symEl.textContent = levels.sym;
+    if (dirEl) {
+      dirEl.className = `badge ${levels.isBuy ? 'badge-positive' : 'badge-negative'}`;
+      dirEl.textContent = levels.isBuy ? '▲ UP / BUY (LONG)' : '▼ DOWN / SELL (SHORT)';
+    }
+    if (statEl) {
+      if (isLive) {
+        statEl.style.background = '#ECFDF5';
+        statEl.style.color = '#059669';
+        statEl.textContent = 'LIVE EXECUTING';
+      } else {
+        statEl.style.background = '#EFF4FF';
+        statEl.style.color = '#0052FF';
+        statEl.textContent = 'STANDBY • NEXT SESSION';
+      }
+    }
+    if (entryEl) entryEl.textContent = `${currSym}${levels.entry.toFixed(dec)}`;
+    if (tp1El) tp1El.textContent = `${currSym}${levels.tp1.toFixed(dec)}`;
+    if (tp2El) tp2El.textContent = `${currSym}${levels.tp2.toFixed(dec)}`;
+    if (slEl) slEl.textContent = `${currSym}${levels.sl.toFixed(dec)}`;
+
+    if (actionWrap) {
+      const sigData = this.state.signalsData || {};
+      const hasUsed = Boolean(activeSig && (activeSig.has_used || activeSig.has_confirmed));
+      const isTest = Boolean(activeSig && (activeSig.is_testing || activeSig.no_profit || String(activeSig.id || '').startsWith('sig_test_')));
+      if (activeSig && isLive && !isTest) {
+        actionWrap.style.display = 'flex';
+        if (hasUsed) {
+          actionWrap.innerHTML = `<span class="badge badge-positive" style="padding:7px 12px;">✅ Confirmed (+${levels.pct}%)</span>`;
+        } else if (sigData.is_eligible) {
+          actionWrap.innerHTML = `<button type="button" class="btn-primary" style="padding:8px 14px;font-size:12px;font-weight:800;border-radius:999px;" data-alpha-action="signal:${this.escapeHtml(activeSig.id)}" onclick="App.confirmSignalDirectly('${this.escapeHtml(activeSig.id)}')">⚡ Confirm Signal (+${levels.pct}%)</button>`;
+        } else if (sigData.needs_future_transfer) {
+          actionWrap.innerHTML = `<button type="button" class="btn-primary" style="padding:8px 14px;font-size:12px;font-weight:700;border-radius:999px;" onclick="App.navigate('transfer')">⇄ Transfer to Future</button>`;
+        } else {
+          actionWrap.innerHTML = `<button type="button" class="btn-secondary" style="padding:8px 14px;font-size:12px;font-weight:700;border-radius:999px;" onclick="App.openDepositModal()">🔒 Deposit 20 USDT</button>`;
+        }
+      } else {
+        actionWrap.innerHTML = '';
+        actionWrap.style.display = 'none';
+      }
+    }
+
+    // Build directional historical candles leading cleanly into current live progress
+    const tfSec = { '1m': 60, '5m': 300, '15m': 900 }[this.state.signalChartInterval || '1m'] || 60;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const totalCandles = 46;
+    const preSignalCount = isLive ? 34 : totalCandles;
+    const candles = [];
+    let p = levels.entry * (levels.isBuy ? 0.996 : 1.004);
+    const volScale = levels.isForex ? 0.0005 : 0.0018;
+
+    for (let i = 0; i < totalCandles; i++) {
+      const t = nowSec - (totalCandles - 1 - i) * tfSec;
+      const open = p;
+      let close;
+      if (i < preSignalCount) {
+        // Pre-signal consolidation converging cleanly toward entry price
+        const pull = (levels.entry - open) * 0.16;
+        const wiggle = Math.sin(i * 0.7) * levels.entry * volScale * 0.55;
+        close = Math.max(levels.entry * 0.5, open + pull + wiggle);
+      } else {
+        // Live window candles trend strictly in the signal direction
+        const liveStepIdx = i - preSignalCount + 1;
+        const liveStepsTotal = Math.max(1, totalCandles - preSignalCount);
+        const stepProgress = liveStepIdx / liveStepsTotal;
+        const targetNow = levels.entry + (levels.tp1 - levels.entry) * (0.85 * stepProgress);
+        const jitter = (levels.isBuy ? 1 : -1) * Math.abs(Math.sin(i * 1.1)) * levels.entry * volScale * 0.35;
+        close = targetNow + jitter;
+      }
+      const wickScale = levels.entry * volScale * 0.45;
+      const high = Math.max(open, close) + Math.abs(Math.cos(i * 0.9)) * wickScale;
+      const low = Math.min(open, close) - Math.abs(Math.sin(i * 1.3)) * wickScale;
+      candles.push({
+        time: t,
+        open: Number(open.toFixed(dec)),
+        high: Number(high.toFixed(dec)),
+        low: Number(low.toFixed(dec)),
+        close: Number(close.toFixed(dec)),
+        volume: Math.floor(180000 + Math.abs(Math.sin(i)) * 420000)
+      });
+      p = close;
+    }
+
+    this.state._activeSignalTerminalMeta = {
+      signal: fallbackSig,
+      isLive,
+      levels,
+      dec,
+      tfSec,
+      lastPrice: candles[candles.length - 1].close
+    };
+
+    this.signalChart.setData(candles, 'candlestick');
+    this.signalChart.setSignalOverlay({
+      direction: levels.isBuy ? 'BUY' : 'SELL',
+      entry: levels.entry,
+      tp1: levels.tp1,
+      tp2: levels.tp2,
+      sl: levels.sl
+    });
+
+    this.tickSignalsTerminalChart();
+    if (this.state.signalLiveChartTimer) clearInterval(this.state.signalLiveChartTimer);
+    this.state.signalLiveChartTimer = setInterval(() => this.tickSignalsTerminalChart(), 1200);
+  },
+
+  tickSignalsTerminalChart() {
+    if (this.state.currentView !== 'signals' || !this.signalChart || !this.state._activeSignalTerminalMeta) return;
+    const meta = this.state._activeSignalTerminalMeta;
+    const { signal, isLive, levels, dec, tfSec } = meta;
+
+    let nextPrice = meta.lastPrice;
+    if (isLive) {
+      const rawPub = String(signal.published_at || signal.scheduled_at || '');
+      const rawExp = String(signal.expires_at || '');
+      const pubMs = rawPub ? Date.parse(rawPub.replace(' ', 'T') + (rawPub.endsWith('Z') ? '' : 'Z')) : (Date.now() - 120000);
+      const expMs = rawExp ? Date.parse(rawExp.replace(' ', 'T') + (rawExp.endsWith('Z') ? '' : 'Z')) : (Date.now() + 780000);
+      const totalWindow = Math.max(60000, (expMs - pubMs) || 900000);
+      const progress = Math.max(0.05, Math.min(0.98, (Date.now() - pubMs) / totalWindow));
+
+      // Directional trajectory: strictly moves toward TP1 / TP2 along signal direction
+      const desiredTarget = levels.entry + (levels.tp2 - levels.entry) * (0.28 + 0.68 * progress);
+      const dirSign = levels.isBuy ? 1 : -1;
+      const stepPull = (desiredTarget - nextPrice) * 0.22;
+      const microNoise = dirSign * Math.abs(Math.random() * 0.00055) * levels.entry;
+      nextPrice = nextPrice + stepPull + (Math.random() > 0.28 ? microNoise : -microNoise * 0.2);
+
+      // Guardrail: never drift below SL (for BUY) or above SL (for SELL)
+      if (levels.isBuy && nextPrice < levels.entry) nextPrice = levels.entry + Math.abs(microNoise);
+      if (!levels.isBuy && nextPrice > levels.entry) nextPrice = levels.entry - Math.abs(microNoise);
+
+      const secLeft = Math.max(0, Math.floor((expMs - Date.now()) / 1000));
+      const cdEl = document.getElementById('sig-term-countdown');
+      if (cdEl) cdEl.textContent = secLeft > 0 ? `⏳ ${this.formatCountdown(secLeft)}` : 'Session Ending';
+    } else {
+      // Gentle standby micro-consolidation near entry
+      const wiggle = (Math.random() - 0.5) * levels.entry * (levels.isForex ? 0.00018 : 0.0006);
+      nextPrice = nextPrice + wiggle + (levels.entry - nextPrice) * 0.12;
+      const cdEl = document.getElementById('sig-term-countdown');
+      if (cdEl) cdEl.textContent = '4 PM / 8 PM PKT';
+    }
+
+    meta.lastPrice = nextPrice;
+    this.signalChart.updateLiveCandleTick(nextPrice, Math.random() * 24000, tfSec);
+
+    const priceEl = document.getElementById('sig-term-price');
+    const moveEl = document.getElementById('sig-term-move-pct');
+    const pctMove = levels.entry > 0 ? ((nextPrice - levels.entry) / levels.entry) * 100 : 0;
+    const isPositiveMove = pctMove >= 0;
+    if (priceEl) {
+      priceEl.textContent = `$${nextPrice.toFixed(dec)}`;
+      priceEl.style.color = isLive ? (levels.isBuy ? '#00B87C' : '#F6465D') : '#0F172A';
+    }
+    if (moveEl) {
+      moveEl.textContent = `${isPositiveMove ? '+' : ''}${pctMove.toFixed(2)}%`;
+      moveEl.style.color = isPositiveMove ? '#00B87C' : '#F6465D';
+    }
   },
 
   formatCountdown(seconds) {
@@ -4485,10 +4881,10 @@ const App = {
     }
 
     container.innerHTML = signals.slice(0, 3).map(s => {
-      const isBuy = s.direction === 'BUY' || s.direction === 'LONG';
+      const isBuy = ['BUY', 'LONG', 'UP'].includes(String(s.direction || 'BUY').toUpperCase());
       const dirBadge = isBuy ? 'badge-positive' : 'badge-negative';
       const isTesting = Boolean(s.is_testing || s.no_profit || String(s.id || '').startsWith('sig_test_'));
-      const profitPct = isTesting ? 0 : (s.profit_percentage || 2.5);
+      const profitPct = isTesting ? 0 : (s.profit_percentage || 1.67);
       const hasUsed = Boolean(s.has_used || s.has_confirmed);
       const isExpired = Boolean(s.is_expired || (s.time_left_seconds !== undefined && s.time_left_seconds <= 0 && s.status === 'PUBLISHED'));
       const isScheduled = Boolean(s.is_scheduled || s.status === 'SCHEDULED');
@@ -4609,7 +5005,7 @@ const App = {
     }
 
     const isTestingModal = Boolean(s.is_testing || s.no_profit || String(s.id || '').startsWith('sig_test_'));
-    const profitPct = isTestingModal ? 0 : (s.profit_percentage || 2.5);
+    const profitPct = isTestingModal ? 0 : (s.profit_percentage || 1.67);
     const profitBadge = document.getElementById('exec-sig-profit-badge');
     if (profitBadge) profitBadge.textContent = isTestingModal ? '🧪 TESTING • NO PROFIT' : `+${profitPct}% Guaranteed Profit`;
     const profitRate = document.getElementById('exec-sig-profit-rate');
@@ -4646,7 +5042,7 @@ const App = {
     if (!s) return;
     const amount = parseFloat(document.getElementById('exec-sig-amount').value) || 20;
     const isTestingCalc = Boolean(s.is_testing || s.no_profit || String(s.id || '').startsWith('sig_test_'));
-    const profitPct = isTestingCalc ? 0 : (s.profit_percentage || 2.5);
+    const profitPct = isTestingCalc ? 0 : (s.profit_percentage || 1.67);
     const profit = (amount * profitPct) / 100;
     const total = amount + profit;
 
@@ -6770,53 +7166,41 @@ const App = {
   fillSignalPreset(sym) {
     const symEl = document.getElementById('adm-sig-symbol');
     const dirEl = document.getElementById('adm-sig-direction');
-    const minEl = document.getElementById('adm-sig-entry-min');
-    const maxEl = document.getElementById('adm-sig-entry-max');
-    const tp1El = document.getElementById('adm-sig-tp1');
-    const tp2El = document.getElementById('adm-sig-tp2');
-    const slEl = document.getElementById('adm-sig-sl');
     const pctEl = document.getElementById('adm-sig-profit-pct');
-
-    if (sym === 'BTC') {
-      if (symEl) symEl.value = 'BTC/USDT';
-      if (dirEl) dirEl.value = 'BUY';
-      if (minEl) minEl.value = '66200.00';
-      if (maxEl) maxEl.value = '66500.00';
-      if (tp1El) tp1El.value = '69500.00';
-      if (tp2El) tp2El.value = '72000.00';
-      if (slEl) slEl.value = '64800.00';
-      if (pctEl) pctEl.value = '5.2';
-    } else if (sym === 'ETH') {
-      if (symEl) symEl.value = 'ETH/USDT';
-      if (dirEl) dirEl.value = 'BUY';
-      if (minEl) minEl.value = '3450.00';
-      if (maxEl) maxEl.value = '3480.00';
-      if (tp1El) tp1El.value = '3680.00';
-      if (tp2El) tp2El.value = '3800.00';
-      if (slEl) slEl.value = '3350.00';
-      if (pctEl) pctEl.value = '4.8';
-    } else if (sym === 'SOL') {
-      if (symEl) symEl.value = 'SOL/USDT';
-      if (dirEl) dirEl.value = 'BUY';
-      if (minEl) minEl.value = '148.50';
-      if (maxEl) maxEl.value = '151.00';
-      if (tp1El) tp1El.value = '165.00';
-      if (tp2El) tp2El.value = '175.00';
-      if (slEl) slEl.value = '141.00';
-      if (pctEl) pctEl.value = '6.5';
-    } else if (sym === 'GOLD') {
-      if (symEl) symEl.value = 'GOLD/USD';
-      if (dirEl) dirEl.value = 'BUY';
-      if (minEl) minEl.value = '2420.00';
-      if (maxEl) maxEl.value = '2430.00';
-      if (tp1El) tp1El.value = '2485.00';
-      if (tp2El) tp2El.value = '2520.00';
-      if (slEl) slEl.value = '2390.00';
-      if (pctEl) pctEl.value = '4.2';
-    }
+    const map = {
+      BTC: 'BTC/USDT',
+      ETH: 'ETH/USDT',
+      SOL: 'SOL/USDT',
+      EUR: 'EUR/USD',
+      GBP: 'GBP/USD',
+      GOLD: 'GOLD/USD',
+      OIL: 'OIL/USD',
+      NVDA: 'NVDA/USD',
+      AAPL: 'AAPL/USD',
+      TSLA: 'TSLA/USD'
+    };
+    const resolved = map[String(sym || '').toUpperCase()] || (String(sym || '').includes('/') ? sym : 'BTC/USDT');
+    if (symEl) symEl.value = resolved;
+    if (dirEl && !dirEl.value) dirEl.value = 'BUY';
+    if (pctEl) pctEl.value = '1.67';
     this.syncAdminSignalDirectionSelect();
     if (pctEl) this.syncAdminSignalProfitInput(pctEl.value);
-    this.toast(`Signal preset loaded: ${sym}`, 'info');
+    this.updateAdminSignalPreview();
+    this.toast(`Signal preset loaded: ${resolved} (+1.67% / 30d 2×)`, 'info');
+  },
+
+  updateAdminSignalPreview() {
+    const sym = document.getElementById('adm-sig-symbol')?.value || 'BTC/USDT';
+    const dir = (document.getElementById('adm-sig-direction')?.value || 'BUY').toUpperCase();
+    const pct = Math.max(0.5, parseFloat(document.getElementById('adm-sig-profit-pct')?.value) || 1.67);
+    const levels = this.computeSignalTerminalLevels({ symbol: sym, direction: dir, profit_percentage: pct });
+    const dec = this.getSignalTerminalPriceDecimals(sym, levels.entry);
+    const eEl = document.getElementById('adm-sig-prev-entry');
+    const tEl = document.getElementById('adm-sig-prev-tp');
+    const sEl = document.getElementById('adm-sig-prev-sl');
+    if (eEl) eEl.textContent = `$${levels.entry.toFixed(dec)}`;
+    if (tEl) tEl.textContent = `$${levels.tp2.toFixed(dec)}`;
+    if (sEl) sEl.textContent = `$${levels.sl.toFixed(dec)}`;
   },
 
   setAdminSignalDirection(dir) {
@@ -6824,6 +7208,7 @@ const App = {
     const sel = document.getElementById('adm-sig-direction');
     if (sel) sel.value = val;
     this.syncAdminSignalDirectionSelect();
+    this.updateAdminSignalPreview();
   },
 
   syncAdminSignalDirectionSelect() {
@@ -6835,19 +7220,21 @@ const App = {
   },
 
   syncAdminSignalProfitSlider(val) {
-    const num = Math.max(0.5, parseFloat(val) || 2.5);
+    const num = Math.max(0.5, parseFloat(val) || 1.67);
     const input = document.getElementById('adm-sig-profit-pct');
     const readout = document.getElementById('adm-sig-profit-readout');
     if (input) input.value = String(num);
     if (readout) readout.textContent = `${num}%`;
+    this.updateAdminSignalPreview();
   },
 
   syncAdminSignalProfitInput(val) {
-    const num = Math.max(0.5, parseFloat(val) || 2.5);
+    const num = Math.max(0.5, parseFloat(val) || 1.67);
     const slider = document.getElementById('adm-sig-profit-slider');
     const readout = document.getElementById('adm-sig-profit-readout');
     if (slider) slider.value = String(Math.min(10, Math.max(0.5, num)));
     if (readout) readout.textContent = `${num}%`;
+    this.updateAdminSignalPreview();
   },
 
   /* Admin Unified User-Dashboard Light Theme */
@@ -6873,8 +7260,11 @@ const App = {
     const profitEl = document.getElementById('adm-sig-profit-pct');
     const customWrap = document.getElementById('adm-sig-custom-datetime-wrap');
 
-    // Preserve the admin-selected duration when switching signal presets; 15 minutes is only the initial default in the form.
-    if (profitEl && (!profitEl.value || parseFloat(profitEl.value) === 5.2)) profitEl.value = '2.5'; // Default 2.5% for doubling in 20 days
+    // Default 1.67% per session (2 daily sessions = 3.33%/day -> 2x deposit in 30 days)
+    if (profitEl && (!profitEl.value || parseFloat(profitEl.value) === 5.2 || parseFloat(profitEl.value) === 2.5)) {
+      profitEl.value = '1.67';
+      this.syncAdminSignalProfitInput('1.67');
+    }
 
     if (timeType === 'NOW') {
       if (dateTargetEl) dateTargetEl.value = 'LIVE';
@@ -6982,16 +7372,32 @@ const App = {
   },
 
   async loadAdminSignals() {
+    this.updateAdminSignalPreview();
     const res = await this.api('/admin/signals.php');
     const container = document.getElementById('adm-signals-list');
     if (!container) return;
 
-    if (!res.success || !res.data || !res.data.signals || !res.data.signals.length) {
+    const signalsList = (res.success && res.data && Array.isArray(res.data.signals)) ? res.data.signals : [];
+    const history = (res.success && res.data && Array.isArray(res.data.history)) ? res.data.history : [];
+    const activeCount = signalsList.filter(s => s.status === 'PUBLISHED' || s.status === 'ACTIVE').length;
+    const schedCount = signalsList.filter(s => s.status === 'SCHEDULED').length;
+    const totalPaid = signalsList.reduce((acc, s) => acc + Number(s.total_profit_paid || s.profit_paid || 0), 0);
+
+    const kpiLiveEl = document.getElementById('adm-sig-kpi-live');
+    const kpiSchedEl = document.getElementById('adm-sig-kpi-scheduled');
+    const kpiPaidEl = document.getElementById('adm-sig-kpi-paid');
+    const kpiArchEl = document.getElementById('adm-sig-kpi-archived');
+    if (kpiLiveEl) kpiLiveEl.textContent = String(activeCount);
+    if (kpiSchedEl) kpiSchedEl.textContent = String(schedCount);
+    if (kpiPaidEl) kpiPaidEl.textContent = `$${Number(res?.data?.total_profit_paid ?? totalPaid).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (kpiArchEl) kpiArchEl.textContent = String(history.length);
+
+    if (!signalsList.length) {
       container.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#6B7280;">No dispatched trading signals in history. Broadcast or schedule a new signal above.</td></tr>`;
       return;
     }
 
-    this.state.adminSignals = res.data.signals;
+    this.state.adminSignals = signalsList;
 
     // Admin-only presentation lanes. These are derived from the existing signal records
     // and do not alter creation, scheduling, eligibility, expiry, or execution logic.
@@ -7028,22 +7434,21 @@ const App = {
     const lane8 = document.getElementById('adm-signal-lane-8pm');
     const laneCustom = document.getElementById('adm-signal-lane-custom');
     const laneTest = document.getElementById('adm-signal-lane-test');
-    const daily4 = res.data.signals.filter(s => !s.is_testing && Number(s.daily_slot) === 1);
-    const daily8 = res.data.signals.filter(s => !s.is_testing && Number(s.daily_slot) === 2);
-    const custom = res.data.signals.filter(s => !s.is_testing && Number(s.daily_slot) !== 1 && Number(s.daily_slot) !== 2);
-    const testing = res.data.signals.filter(s => Boolean(s.is_testing || String(s.id || '').startsWith('sig_test_')));
+    const daily4 = signalsList.filter(s => !s.is_testing && Number(s.daily_slot) === 1);
+    const daily8 = signalsList.filter(s => !s.is_testing && Number(s.daily_slot) === 2);
+    const custom = signalsList.filter(s => !s.is_testing && Number(s.daily_slot) !== 1 && Number(s.daily_slot) !== 2);
+    const testing = signalsList.filter(s => Boolean(s.is_testing || String(s.id || '').startsWith('sig_test_')));
     if (lane4) lane4.innerHTML = daily4.length ? daily4.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>◷</span><strong>No 4 PM signal record</strong><small>The daily 4 PM slot will appear here when scheduled.</small></div>`;
     if (lane8) lane8.innerHTML = daily8.length ? daily8.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>◷</span><strong>No 8 PM signal record</strong><small>The daily 8 PM slot will appear here when scheduled.</small></div>`;
     if (laneCustom) laneCustom.innerHTML = custom.length ? custom.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>✦</span><strong>No custom signals</strong><small>Manual and custom scheduled broadcasts will appear here.</small></div>`;
     if (laneTest) laneTest.innerHTML = testing.length ? testing.slice(0, 3).map(renderSignalLaneCard).join('') : `<div class="signal-lane-empty"><span>T</span><strong>No testing signals</strong><small>Testing broadcasts are worldwide and cannot generate profit.</small></div>`;
 
-    const activeCount = res.data.signals.filter(s => s.status === 'PUBLISHED' || s.status === 'ACTIVE').length;
     const activePill = document.getElementById('adm-signals-active-pill');
     if (activePill) activePill.textContent = `Active Signals: ${activeCount}`;
     const countBadge = document.getElementById('adm-signals-count-badge');
-    if (countBadge) countBadge.textContent = `${res.data.signals.length} Signals`;
+    if (countBadge) countBadge.textContent = `${signalsList.length} Signals`;
 
-    container.innerHTML = res.data.signals.map(s => {
+    container.innerHTML = signalsList.map(s => {
       const isPublished = (s.status === 'PUBLISHED' || s.status === 'ACTIVE');
       const isScheduled = (s.status === 'SCHEDULED');
 
@@ -7057,7 +7462,7 @@ const App = {
         statusBadge = '<span class="badge" style="background:#F3F4F6; color:#6B7280; border:1px solid #E5E7EB;">EXPIRED</span>';
       }
 
-      const profitPct = s.profit_percentage || 2.5;
+      const profitPct = s.profit_percentage || 1.67;
       const slotLabel = s.slot_label || `Slot #${s.daily_slot || 1}`;
       const rawStart = String(s.scheduled_at || s.published_at || '');
       const startMs = rawStart ? Date.parse(rawStart.replace(' ', 'T') + (rawStart.endsWith('Z') ? '' : 'Z')) : NaN;
@@ -7105,7 +7510,6 @@ const App = {
       `;
     }).join('');
 
-    const history = Array.isArray(res.data.history) ? res.data.history : [];
     const histWrap = document.getElementById('adm-signal-history-wrap');
     if (histWrap) {
       histWrap.innerHTML = history.length ? `<div class="signal-history-table-head" style="display:grid;grid-template-columns:1.2fr .65fr 1.65fr .65fr .95fr;gap:10px;padding:10px 14px;background:#F8FAFC;border-bottom:1px solid #EEF1F6;color:#6B7280;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;"><div>Signal</div><div>Direction</div><div>Broadcast / Expired</div><div>Duration</div><div>Status / Action</div></div>` + history.map(h => {
@@ -7146,7 +7550,7 @@ const App = {
     if (symEl) symEl.value = signal.symbol || 'BTC/USDT';
     if (dirEl) dirEl.value = (signal.direction || 'BUY').toUpperCase();
     if (slotEl) slotEl.value = Number.isFinite(Number(signal.daily_slot)) ? String(Number(signal.daily_slot)) : '0';
-    if (profitEl) profitEl.value = signal.profit_percentage || 2.5;
+    if (profitEl) profitEl.value = signal.profit_percentage || 1.67;
     if (durEl) durEl.value = signal.duration_minutes || 15;
     if (statEl) statEl.value = (signal.status || 'SCHEDULED').toUpperCase();
 
@@ -7173,7 +7577,7 @@ const App = {
     const slotRaw = document.getElementById('edit-sig-slot')?.value ?? '';
     const parsedSlot = parseInt(slotRaw, 10);
     const slot = Number.isFinite(parsedSlot) ? Math.max(0, Math.min(2, parsedSlot)) : 1;
-    const profit = parseFloat(document.getElementById('edit-sig-profit')?.value) || 2.5;
+    const profit = parseFloat(document.getElementById('edit-sig-profit')?.value) || 1.67;
     const timeVal = document.getElementById('edit-sig-time')?.value;
     const duration = parseInt(document.getElementById('edit-sig-duration')?.value, 10) || 15;
     const status = document.getElementById('edit-sig-status')?.value;
@@ -7384,7 +7788,7 @@ const App = {
     const timezone = document.getElementById('adm-sig-timezone')?.value || 'GLOBAL — ALL COUNTRIES (PKT)';
     const broadcastTime = document.getElementById('adm-sig-broadcast-time')?.value || '';
     const duration = parseInt(document.getElementById('adm-sig-duration')?.value, 10) || 15;
-    const profitPct = parseFloat(document.getElementById('adm-sig-profit-pct')?.value) || 2.5;
+    const profitPct = parseFloat(document.getElementById('adm-sig-profit-pct')?.value) || 1.67;
     const slot = parseInt(document.getElementById('adm-sig-slot')?.value, 10) || 1;
     const timeSlot = document.getElementById('adm-sig-time-slot')?.value || '4 PM';
     const dateTarget = document.getElementById('adm-sig-date-target')?.value || 'TODAY';
@@ -7412,15 +7816,16 @@ const App = {
       } catch (e) {}
     }
 
+    const previewLevels = this.computeSignalTerminalLevels({ symbol, direction, profit_percentage: profitPct });
     const res = await this.api('/admin/signals.php', 'POST', {
       action: 'CREATE',
       symbol,
       direction,
-      entry_min: 0,
-      entry_max: 0,
-      tp1: 0,
-      tp2: 0,
-      sl: 0,
+      entry_min: previewLevels.entry,
+      entry_max: previewLevels.entry,
+      tp1: previewLevels.tp1,
+      tp2: previewLevels.tp2,
+      sl: previewLevels.sl,
       duration_minutes: duration,
       profit_percentage: isTesting ? 0 : profitPct,
       daily_slot: isTesting ? 0 : (signalMode === 'DAILY' ? (slot === 2 ? 2 : 1) : 0),
@@ -11158,9 +11563,13 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       badgeColor = '#0052FF';
     }
 
+    const ctaBtn = latest.type === 'SIGNAL_AVAILABLE'
+      ? `<button type="button" onclick="event.stopPropagation(); App.navigate('signals')" style="background: #0052FF; border: none; color: #FFFFFF; font-size: 11.5px; font-weight: 800; padding: 7px 13px; border-radius: 999px; cursor: pointer; white-space: nowrap; flex-shrink: 0;">Open Signal →</button>`
+      : `<button type="button" style="background: #EFF4FF; border: 1px solid #DBEAFE; color: #0052FF; font-size: 11.5px; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; flex-shrink: 0;">View</button>`;
+
     banner.style.display = 'block';
     banner.innerHTML = `
-      <div style="background: #FFFFFF; border: 1px solid ${borderColor}; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 4px 12px rgba(17,24,39,0.06); cursor: pointer;" onclick="App.openNotificationsModal()">
+      <div style="background: #FFFFFF; border: 1px solid ${borderColor}; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 4px 12px rgba(17,24,39,0.06); cursor: pointer;" onclick="${latest.type === 'SIGNAL_AVAILABLE' ? "App.navigate('signals')" : 'App.openNotificationsModal()'}">
         <div style="display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0;">
           <div style="font-size: 20px; line-height: 1; flex-shrink: 0; padding-top: 2px;">${icon}</div>
           <div style="flex: 1; min-width: 0;">
@@ -11177,9 +11586,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
             </div>
           </div>
         </div>
-        <button style="background: #EFF4FF; border: 1px solid #DBEAFE; color: #0052FF; font-size: 11.5px; font-weight: 700; padding: 6px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; flex-shrink: 0;">
-          View
-        </button>
+        ${ctaBtn}
       </div>
     `;
   },

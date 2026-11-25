@@ -37,8 +37,47 @@ if ($supabase->isConfigured()) {
         'signals' => [
             'table' => 'user_signal_executions',
             'params' => ['user_id' => "eq.{$userId}", 'order' => 'executed_at.desc', 'limit' => '10']
+        ],
+        'live_signals' => [
+            'table' => 'trading_signals',
+            'params' => ['status' => 'in.(PUBLISHED,ACTIVE)', 'select' => 'id,symbol,direction,profit_percentage,duration_minutes,daily_slot,published_at,scheduled_at,expires_at,created_at', 'order' => 'published_at.desc', 'limit' => '10']
         ]
     ]);
+
+    // 0. Live trading signal broadcasts (shown on all user dashboards while active)
+    $liveSigRes = $batch['live_signals'] ?? ['success' => false];
+    if ($liveSigRes['success'] && is_array($liveSigRes['data'])) {
+        $nowUtcTs = time();
+        foreach ($liveSigRes['data'] as $ls) {
+            $lsId = trim((string)($ls['id'] ?? ''));
+            if ($lsId === '' || strpos($lsId, 'sig_test_') === 0) continue;
+            $pubRaw = (string)($ls['published_at'] ?? $ls['scheduled_at'] ?? $ls['created_at'] ?? '');
+            $expRaw = (string)($ls['expires_at'] ?? '');
+            $pubTs = $pubRaw !== '' ? strtotime($pubRaw) : false;
+            $expTs = $expRaw !== '' ? strtotime($expRaw) : false;
+            if ($pubTs !== false && $nowUtcTs < $pubTs) continue;
+            if ($expTs !== false && $nowUtcTs >= $expTs) continue;
+
+            $lsSym = strtoupper(trim((string)($ls['symbol'] ?? 'BTC/USDT')));
+            $lsDirRaw = strtoupper(trim((string)($ls['direction'] ?? 'BUY')));
+            $lsIsBuy = in_array($lsDirRaw, ['BUY', 'LONG', 'UP'], true);
+            $lsDirLabel = $lsIsBuy ? 'UP / BUY (LONG)' : 'DOWN / SELL (SHORT)';
+            $lsSlot = (int)($ls['daily_slot'] ?? 0);
+            $lsPct = in_array($lsSlot, [1, 2], true) ? 1.67 : (float)($ls['profit_percentage'] ?? 1.67);
+            $lsDur = max(1, (int)($ls['duration_minutes'] ?? 15));
+            $lsTime = $pubRaw !== '' ? $pubRaw : gmdate('Y-m-d H:i:s');
+
+            $notifications[] = [
+                'id' => 'notif_live_sig_' . $lsId,
+                'user_id' => $userId,
+                'type' => 'SIGNAL_AVAILABLE',
+                'title' => "⚡ Live Signal: {$lsSym} ({$lsDirLabel})",
+                'message' => "{$lsSym} {$lsDirLabel} signal is LIVE now (+{$lsPct}% target, {$lsDur}m window). Open Signals Terminal to confirm.",
+                'is_read' => 0,
+                'created_at' => $lsTime
+            ];
+        }
+    }
 
     // 1. Deposits events
     $depRes = $batch['deposits'] ?? ['success'=>false];
@@ -152,7 +191,7 @@ if ($supabase->isConfigured()) {
             if (strpos($signalId, 'sig_test_') === 0) continue;
             $profit = (float)($s['profit_amount'] ?? 0);
             $sym = $s['symbol'] ?? 'USDT';
-            $pct = $s['profit_percentage'] ?? '2.5';
+            $pct = $s['profit_percentage'] ?? '1.67';
             $time = $s['executed_at'] ?? $s['created_at'] ?? gmdate('Y-m-d H:i:s');
 
             $notifications[] = [

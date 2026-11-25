@@ -34,6 +34,7 @@
 
       this.candles = [];
       this.chartType = 'candlestick'; // 'candlestick' | 'line' | 'area'
+      this.signalOverlay = null;
       
       this.indicators = {
         MA: true,
@@ -239,6 +240,47 @@
 
     setChartType(type) {
       this.chartType = (type === 'candles') ? 'candlestick' : type;
+      this.render();
+    }
+
+    setSignalOverlay(overlay) {
+      this.signalOverlay = overlay || null;
+      this.render();
+    }
+
+    updateLiveCandleTick(nextPrice, volDelta = 0, stepSeconds = 60) {
+      const price = Number(nextPrice);
+      if (!Number.isFinite(price) || price <= 0) return;
+      if (!this.candles || !this.candles.length) {
+        this.candles = this.generateSeedCandles(price);
+      }
+      const nowSec = Math.floor(Date.now() / 1000);
+      const last = this.candles[this.candles.length - 1];
+      const decimals = price >= 1000 ? 2 : (price >= 10 ? 2 : (price >= 1 ? 4 : (price >= 0.01 ? 5 : 6)));
+      const roundedPrice = Number(price.toFixed(decimals));
+
+      if (last && (nowSec - Number(last.time || 0)) >= stepSeconds) {
+        const open = last.close;
+        const close = roundedPrice;
+        this.candles.push({
+          time: nowSec,
+          open,
+          high: Math.max(open, close),
+          low: Math.min(open, close),
+          close,
+          volume: Math.max(1200, Math.round(volDelta || 4200))
+        });
+        if (this.candles.length > 90) {
+          this.candles.shift();
+        }
+      } else if (last) {
+        last.close = roundedPrice;
+        last.high = Math.max(last.high, roundedPrice);
+        last.low = Math.min(last.low, roundedPrice);
+        last.volume = Math.max(0, Number(last.volume || 0) + Number(volDelta || 180));
+      }
+
+      this.computeTechnicalIndicators();
       this.render();
     }
 
@@ -449,6 +491,17 @@
         }
       }
 
+      if (this.signalOverlay) {
+        const ov = this.signalOverlay;
+        [ov.entry, ov.tp1, ov.tp2, ov.sl].forEach(lvl => {
+          const v = Number(lvl);
+          if (Number.isFinite(v) && v > 0) {
+            minPrice = Math.min(minPrice, v);
+            maxPrice = Math.max(maxPrice, v);
+          }
+        });
+      }
+
       // Padding for top/bottom margins
       if (!Number.isFinite(minPrice) || !Number.isFinite(maxPrice)) {
         return ctx.restore();
@@ -635,6 +688,44 @@
         drawBoll(this.bollUpper, 'rgba(6, 182, 212, 0.7)');
         drawBoll(this.bollMid, 'rgba(245, 158, 11, 0.7)', [3, 3]);
         drawBoll(this.bollLower, 'rgba(6, 182, 212, 0.7)');
+      }
+
+      // 3b. Signal Entry / TP1 / TP2 / SL Overlay Lines
+      if (this.signalOverlay) {
+        const ov = this.signalOverlay;
+        const drawLevelLine = (val, labelText, color, dash = [4, 4]) => {
+          const num = Number(val);
+          if (!Number.isFinite(num) || num <= 0) return;
+          const y = Math.round(priceToY(num));
+          if (y < 6 || y > mainPlotH - 6) return;
+
+          ctx.save();
+          ctx.setLineDash(dash);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.15;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(plotW, y);
+          ctx.stroke();
+          ctx.restore();
+
+          const tagText = `${labelText} ${this.formatAxisPrice(num)}`;
+          ctx.save();
+          ctx.font = 'bold 9.5px var(--font-mono, monospace)';
+          const textW = ctx.measureText(tagText).width + 10;
+          ctx.fillStyle = color;
+          ctx.fillRect(6, y - 8, textW, 16);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(tagText, 11, y);
+          ctx.restore();
+        };
+
+        drawLevelLine(ov.entry, 'ENTRY', '#0052FF', [5, 3]);
+        drawLevelLine(ov.tp1, 'TP1', '#00B87C', [4, 4]);
+        drawLevelLine(ov.tp2, 'TP2', '#059669', [2, 3]);
+        drawLevelLine(ov.sl, 'SL', '#F6465D', [4, 4]);
       }
 
       // 4. Latest Price Tracker Line & Badge

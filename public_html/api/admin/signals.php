@@ -4,6 +4,7 @@
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/signal_lifecycle.php';
+require_once dirname(__DIR__) . '/lib/signal_broadcast.php';
 
 $admin = requireAdmin();
 $supabase = getSupabaseClient();
@@ -359,8 +360,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $isTesting = strpos($sigId, 'sig_test_') === 0;
         $slot = (int)($signalRow['daily_slot'] ?? 0);
         if (!$isTesting && in_array($slot, [1, 2], true)) {
-            // Normal daily sessions always use the fixed 2.5% rate.
-            $signalRow['profit_percentage'] = 2.5;
+            // Normal daily sessions always use the fixed 1.67% rate (doubles deposit in 30 days).
+            $signalRow['profit_percentage'] = 1.67;
         }
         $rawStart = (string)($signalRow['scheduled_at'] ?? $signalRow['published_at'] ?? $signalRow['created_at'] ?? '');
         $startDay = '';
@@ -419,6 +420,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $totalProfitPaid += (float)($ex['profit_amount'] ?? 0);
     }
 
+    if (!empty($signals)) {
+        primex_schedule_signal_live_broadcast($supabase, $signals);
+    }
+
     sendSuccess([
         'signals' => $signals,
         'today_count' => count($signals),
@@ -465,8 +470,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $symbol = strtoupper(trim((string)($input['symbol'] ?? 'BTC/USDT')));
         $direction = strtoupper(trim((string)($input['direction'] ?? 'BUY')));
         $dailySlot = max(0, min(2, (int)($input['daily_slot'] ?? 0)));
-        $profitPercentage = max(0.1, (float)($input['profit_percentage'] ?? 2.5));
-        if (in_array($dailySlot, [1, 2], true)) $profitPercentage = 2.5;
+        $profitPercentage = max(0.1, (float)($input['profit_percentage'] ?? 1.67));
+        if (in_array($dailySlot, [1, 2], true)) $profitPercentage = 1.67;
         $durationMinutes = max(1, min(1440, (int)($input['duration_minutes'] ?? 15)));
         $requestedStatus = strtoupper(trim((string)($input['status'] ?? '')));
 
@@ -557,6 +562,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $saved['audience_scope'] = 'ALL_COUNTRIES';
         $saved['is_testing'] = $isTestingExisting;
         $saved['no_profit'] = $isTestingExisting;
+        if (strtoupper((string)($saved['status'] ?? '')) === 'PUBLISHED' && !$isTestingExisting) {
+            primex_schedule_signal_live_broadcast($supabase, [$saved]);
+        }
         sendSuccess(['signal' => $saved], 'Signal updated successfully');
     }
 
@@ -564,7 +572,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $symbol = strtoupper(trim($input['symbol'] ?? 'BTC/USDT'));
         $direction = strtoupper(trim($input['direction'] ?? 'BUY'));
         $duration = max(1, min(1440, (int)($input['duration_minutes'] ?? 15))); // 15 minutes remains the default; admin selection is honored.
-        $profitPercentage = max(0.1, (float)($input['profit_percentage'] ?? 2.5));
+        $profitPercentage = max(0.1, (float)($input['profit_percentage'] ?? 1.67));
         $timezoneLabel = 'GLOBAL — ALL COUNTRIES (PKT)'; // Every signal is broadcast worldwide; PKT is the canonical schedule timezone.
         $signalMode = strtoupper(trim((string)($input['signal_mode'] ?? $input['mode'] ?? 'DAILY')));
         $broadcastTime = trim((string)($input['broadcast_time'] ?? ''));
@@ -614,9 +622,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $slotLabel = $isTesting ? 'Testing Signal • Custom • No Profit' : 'Custom Signal';
         } else {
             $dailySlot = ($dailySlotInput === 2) ? 2 : 1;
-            // The two normal daily sessions are fixed at 2.5% each. Custom/manual
+            // The two normal daily sessions are fixed at 1.67% each (2x in 30 days). Custom/manual
             // signal rates remain independently configurable below.
-            $profitPercentage = 2.5;
+            $profitPercentage = 1.67;
             $hour = $dailySlot === 2 ? 20 : 16;
             $scheduled = new DateTime($now->format('Y-m-d') . sprintf(' %02d:00:00', $hour), $tz);
             if ($scheduled <= $now) $scheduled->modify('+1 day');
@@ -669,6 +677,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $savedSignal['is_testing'] = $isTesting;
         $savedSignal['no_profit'] = $isTesting;
         $savedSignal['audience_scope'] = 'ALL_COUNTRIES';
+        if (strtoupper((string)($savedSignal['status'] ?? '')) === 'PUBLISHED' && !$isTesting) {
+            primex_schedule_signal_live_broadcast($supabase, [$savedSignal]);
+        }
         sendSuccess(['signal' => $savedSignal, 'signals' => [$savedSignal]], 'Trading signal saved successfully to the signal list');
     }
 
