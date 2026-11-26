@@ -207,7 +207,6 @@ if (!function_exists('primex_summarize_additional_signal_record')) {
             'reward_usdt' => 4.00,
             'earned_additional_usdt' => round($usedTotal * 4.00, 2),
             'separate_from_30d_plan' => true,
-            'schedule_time_pkt' => '09:30 PM',
             'daily_rule' => 'Maximum 1 Additional Signal per day when holding multiple credits',
             'grants' => array_slice(array_reverse($grantList), 0, 20),
             'tiers' => primex_additional_signal_tiers(),
@@ -361,7 +360,7 @@ if (!function_exists('primex_grant_additional_signals_for_deposit')) {
         // Notify depositor of unlocked Additional Signals
         if ($depositorGranted) {
             try {
-                $dailyNote = $credits > 1 ? ' (1 Additional Signal per day at 9:30 PM PKT, $4.00 USDT fixed each, separate from your 30-day 2x plan)' : ' ($4.00 USDT fixed profit at 9:30 PM PKT, separate from your 30-day 2x plan)';
+                $dailyNote = $credits > 1 ? ' (maximum 1 Additional Signal per day, separate from your 30-day 2x plan)' : ' (separate from your 30-day 2x plan)';
                 $supabase->insert('user_notifications', [[
                     'user_id' => $depositorUserId,
                     'title' => "⚡ +{$credits} Additional Signal" . ($credits > 1 ? 's' : '') . " Unlocked",
@@ -402,7 +401,7 @@ if (!function_exists('primex_grant_additional_signals_for_deposit')) {
                             $supabase->insert('user_notifications', [[
                                 'user_id' => $inviterId,
                                 'title' => "🎁 Referral Additional Signal Reward (+{$credits})",
-                                'message' => "Your invited team member completed a $" . number_format($amount, 2) . " deposit. Both accounts received {$credits} Additional Signal credit" . ($credits > 1 ? 's' : '') . " (1 per day at 9:30 PM PKT, $4.00 USDT fixed each).",
+                                'message' => "Your invited team member completed a $" . number_format($amount, 2) . " deposit. Both accounts received {$credits} Additional Signal credit" . ($credits > 1 ? 's' : '') . " (1 per day, separate from the 30-day 2x plan).",
                                 'type' => 'SIGNAL_AVAILABLE',
                                 'is_read' => false,
                                 'created_at' => gmdate('Y-m-d H:i:s'),

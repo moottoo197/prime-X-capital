@@ -37,13 +37,10 @@ if (!primex_check_email_rate_limit('reset_password_attempt', $ip, 10, 900, 0)) {
 
 $body = getJsonBody();
 $rawToken = trim((string)($body['token'] ?? ''));
+$emailInput = strtolower(trim((string)($body['email'] ?? '')));
+$verificationCode = trim((string)($body['verification_code'] ?? $body['code'] ?? $body['otp'] ?? ''));
 $newPassword = (string)($body['password'] ?? $body['new_password'] ?? '');
 $confirmPassword = (string)($body['confirm_password'] ?? '');
-
-if (primex_validate_raw_token_format($rawToken) === '') {
-    primex_record_email_rate_attempt('reset_password_attempt', $ip, 10, 900);
-    sendError('INVALID_OR_EXPIRED_TOKEN', 'This password reset link is invalid or has expired.', 400);
-}
 
 if (strlen($newPassword) < 8 || strlen($newPassword) > 128) {
     sendError('VALIDATION_ERROR', 'Password must be between 8 and 128 characters.', 400);
@@ -52,28 +49,55 @@ if ($confirmPassword !== '' && !hash_equals($newPassword, $confirmPassword)) {
     sendError('VALIDATION_ERROR', 'New passwords do not match.', 400);
 }
 
-// Peek before consuming so weak/mismatched password errors do not burn a valid token,
-// then immediately consume atomically once validated.
-$peeked = primex_peek_auth_token($supabase, 'password_reset', $rawToken);
-if (!$peeked) {
-    primex_record_email_rate_attempt('reset_password_attempt', $ip, 10, 900);
-    sendError('INVALID_OR_EXPIRED_TOKEN', 'This password reset link is invalid, expired, or has already been used.', 400);
+$profile = null;
+$userId = '';
+
+if ($rawToken !== '') {
+    if (primex_validate_raw_token_format($rawToken) === '') {
+        primex_record_email_rate_attempt('reset_password_attempt', $ip, 10, 900);
+        sendError('INVALID_OR_EXPIRED_TOKEN', 'This password reset link is invalid or has expired.', 400);
+    }
+
+    $peeked = primex_peek_auth_token($supabase, 'password_reset', $rawToken);
+    if (!$peeked) {
+        primex_record_email_rate_attempt('reset_password_attempt', $ip, 10, 900);
+        sendError('INVALID_OR_EXPIRED_TOKEN', 'This password reset link is invalid, expired, or has already been used.', 400);
+    }
+
+    $consumed = primex_consume_auth_token($supabase, 'password_reset', $rawToken);
+    if (!$consumed || empty($consumed['user_id'])) {
+        primex_record_email_rate_attempt('reset_password_attempt', $ip, 10, 900);
+        sendError('INVALID_OR_EXPIRED_TOKEN', 'This password reset link is invalid, expired, or has already been used.', 400);
+    }
+
+    $userId = (string)$consumed['user_id'];
+    $profRes = $supabase->select('profiles', ['id' => 'eq.' . $userId, 'limit' => '1']);
+    $profile = (!empty($profRes['success']) && !empty($profRes['data'][0])) ? $profRes['data'][0] : null;
+} else {
+    if ($emailInput === '' || !filter_var($emailInput, FILTER_VALIDATE_EMAIL)) {
+        sendError('VALIDATION_ERROR', 'A valid account email address is required.', 400);
+    }
+    $cleanOtp = preg_replace('/\s+/', '', $verificationCode);
+    if (!preg_match('/^\d{6}$/', (string)$cleanOtp)) {
+        sendError('VERIFICATION_CODE_REQUIRED', 'Please enter the 6-digit verification code sent to your email.', 400);
+    }
+
+    $otpRes = primex_consume_scoped_otp($supabase, 'forgot_password', $emailInput, (string)$cleanOtp);
+    if (empty($otpRes['success'])) {
+        primex_record_email_rate_attempt('reset_password_attempt', $ip, 10, 900);
+        $status = (($otpRes['error_code'] ?? '') === 'RATE_LIMITED') ? 429 : 400;
+        sendError((string)($otpRes['error_code'] ?? 'INVALID_VERIFICATION_CODE'), (string)($otpRes['message'] ?? 'Invalid or expired verification code.'), $status);
+    }
+
+    $profile = primex_find_profile_by_email($supabase, $emailInput);
+    $userId = (string)($profile['id'] ?? '');
 }
 
-$consumed = primex_consume_auth_token($supabase, 'password_reset', $rawToken);
-if (!$consumed || empty($consumed['user_id'])) {
-    primex_record_email_rate_attempt('reset_password_attempt', $ip, 10, 900);
-    sendError('INVALID_OR_EXPIRED_TOKEN', 'This password reset link is invalid, expired, or has already been used.', 400);
-}
-
-$userId = (string)$consumed['user_id'];
-$profRes = $supabase->select('profiles', ['id' => 'eq.' . $userId, 'limit' => '1']);
-$profile = (!empty($profRes['success']) && !empty($profRes['data'][0])) ? $profRes['data'][0] : null;
-if (!$profile || (isset($profile['is_active']) && !$profile['is_active'])) {
+if (!$profile || $userId === '' || (isset($profile['is_active']) && !$profile['is_active'])) {
     sendError('ACCOUNT_UNAVAILABLE', 'Unable to update password for this account.', 400);
 }
 
-$userEmail = strtolower(trim((string)($profile['email'] ?? ($consumed['email'] ?? ''))));
+$userEmail = strtolower(trim((string)($profile['email'] ?? $emailInput)));
 $firstName = trim((string)($profile['first_name'] ?? ''));
 
 $newHash = primex_hash_password($newPassword);

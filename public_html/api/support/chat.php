@@ -1,8 +1,9 @@
 <?php
 /**
- * User Support Chat Endpoint (Persistent Supabase support_tickets + support_messages)
+ * User Support Chat Endpoint (Single WhatsApp-Style Conversation per User)
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/auth_tokens.php';
 
 $user = requireAuth();
 $userId = (string)($user['id'] ?? '');
@@ -20,8 +21,8 @@ $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 $fetchUserTickets = static function (SupabaseClient $sb, string $uid): array {
     $res = $sb->select('support_tickets', [
         'user_id' => 'eq.' . $uid,
-        'order' => 'updated_at.desc,created_at.desc',
-        'limit' => '15'
+        'order' => 'created_at.asc,id.asc',
+        'limit' => '50'
     ]);
     if (!$res['success'] || !is_array($res['data'])) {
         return [];
@@ -29,15 +30,26 @@ $fetchUserTickets = static function (SupabaseClient $sb, string $uid): array {
     return $res['data'];
 };
 
-$fetchTicketMessages = static function (SupabaseClient $sb, string $ticketId): array {
-    if ($ticketId === '') {
+$fetchMergedUserMessages = static function (SupabaseClient $sb, array $tickets): array {
+    if (empty($tickets)) {
         return [];
     }
+    $ticketIds = [];
+    foreach ($tickets as $t) {
+        $tid = trim((string)($t['id'] ?? ''));
+        if ($tid !== '') {
+            $ticketIds[] = $tid;
+        }
+    }
+    if (empty($ticketIds)) {
+        return [];
+    }
+    $inList = '(' . implode(',', array_unique($ticketIds)) . ')';
     $res = $sb->select('support_messages', [
-        'ticket_id' => 'eq.' . $ticketId,
+        'ticket_id' => 'in.' . $inList,
         'is_internal' => 'eq.0',
         'order' => 'created_at.asc',
-        'limit' => '200'
+        'limit' => '500'
     ]);
     if (!$res['success'] || !is_array($res['data'])) {
         return [];
@@ -47,37 +59,14 @@ $fetchTicketMessages = static function (SupabaseClient $sb, string $ticketId): a
 
 if ($method === 'GET') {
     $tickets = $fetchUserTickets($supabase, $userId);
-    $requestedId = trim((string)($_GET['ticket_id'] ?? ''));
-    $activeTicket = null;
-
-    if ($requestedId !== '') {
-        foreach ($tickets as $t) {
-            if ((string)($t['id'] ?? '') === $requestedId && (string)($t['user_id'] ?? '') === $userId) {
-                $activeTicket = $t;
-                break;
-            }
-        }
-    }
-
-    if ($activeTicket === null && !empty($tickets)) {
-        foreach ($tickets as $t) {
-            $st = strtoupper((string)($t['status'] ?? 'OPEN'));
-            if (!in_array($st, ['RESOLVED', 'CLOSED'], true)) {
-                $activeTicket = $t;
-                break;
-            }
-        }
-        if ($activeTicket === null) {
-            $activeTicket = $tickets[0];
-        }
-    }
-
-    $messages = $activeTicket ? $fetchTicketMessages($supabase, (string)$activeTicket['id']) : [];
+    $primaryTicket = !empty($tickets) ? $tickets[0] : null;
+    $messages = $primaryTicket ? $fetchMergedUserMessages($supabase, $tickets) : [];
 
     sendSuccess([
-        'ticket' => $activeTicket,
-        'tickets' => $tickets,
-        'messages' => $messages
+        'ticket' => $primaryTicket,
+        'tickets' => $primaryTicket ? [$primaryTicket] : [],
+        'messages' => $messages,
+        'user_avatar' => primex_get_user_avatar($user)
     ], 'Support chat loaded');
 }
 
@@ -96,46 +85,18 @@ if ($method === 'POST') {
         $rawMessage = function_exists('mb_substr') ? mb_substr($rawMessage, 0, 2000, 'UTF-8') : substr($rawMessage, 0, 2000);
     }
 
-    $subject = trim((string)($input['subject'] ?? 'Platform Support Inquiry'));
-    if ($subject === '') {
-        $subject = 'Platform Support Inquiry';
-    }
+    $topic = trim((string)($input['topic'] ?? ''));
+    $subjectInput = trim((string)($input['subject'] ?? ''));
+    $subject = $topic !== '' ? $topic : ($subjectInput !== '' ? $subjectInput : 'Platform Support');
     if ((function_exists('mb_strlen') ? mb_strlen($subject, 'UTF-8') : strlen($subject)) > 140) {
         $subject = function_exists('mb_substr') ? mb_substr($subject, 0, 140, 'UTF-8') : substr($subject, 0, 140);
     }
 
-    $requestedId = trim((string)($input['ticket_id'] ?? ''));
-    $forceNew = !empty($input['new_ticket']);
     $now = gmdate('Y-m-d H:i:s');
-    $ticket = null;
+    $tickets = $fetchUserTickets($supabase, $userId);
+    $primaryTicket = !empty($tickets) ? $tickets[0] : null;
 
-    if (!$forceNew && $requestedId !== '') {
-        $existingRes = $supabase->select('support_tickets', [
-            'id' => 'eq.' . $requestedId,
-            'user_id' => 'eq.' . $userId,
-            'limit' => '1'
-        ]);
-        if (!$existingRes['success'] || empty($existingRes['data'][0])) {
-            sendError('TICKET_NOT_FOUND', 'Support conversation not found.', 404);
-        }
-        $ticket = $existingRes['data'][0];
-        $status = strtoupper((string)($ticket['status'] ?? 'OPEN'));
-        if ($status === 'CLOSED') {
-            $ticket = null;
-            $forceNew = true;
-        }
-    } elseif (!$forceNew) {
-        $tickets = $fetchUserTickets($supabase, $userId);
-        foreach ($tickets as $t) {
-            $st = strtoupper((string)($t['status'] ?? 'OPEN'));
-            if (!in_array($st, ['RESOLVED', 'CLOSED'], true)) {
-                $ticket = $t;
-                break;
-            }
-        }
-    }
-
-    if ($ticket === null) {
+    if ($primaryTicket === null) {
         $newTicketId = primex_uuid_v4();
         $newTicketPayload = [
             'id' => $newTicketId,
@@ -154,53 +115,67 @@ if ($method === 'POST') {
             ], 'ERROR', $userId, (string)($user['email'] ?? ''));
             sendError('SUPPORT_CREATE_FAILED', 'Unable to start support conversation right now. Please try again.', 500);
         }
-        $ticket = $insTicket['data'][0] ?? $newTicketPayload;
+        $primaryTicket = $insTicket['data'][0] ?? $newTicketPayload;
+        $tickets = [$primaryTicket];
     } else {
-        $updTicket = $supabase->update('support_tickets', [
+        $updFields = [
             'status' => 'OPEN',
             'updated_at' => $now
-        ], [
-            'id' => 'eq.' . $ticket['id'],
+        ];
+        if ($topic !== '') {
+            $updFields['subject'] = $subject;
+        }
+        $updTicket = $supabase->update('support_tickets', $updFields, [
+            'id' => 'eq.' . $primaryTicket['id'],
             'user_id' => 'eq.' . $userId
         ]);
         if (!empty($updTicket['success']) && !empty($updTicket['data'][0])) {
-            $ticket = $updTicket['data'][0];
+            $primaryTicket = $updTicket['data'][0];
         } else {
-            $ticket['status'] = 'OPEN';
-            $ticket['updated_at'] = $now;
+            $primaryTicket['status'] = 'OPEN';
+            $primaryTicket['updated_at'] = $now;
+            if ($topic !== '') {
+                $primaryTicket['subject'] = $subject;
+            }
         }
+    }
+
+    $finalMessage = $rawMessage;
+    if ($topic !== '' && stripos($rawMessage, '[' . $topic . ']') !== 0) {
+        $finalMessage = '[' . $topic . "]\n" . $rawMessage;
     }
 
     $msgPayload = [
         'id' => primex_uuid_v4(),
-        'ticket_id' => (string)$ticket['id'],
+        'ticket_id' => (string)$primaryTicket['id'],
         'sender_id' => $userId,
         'sender_role' => 'USER',
-        'message' => $rawMessage,
+        'message' => $finalMessage,
         'is_internal' => 0,
         'created_at' => $now
     ];
     $insMsg = $supabase->insert('support_messages', [$msgPayload]);
     if (empty($insMsg['success'])) {
         primex_record_log('SUPPORT', 'MESSAGE_INSERT_FAILED', (string)($insMsg['message'] ?? 'Insert failed'), [
-            'ticket_id' => (string)$ticket['id'],
+            'ticket_id' => (string)$primaryTicket['id'],
             'http_code' => $insMsg['http_code'] ?? 0
         ], 'ERROR', $userId, (string)($user['email'] ?? ''));
         sendError('MESSAGE_SEND_FAILED', 'Unable to send your support message right now.', 500);
     }
 
     primex_record_log('SUPPORT', 'USER_MESSAGE_SENT', 'User sent support message', [
-        'ticket_id' => (string)$ticket['id'],
+        'ticket_id' => (string)$primaryTicket['id'],
+        'topic' => $topic,
         'length' => $msgLen
     ], 'INFO', $userId, (string)($user['email'] ?? ''));
 
-    $tickets = $fetchUserTickets($supabase, $userId);
-    $messages = $fetchTicketMessages($supabase, (string)$ticket['id']);
+    $messages = $fetchMergedUserMessages($supabase, $tickets);
 
     sendSuccess([
-        'ticket' => $ticket,
-        'tickets' => $tickets,
-        'messages' => $messages
+        'ticket' => $primaryTicket,
+        'tickets' => [$primaryTicket],
+        'messages' => $messages,
+        'user_avatar' => primex_get_user_avatar($user)
     ], 'Message sent to support desk');
 }
 

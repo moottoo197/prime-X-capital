@@ -4191,7 +4191,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261125_v134_withdraw_fee_and_daily_add_sig">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261126_v135_security_otp_tour_support">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -4766,7 +4766,7 @@ window.gtranslateSettings = {
             </div>
 
             <div style="display:flex;align-items:baseline;gap:8px;margin:2px 0 8px;">
-              <span style="font-size:34px;font-weight:900;color:#111827;letter-spacing:-0.03em;line-height:1;"><span id="home-balance-currency-sym">$</span><span id="home-balance-val" class="mono">0.00</span></span>
+              <span class="av-bal-fade" style="font-size:34px;font-weight:900;color:#111827;letter-spacing:-0.03em;line-height:1;"><span id="home-balance-currency-sym">$</span><span id="home-balance-val" class="mono">0.00</span></span>
               <span id="home-balance-currency-code" style="font-size:14px;color:#6B7280;font-weight:600;">USDT</span>
               <button onclick="App.toggleBalanceVisibility()" title="Toggle Balance" style="color:#6B7280;display:inline-flex;align-items:center;background:none;border:none;cursor:pointer;padding:2px;margin-left:2px;">
                 <svg id="balance-eye-icon" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -4779,8 +4779,8 @@ window.gtranslateSettings = {
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
               <div style="display:flex;align-items:center;gap:5px;font-size:13px;">
                 <span style="color:#0052FF;font-size:11px;">▲</span>
-                <strong style="color:#0052FF;" data-user-signal-profit-total>$0.00</strong>
-                <span style="color:#6B7280;">Today copy &amp; signal profit</span>
+                <strong class="av-bal-fade" style="color:#0052FF;" data-user-signal-profit-total>$0.00</strong>
+                <span style="color:#6B7280;">Today signal profit</span>
               </div>
               <button type="button" onclick="App.navigate('signals')" style="background:#EFF4FF;color:#0052FF;border:1px solid #DBEAFE;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;">Signals ⚡</button>
             </div>
@@ -4788,7 +4788,7 @@ window.gtranslateSettings = {
 
           <!-- 4 Cobalt Blue Action Circles (Matches 003451) -->
           <div class="av-home-circles-4">
-            <div class="circle-action-item" onclick="App.openDepositModal()" style="text-align:center;">
+            <div id="home-action-deposit" class="circle-action-item" onclick="App.openDepositModal()" style="text-align:center;">
               <div class="av-home-circle-btn">
                 <svg width="21" height="21" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="7"></circle>
@@ -4798,7 +4798,7 @@ window.gtranslateSettings = {
               <span style="font-size:12px;font-weight:600;color:#111827;">Deposit</span>
             </div>
 
-            <div class="circle-action-item" onclick="App.openWithdrawModal()" style="text-align:center;">
+            <div id="home-action-withdraw" class="circle-action-item" onclick="App.openWithdrawModal()" style="text-align:center;">
               <div class="av-home-circle-btn">
                 <svg width="21" height="21" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                   <path d="M12 19V5m-5 5l5-5 5 5"></path>
@@ -4808,14 +4808,13 @@ window.gtranslateSettings = {
               <span style="font-size:12px;font-weight:600;color:#111827;">Withdrawal</span>
             </div>
 
-            <div class="circle-action-item" onclick="App.navigate('copytrading')" style="text-align:center;">
+            <div id="home-action-signals" class="circle-action-item" onclick="App.navigate('signals')" style="text-align:center;">
               <div class="av-home-circle-btn">
                 <svg width="21" height="21" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <path d="M12 11v6M9 14h6"></path>
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                 </svg>
               </div>
-              <span style="font-size:12px;font-weight:600;color:#111827;">Copy Trading</span>
+              <span style="font-size:12px;font-weight:600;color:#111827;">Signals</span>
             </div>
 
             <div class="circle-action-item" onclick="App.navigate('convert')" style="text-align:center;">
@@ -4895,11 +4894,10 @@ window.gtranslateSettings = {
       </div>
     </main>
 
-    <!-- VIEW 2: TRADE HUB (Copy Trading · Delivery · Perpetual · Spot · Earn) -->
+    <!-- VIEW 2: TRADE HUB (Delivery · Perpetual · Spot · Earn) -->
     <main id="view-futures" class="view-section" style="display: none;">
-      <!-- Top 5-Mode Trade Tabs matching alpha-pics -->
+      <!-- Top Trade Tabs -->
       <div class="trade-top-tabs">
-        <button type="button" class="trade-top-tab" id="trade-tab-copy" onclick="App.switchTradeHubTab('copy')">Copy Trading</button>
         <button type="button" class="trade-top-tab active" id="trade-tab-delivery" onclick="App.switchTradeHubTab('delivery')">Delivery</button>
         <button type="button" class="trade-top-tab" id="trade-tab-perpetual" onclick="App.switchTradeHubTab('perpetual')">Perpetual</button>
         <button type="button" class="trade-top-tab" id="trade-tab-spot" onclick="App.switchTradeHubTab('spot')">Spot</button>
@@ -5535,11 +5533,11 @@ window.gtranslateSettings = {
             </div>
             <span style="font-size:11px;font-weight:700;color:#FFFFFF;">Transfer</span>
           </div>
-          <div style="cursor:pointer;" onclick="App.navigate('copytrading')">
-            <div style="width:44px;height:44px;border-radius:50%;background:#FFFFFF;color:#111827;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
-              <svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M12 11v6M9 14h6"></path></svg>
+          <div style="cursor:pointer;" onclick="App.navigate('signals')">
+            <div style="width:44px;height:44px;border-radius:50%;background:#FFFFFF;color:#0052FF;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
+              <svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
             </div>
-            <span style="font-size:11px;font-weight:600;color:#FFFFFF;">Copy Trade</span>
+            <span style="font-size:11px;font-weight:600;color:#FFFFFF;">Signals</span>
           </div>
           <div style="cursor:pointer;" onclick="App.navigate('convert')">
             <div style="width:44px;height:44px;border-radius:50%;background:#FFFFFF;color:#111827;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;box-shadow:0 6px 14px rgba(0,0,0,0.12);">
@@ -5564,7 +5562,7 @@ window.gtranslateSettings = {
               <div style="display:flex;align-items:center;gap:6px;">
                 <span style="font-size:17px;font-weight:800;color:#111827;">Total / Spot &amp; Future Balance</span>
                 <button onclick="App.toggleBalanceVisibility()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;" title="Toggle Balance">
-                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <svg id="wallet-balance-eye-icon" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                     <circle cx="12" cy="12" r="3"></circle>
                   </svg>
@@ -5581,17 +5579,17 @@ window.gtranslateSettings = {
           <div style="background:#F8FAFC;border-radius:14px;padding:12px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:8px;">
             <div id="wallet-cell-total" class="av-bal-card-cell">
               <div style="font-size:11px;color:#6B7280;">Total Balance</div>
-              <div id="wallet-total-balance" class="mono" style="font-size:15px;font-weight:800;color:#111827;margin-top:2px;">0.00</div>
+              <div id="wallet-total-balance" class="mono av-bal-fade" style="font-size:15px;font-weight:800;color:#111827;margin-top:2px;">0.00</div>
               <div id="wallet-total-btc-equiv" style="display:none;">0.0000</div>
             </div>
             <div id="wallet-cell-spot" class="av-bal-card-cell">
               <div style="font-size:11px;color:#6B7280;">Spot Balance</div>
-              <div id="wallet-spot-total" class="mono" style="font-size:15px;font-weight:800;color:#00B87C;margin-top:2px;">$0.00</div>
+              <div id="wallet-spot-total" class="mono av-bal-fade" style="font-size:15px;font-weight:800;color:#00B87C;margin-top:2px;">$0.00</div>
               <span id="bal-funding" style="display:none;">$0.00</span>
             </div>
             <div id="wallet-cell-future" class="av-bal-card-cell">
               <div style="font-size:11px;color:#6B7280;">Future Balance</div>
-              <div id="bal-trading" class="mono" style="font-size:15px;font-weight:800;color:#0052FF;margin-top:2px;">$0.00</div>
+              <div id="bal-trading" class="mono av-bal-fade" style="font-size:15px;font-weight:800;color:#0052FF;margin-top:2px;">$0.00</div>
             </div>
           </div>
 
@@ -5611,29 +5609,29 @@ window.gtranslateSettings = {
           <div class="av-wallet-breakdown-grid">
             <div class="av-wallet-stat-box">
               <div style="font-size:11px;color:#6B7280;font-weight:600;">Deposit Balance</div>
-              <div id="bal-deposit-principal" class="mono" style="font-size:14.5px;font-weight:800;color:#111827;margin-top:2px;">$0.00</div>
+              <div id="bal-deposit-principal" class="mono av-bal-fade" style="font-size:14.5px;font-weight:800;color:#111827;margin-top:2px;">$0.00</div>
               <div style="font-size:10px;color:#059669;margin-top:2px;">Transferable to Future</div>
             </div>
             <div class="av-wallet-stat-box">
               <div style="font-size:11px;color:#6B7280;font-weight:600;">Deposit Bonus</div>
-              <div id="bal-deposit-bonus" class="mono" style="font-size:14.5px;font-weight:800;color:#0052FF;margin-top:2px;">$0.00</div>
+              <div id="bal-deposit-bonus" class="mono av-bal-fade" style="font-size:14.5px;font-weight:800;color:#0052FF;margin-top:2px;">$0.00</div>
               <div style="font-size:10px;color:#0052FF;margin-top:2px;">Transferable to Future</div>
             </div>
             <div class="av-wallet-stat-box locked">
               <div style="font-size:11px;color:#92400E;font-weight:600;">Referral Bonus</div>
-              <div id="bal-referral-bonus" class="mono" style="font-size:14.5px;font-weight:800;color:#B45309;margin-top:2px;">$0.00</div>
+              <div id="bal-referral-bonus" class="mono av-bal-fade" style="font-size:14.5px;font-weight:800;color:#B45309;margin-top:2px;">$0.00</div>
               <div style="font-size:10px;color:#B45309;margin-top:2px;">Spot Only · Locked</div>
             </div>
             <div class="av-wallet-stat-box future" style="cursor:pointer;" onclick="App.navigate('transfer')">
               <div style="font-size:11px;color:#1E40AF;font-weight:600;">Transferable Spot</div>
-              <div id="bal-transferable-spot" class="mono" style="font-size:14.5px;font-weight:800;color:#0052FF;margin-top:2px;">$0.00</div>
+              <div id="bal-transferable-spot" class="mono av-bal-fade" style="font-size:14.5px;font-weight:800;color:#0052FF;margin-top:2px;">$0.00</div>
               <div style="font-size:10px;color:#0052FF;font-weight:700;margin-top:2px;">Move Spot → Future ›</div>
             </div>
           </div>
 
           <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 2px 0;margin-top:8px;border-top:1px solid #F1F5F9;font-size:12px;">
             <span style="color:#6B7280;font-weight:600;">Spot Exchange Sub-Ledger</span>
-            <strong id="bal-exchange" class="mono" style="color:#111827;">$0.00</strong>
+            <strong id="bal-exchange" class="mono av-bal-fade" style="color:#111827;">$0.00</strong>
           </div>
         </div>
       </div>
@@ -5655,8 +5653,8 @@ window.gtranslateSettings = {
               <div style="font-size: 15px; font-weight: 700; color: #111827;">BTC</div>
             </div>
             <div style="text-align: right;">
-              <div id="wallet-btc-amount" class="mono" style="font-size: 15px; font-weight: 700; color: #111827;">0.0000</div>
-              <div id="wallet-btc-usd" style="font-size: 12px; color: #6B7280;">≈ 0.00 USDT</div>
+              <div id="wallet-btc-amount" class="mono av-bal-fade" style="font-size: 15px; font-weight: 700; color: #111827;">0.0000</div>
+              <div id="wallet-btc-usd" class="av-bal-fade" style="font-size: 12px; color: #6B7280;">≈ 0.00 USDT</div>
             </div>
           </div>
 
@@ -5668,8 +5666,8 @@ window.gtranslateSettings = {
               <div style="font-size: 15px; font-weight: 700; color: #111827;">ETH</div>
             </div>
             <div style="text-align: right;">
-              <div id="wallet-eth-amount" class="mono" style="font-size: 15px; font-weight: 700; color: #111827;">0.0000</div>
-              <div id="wallet-eth-usd" style="font-size: 12px; color: #6B7280;">≈ 0.00 USDT</div>
+              <div id="wallet-eth-amount" class="mono av-bal-fade" style="font-size: 15px; font-weight: 700; color: #111827;">0.0000</div>
+              <div id="wallet-eth-usd" class="av-bal-fade" style="font-size: 12px; color: #6B7280;">≈ 0.00 USDT</div>
             </div>
           </div>
 
@@ -5681,7 +5679,7 @@ window.gtranslateSettings = {
               <div style="font-size: 15px; font-weight: 700; color: #111827;">USDT</div>
             </div>
             <div style="text-align: right;">
-              <div id="wallet-usdt-amount" class="mono" style="font-size: 15px; font-weight: 700; color: #111827;">0.00</div>
+              <div id="wallet-usdt-amount" class="mono av-bal-fade" style="font-size: 15px; font-weight: 700; color: #111827;">0.00</div>
             </div>
           </div>
         </div>
@@ -7577,20 +7575,6 @@ window.gtranslateSettings = {
           <svg class="more-item-chevron" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </div>
 
-        <div class="more-menu-item" onclick="App.navigate('copytrading')">
-          <div class="more-item-left">
-            <div class="more-item-icon">
-              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="9" cy="7" r="4"></circle>
-                <polyline points="16 11 18 13 22 9"></polyline>
-              </svg>
-            </div>
-            <span class="more-item-title">Copy Trading</span>
-          </div>
-          <svg class="more-item-chevron" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </div>
-
         <div class="more-menu-item" onclick="App.navigate('signals')">
           <div class="more-item-left">
             <div class="more-item-icon">
@@ -8755,12 +8739,26 @@ window.gtranslateSettings = {
       </div>
 
       <div style="display:flex; flex-direction:column; gap:16px;">
-        <div>
+        <div class="av-sec-forgot-bar">
+          <span style="font-size:12px; color:#64748B; font-weight:600;">Email OTP verification required</span>
+          <button type="button" id="btn-toggle-forgot-chpwd" class="av-sec-forgot-btn" onclick="App.toggleChangePwdForgotMode()">Forgot old password?</button>
+        </div>
+
+        <div id="chpwd-old-group">
           <label style="display:block; font-size:14.5px; font-weight:700; color:#111827; margin-bottom:6px;">Old Password</label>
           <div style="position:relative;">
             <input type="password" id="chpwd-old" class="av-auth-input-clean" placeholder="Please enter old password" style="padding-right:44px !important;">
             <button type="button" onclick="App.togglePasswordVisibility('chpwd-old', this)" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:#9CA3AF; cursor:pointer;">👁</button>
           </div>
+        </div>
+
+        <div>
+          <label style="display:block; font-size:14.5px; font-weight:700; color:#111827; margin-bottom:6px;">Email Verification Code (6-Digit) *</label>
+          <div class="av-sec-otp-row">
+            <input type="text" id="chpwd-otp" class="av-auth-input-clean av-sec-otp-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder="000000">
+            <button type="button" id="btn-send-chpwd-otp" class="av-sec-send-btn" onclick="App.sendSecurityOtp('chpwd')">Send Code</button>
+          </div>
+          <div id="chpwd-otp-status" class="av-sec-otp-status">Click Send Code to receive a 6-digit verification code on your registered email.</div>
         </div>
 
         <div>
@@ -9125,7 +9123,7 @@ window.gtranslateSettings = {
 
         <div style="background:rgba(255,179,0,0.1); border:1px solid rgba(255,179,0,0.25); padding:10px; border-radius:8px; font-size:12px; color:var(--warning);">
           <strong id="dep-min-label">Minimum Deposit: 100 USDT</strong>
-          <p id="dep-instructions-text" style="margin-top:4px;">Minimum deposit is 100 USDT. Deposits below threshold cannot be credited. Deposit $300+ to unlock Additional Signals ($4.00 each).</p>
+          <p id="dep-instructions-text" style="margin-top:4px;">Minimum deposit is 100 USDT. Deposits below threshold cannot be credited. Deposit $300+ to unlock Additional Signals.</p>
         </div>
 
         <!-- MANUAL AUDIT & BLOCKCHAIN VERIFICATION -->
@@ -9637,6 +9635,11 @@ window.gtranslateSettings = {
           🔒 Your 6-digit PIN authorizes all money payouts. Never share this PIN with anyone.
         </div>
 
+        <div class="av-sec-forgot-bar">
+          <span style="font-size:12px; color:#64748B; font-weight:600;">Email verification code required</span>
+          <button type="button" id="btn-toggle-forgot-pin" class="av-sec-forgot-btn" onclick="App.toggleForgotPinMode()">Forgot PIN?</button>
+        </div>
+
         <div class="form-group" id="group-current-pin">
           <label class="form-label" for="pin-current">Current 6-Digit PIN</label>
           <div class="password-input-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
@@ -9674,6 +9677,15 @@ window.gtranslateSettings = {
               </svg>
             </button>
           </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="pin-otp">Email Verification Code (6-Digit) *</label>
+          <div class="av-sec-otp-row">
+            <input type="text" id="pin-otp" class="av-sec-otp-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder="000000">
+            <button type="button" id="btn-send-pin-otp" class="av-sec-send-btn" onclick="App.sendSecurityOtp('pin')">Send Code</button>
+          </div>
+          <div id="pin-otp-status" class="av-sec-otp-status">Click Send Code to receive a 6-digit code on your account email.</div>
         </div>
 
         <button class="btn-primary" id="btn-save-withdrawal-pin" onclick="App.submitChangeWithdrawalPin()">Save 6-Digit PIN</button>
@@ -10086,47 +10098,46 @@ window.gtranslateSettings = {
       </div>
 
       <div class="av-concierge-hub-body">
-        <div class="av-concierge-section-label">Choose a topic to begin</div>
         <div class="av-concierge-topics">
-          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('Deposit & Custody Inquiry', 'Hello, I would like assistance verifying a deposit.')">
+          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('Deposit Issue', '')">
             <span class="av-concierge-topic-ico">
               <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
             </span>
             <span class="av-concierge-topic-copy">
-              <strong>Deposit &amp; Custody</strong>
+              <strong>Deposit Issue</strong>
               <span>TXN verification &amp; wallet credits</span>
             </span>
             <span class="av-concierge-topic-arrow" aria-hidden="true">›</span>
           </button>
 
-          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('Withdrawal Desk Inquiry', 'Hello, I have a question regarding a withdrawal request.')">
+          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('Withdraw Issue', '')">
             <span class="av-concierge-topic-ico">
               <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
             </span>
             <span class="av-concierge-topic-copy">
-              <strong>Withdrawal Desk</strong>
+              <strong>Withdraw Issue</strong>
               <span>Payout status &amp; address binding</span>
             </span>
             <span class="av-concierge-topic-arrow" aria-hidden="true">›</span>
           </button>
 
-          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('KYC & Account Verification', 'Hello, I need help with my KYC identity verification.')">
+          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('KYC Issue', '')">
             <span class="av-concierge-topic-ico">
               <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
             </span>
             <span class="av-concierge-topic-copy">
-              <strong>KYC &amp; Security</strong>
-              <span>Identity review &amp; PIN settings</span>
+              <strong>KYC Issue</strong>
+              <span>Identity review &amp; verification</span>
             </span>
             <span class="av-concierge-topic-arrow" aria-hidden="true">›</span>
           </button>
 
-          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('Signals & Trading Support', 'Hello, I have a question about trading signals or futures balance.')">
+          <button type="button" class="av-concierge-topic-card" onclick="App.openLiveSupportChat('Signal Issue', '')">
             <span class="av-concierge-topic-ico">
               <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
             </span>
             <span class="av-concierge-topic-copy">
-              <strong>Signals &amp; Trading</strong>
+              <strong>Signal Issue</strong>
               <span>Execution &amp; Spot-to-Future transfers</span>
             </span>
             <span class="av-concierge-topic-arrow" aria-hidden="true">›</span>
@@ -10141,13 +10152,13 @@ window.gtranslateSettings = {
     </div>
   </div>
 
-  <!-- MODAL: LIVE SUPPORT CHAT (Institutional Concierge Thread) -->
+  <!-- MODAL: LIVE SUPPORT CHAT (WhatsApp-Style Single Thread + Issue Intake) -->
   <div id="modal-support-chat" class="modal-overlay">
     <div class="modal-content av-support-modal-content">
       <div class="av-concierge-topbar">
         <button type="button" class="av-concierge-icon-btn" onclick="App.closeModal('modal-support-chat')" aria-label="Back">‹</button>
         <div class="av-concierge-identity">
-          <div class="av-concierge-monogram" aria-hidden="true">PX</div>
+          <div class="av-concierge-monogram" aria-hidden="true">PX<span class="av-concierge-online-dot"></span></div>
           <div class="av-concierge-title-wrap">
             <div class="av-concierge-title-row">
               <span>PRIME X Concierge</span>
@@ -10160,42 +10171,76 @@ window.gtranslateSettings = {
           </div>
         </div>
         <div class="av-concierge-topbar-actions">
-          <button type="button" class="av-concierge-new-btn" onclick="App.startNewSupportTicket()">New Thread</button>
+          <button type="button" id="btn-chat-report-issue" class="av-concierge-new-btn" onclick="App.openSupportIntake()">New Issue</button>
           <button type="button" class="av-concierge-icon-btn" onclick="App.closeModal('modal-support-chat')" aria-label="Close">✕</button>
         </div>
       </div>
 
-      <div id="chat-thread-switcher" class="av-chat-thread-bar" style="display:none;"></div>
+      <!-- Issue Intake View (Step 1: Choose Issue Option + Describe Problem) -->
+      <div id="chat-intake-view" class="av-sup-intake" style="display:none;">
+        <div class="av-sup-intake-head">
+          <div>
+            <h4>How can we help you?</h4>
+            <p>Select an issue category and describe your concern for our support team.</p>
+          </div>
+          <button type="button" id="btn-chat-back-stream" class="av-sup-back-chat-btn" style="display:none;" onclick="App.closeSupportIntake()">Back to Chat</button>
+        </div>
 
-      <!-- Chat Messages Scrollable Canvas -->
-      <div id="chat-messages-container" class="av-chat-canvas">
-        <div class="av-chat-welcome-card">
-          <div class="av-chat-welcome-head">
-            <span class="av-chat-welcome-mark">PX</span>
-            <div>
-              <strong>PRIME X CAPITAL Support Desk</strong>
-              <span>Messages go straight to an account specialist.</span>
-            </div>
+        <div class="av-sup-topic-grid" role="radiogroup" aria-label="Support issue categories">
+          <button type="button" class="av-sup-topic-card" data-topic="Deposit Issue" onclick="App.selectSupportIssueOption('Deposit Issue', this)">
+            <span class="av-sup-topic-ico">💰</span>
+            <span class="av-sup-topic-copy"><strong>Deposit Issue</strong><small>TXN confirmation &amp; credit</small></span>
+          </button>
+          <button type="button" class="av-sup-topic-card" data-topic="Withdraw Issue" onclick="App.selectSupportIssueOption('Withdraw Issue', this)">
+            <span class="av-sup-topic-ico">💸</span>
+            <span class="av-sup-topic-copy"><strong>Withdraw Issue</strong><small>Payout status, fee or address</small></span>
+          </button>
+          <button type="button" class="av-sup-topic-card" data-topic="KYC Issue" onclick="App.selectSupportIssueOption('KYC Issue', this)">
+            <span class="av-sup-topic-ico">🛡️</span>
+            <span class="av-sup-topic-copy"><strong>KYC Issue</strong><small>ID upload &amp; verification</small></span>
+          </button>
+          <button type="button" class="av-sup-topic-card" data-topic="Withdrawal PIN" onclick="App.selectSupportIssueOption('Withdrawal PIN', this)">
+            <span class="av-sup-topic-ico">🔐</span>
+            <span class="av-sup-topic-copy"><strong>Withdrawal PIN</strong><small>6-digit PIN setup or reset</small></span>
+          </button>
+          <button type="button" class="av-sup-topic-card" data-topic="Signal Issue" onclick="App.selectSupportIssueOption('Signal Issue', this)">
+            <span class="av-sup-topic-ico">⚡</span>
+            <span class="av-sup-topic-copy"><strong>Signal Issue</strong><small>Daily &amp; additional signals</small></span>
+          </button>
+          <button type="button" class="av-sup-topic-card" data-topic="Account & Security" onclick="App.selectSupportIssueOption('Account & Security', this)">
+            <span class="av-sup-topic-ico">👤</span>
+            <span class="av-sup-topic-copy"><strong>Account &amp; Security</strong><small>Password, email, referrals</small></span>
+          </button>
+          <button type="button" class="av-sup-topic-card is-full" data-topic="Other Issue" onclick="App.selectSupportIssueOption('Other Issue', this)">
+            <span class="av-sup-topic-ico">💬</span>
+            <span class="av-sup-topic-copy"><strong>Other Issue</strong><small>Select if your concern does not match the options above</small></span>
+          </button>
+        </div>
+
+        <div id="chat-intake-desc-box" class="av-sup-intake-desc-box" style="display:none;">
+          <div class="av-sup-intake-desc-label">
+            <span>Selected Topic</span>
+            <span id="chat-intake-selected-label" class="av-sup-selected-pill">Deposit Issue</span>
           </div>
-          <div class="av-chat-starters">
-            <button type="button" onclick="App.insertUserSupportStarter('Please check the verification status of my recent deposit.')">Check deposit status</button>
-            <button type="button" onclick="App.insertUserSupportStarter('I need help verifying my bound withdrawal address.')">Withdrawal verification</button>
-            <button type="button" onclick="App.insertUserSupportStarter('Could you review my submitted KYC documents?')">KYC document review</button>
-          </div>
+          <textarea id="chat-intake-desc" class="av-sup-intake-desc" maxlength="2000" placeholder="Enter a complete description of the issue you are facing (amount, TXN ID, date, or details)..."></textarea>
+          <button type="button" id="btn-chat-intake-submit" class="av-sup-intake-submit" onclick="App.submitSupportIntake()">Send Description &amp; Start Chat</button>
         </div>
       </div>
 
-      <!-- Chat Input Bar -->
-      <div class="av-chat-composer-dock">
-        <div class="av-chat-composer-shell">
-          <input type="text" id="chat-input-text" placeholder="Write a message to support..." maxlength="2000" oninput="App.updateSupportCharCount()" onkeydown="if(event.key==='Enter') App.sendSupportMessage()">
-          <span id="chat-char-count" class="av-chat-char-count" style="display:none;">0/2000</span>
-          <button type="button" id="btn-chat-send" class="av-chat-send-btn" onclick="App.sendSupportMessage()" aria-label="Send message">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
-          </button>
+      <!-- Single WhatsApp-Style Chat Stream View -->
+      <div id="chat-stream-view" class="av-chat-stream-view">
+        <div id="chat-messages-container" class="av-chat-canvas"></div>
+        <div class="av-chat-composer-dock">
+          <div class="av-chat-composer-shell">
+            <input type="text" id="chat-input-text" placeholder="Write a message to support..." maxlength="2000" oninput="App.updateSupportCharCount()" onkeydown="if(event.key==='Enter') App.sendSupportMessage()">
+            <span id="chat-char-count" class="av-chat-char-count" style="display:none;">0/2000</span>
+            <button type="button" id="btn-chat-send" class="av-chat-send-btn" onclick="App.sendSupportMessage()" aria-label="Send message">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -10232,32 +10277,39 @@ window.gtranslateSettings = {
 
   <!-- MODAL: NOTIFICATIONS & ALERTS CENTER -->
   <div id="modal-notifications" class="modal-overlay">
-    <div class="modal-content" style="max-width: 440px; max-height: 84vh; display: flex; flex-direction: column; background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 18px; padding: 18px;">
-      <div class="modal-header" style="border-bottom: 1px solid #EEF1F6; padding-bottom: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 18px;">🔔</span>
-          <h3 class="modal-title" style="margin: 0; font-size: 16px; font-weight: 800; color: var(--text-primary);">Message &amp; Alerts</h3>
+    <div class="modal-content av-notif-modal">
+      <div class="av-notif-header">
+        <div class="av-notif-header-left">
+          <div class="av-notif-bell-badge" aria-hidden="true">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          </div>
+          <div>
+            <h3 class="av-notif-header-title">Notifications &amp; Alerts</h3>
+            <div id="notifications-modal-subtitle" class="av-notif-header-sub">Real-time account alerts &amp; trade executions</div>
+          </div>
         </div>
-        <button class="modal-close" onclick="App.closeModal('modal-notifications')">✕</button>
+        <button type="button" class="av-notif-close" onclick="App.closeModal('modal-notifications')" aria-label="Close notifications">✕</button>
       </div>
-      <div class="xdx-market-tabs" style="margin-bottom: 10px; border-bottom: 1px solid #F1F5F9;">
-        <div class="xdx-market-tab active" id="tab-notif-modal-notifications" onclick="App.setNotifModalTab('notifications')">
-          All <span id="modal-notif-unread-badge" class="badge badge-negative" style="display:none; font-size:10px; margin-left:4px; padding:1px 6px;">0</span>
-        </div>
-        <div class="xdx-market-tab" id="tab-notif-modal-announcement" onclick="App.setNotifModalTab('announcement')">
+
+      <div class="av-notif-tabs">
+        <button type="button" class="xdx-market-tab active" id="tab-notif-modal-notifications" onclick="App.setNotifModalTab('notifications')">
+          All Alerts <span id="modal-notif-unread-badge" class="badge badge-negative" style="display:none; font-size:10px; margin-left:4px; padding:1px 6px;">0</span>
+        </button>
+        <button type="button" class="xdx-market-tab" id="tab-notif-modal-announcement" onclick="App.setNotifModalTab('announcement')">
           Announcement
-        </div>
-        <div class="xdx-market-tab" id="tab-notif-modal-private" onclick="App.setNotifModalTab('private')">
+        </button>
+        <button type="button" class="xdx-market-tab" id="tab-notif-modal-private" onclick="App.setNotifModalTab('private')">
           Messages
-        </div>
+        </button>
       </div>
-      <div id="notifications-modal-subtitle" style="font-size: 11.5px; color: #6B7280; margin-bottom: 10px;">Real-time account alerts &amp; trade executions</div>
-      <div id="notifications-modal-list" style="overflow-y: auto; flex: 1; padding-right: 4px;">
+
+      <div id="notifications-modal-list" class="av-notif-body">
         <!-- Loaded dynamically by App.renderNotificationsList() -->
       </div>
-      <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #EEF1F6; display: flex; gap: 10px;">
-        <button type="button" class="btn-secondary" style="flex: 1; padding: 10px; font-size: 12px; font-weight: 700; color: #0052FF; background: #EFF4FF; border-color: #DBEAFE; border-radius: 8px;" onclick="App.markAllNotificationsRead()">✓ Mark all read</button>
-        <button type="button" class="btn-secondary" style="flex: 1; padding: 10px; font-size: 12px; border-radius: 8px;" onclick="App.closeModal('modal-notifications')">Dismiss</button>
+
+      <div class="av-notif-footer">
+        <button type="button" class="btn-secondary" style="flex: 1; padding: 10px 12px; font-size: 12.5px; font-weight: 700; color: #0052FF; background: #EFF4FF; border: 1px solid #DBEAFE; border-radius: 10px; cursor: pointer;" onclick="App.markAllNotificationsRead()">✓ Mark All Read</button>
+        <button type="button" class="btn-secondary" style="flex: 1; padding: 10px 12px; font-size: 12.5px; font-weight: 700; border-radius: 10px; cursor: pointer;" onclick="App.closeModal('modal-notifications')">Close</button>
       </div>
     </div>
   </div>
@@ -10832,8 +10884,8 @@ window.gtranslateSettings = {
         <button class="modal-close" onclick="App.closeModal('modal-update-email')">✕</button>
       </div>
       <div style="display:flex; flex-direction:column; gap:14px;">
-        <p style="font-size:13px; color:var(--text-muted);">
-          Update the primary email address associated with your trading account.
+        <p style="font-size:13px; color:var(--text-muted); margin:0;">
+          Enter your new email address and verify it using the 6-digit verification code sent to that new email.
         </p>
 
         <div class="form-group">
@@ -10842,34 +10894,65 @@ window.gtranslateSettings = {
         </div>
 
         <div class="form-group">
-          <label class="form-label">New Email Address *</label>
+          <label class="form-label" for="update-email-new">New Email Address *</label>
           <input type="email" id="update-email-new" placeholder="Enter new email address..." required>
         </div>
 
+        <div class="form-group">
+          <label class="form-label" for="update-email-otp">6-Digit Verification Code *</label>
+          <div class="av-sec-otp-row">
+            <input type="text" id="update-email-otp" class="av-sec-otp-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder="000000">
+            <button type="button" id="btn-send-email-otp" class="av-sec-send-btn" onclick="App.sendSecurityOtp('email')">Send Code</button>
+          </div>
+          <div id="update-email-otp-status" class="av-sec-otp-status">Code will be sent to your NEW email address.</div>
+        </div>
+
         <button class="btn-primary" id="btn-submit-update-email" style="margin-top:6px; padding:12px; font-weight:700;" onclick="App.submitUpdateEmail()">
-          Save New Email
+          Verify Code &amp; Update Email
         </button>
       </div>
     </div>
   </div>
 
-  <!-- MODAL: FORGOT PASSWORD -->
+  <!-- MODAL: FORGOT PASSWORD (6-Digit OTP Recovery) -->
   <div id="modal-forgot-password" class="modal-overlay">
     <div class="modal-content" style="max-width: 440px; padding-bottom: 28px;">
       <div class="modal-header">
-        <h3>Forgot Password</h3>
+        <h3>Forgot Login Password</h3>
         <button class="modal-close" onclick="App.closeModal('modal-forgot-password')">✕</button>
       </div>
       <div style="display:flex; flex-direction:column; gap:14px;">
         <p style="font-size:13px; color:var(--text-muted); line-height:1.5; margin:0;">
-          Enter your registered email address and we will send you a secure, single-use link to reset your password.
+          Enter your registered email, click <strong>Send Code</strong> to receive a 6-digit verification code, and set a new password.
         </p>
         <div class="form-group">
-          <label class="form-label" for="forgot-pwd-email">Email Address</label>
-          <input type="email" id="forgot-pwd-email" class="av-auth-input-clean" placeholder="Enter your account email" onkeyup="if(event.key==='Enter') App.submitForgotPassword()">
+          <label class="form-label" for="forgot-pwd-email">Registered Email Address *</label>
+          <div class="av-sec-otp-row">
+            <input type="email" id="forgot-pwd-email" class="av-auth-input-clean" style="flex:1;" placeholder="Enter your account email">
+            <button type="button" id="btn-send-forgot-otp" class="av-sec-send-btn" onclick="App.sendSecurityOtp('forgot_pwd')">Send Code</button>
+          </div>
+          <div id="forgot-pwd-otp-status" class="av-sec-otp-status">We will email a 6-digit reset verification code.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="forgot-pwd-otp">6-Digit Verification Code *</label>
+          <input type="text" id="forgot-pwd-otp" class="av-auth-input-clean av-sec-otp-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" placeholder="000000">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="forgot-pwd-new">New Password *</label>
+          <div class="password-input-wrapper" style="position:relative; display:flex; align-items:center; width:100%;">
+            <input type="password" id="forgot-pwd-new" class="av-auth-input-clean" placeholder="New password (8 to 128 chars)" style="padding-right:44px !important;">
+            <button type="button" class="password-toggle-btn" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:#9CA3AF; padding:6px; cursor:pointer;" onclick="App.togglePasswordVisibility('forgot-pwd-new', this)" aria-label="Toggle password visibility">👁</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="forgot-pwd-confirm">Confirm New Password *</label>
+          <div class="password-input-wrapper" style="position:relative; display:flex; align-items:center; width:100%;">
+            <input type="password" id="forgot-pwd-confirm" class="av-auth-input-clean" placeholder="Confirm new password" style="padding-right:44px !important;" onkeyup="if(event.key==='Enter') App.submitForgotPassword()">
+            <button type="button" class="password-toggle-btn" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:#9CA3AF; padding:6px; cursor:pointer;" onclick="App.togglePasswordVisibility('forgot-pwd-confirm', this)" aria-label="Toggle password visibility">👁</button>
+          </div>
         </div>
         <button type="button" class="btn-primary" id="btn-submit-forgot-pwd" style="padding:12px; font-weight:700;" onclick="App.submitForgotPassword()">
-          Send Reset Link
+          Verify Code &amp; Reset Password
         </button>
       </div>
     </div>
@@ -10991,6 +11074,26 @@ window.gtranslateSettings = {
           <button type="button" class="lang-select-item" data-currency-code="GEL" onclick="App.setDisplayCurrency('GEL', '₾', 2.72)"><span>GEL — Georgian Lari (₾)</span><span class="curr-check" style="display:none;color:#0052FF;font-weight:800;">✓</span></button>
           <button type="button" class="lang-select-item" data-currency-code="AED" onclick="App.setDisplayCurrency('AED', 'د.إ', 3.67)"><span>AED — UAE Dirham</span><span class="curr-check" style="display:none;color:#0052FF;font-weight:800;">✓</span></button>
           <button type="button" class="lang-select-item" data-currency-code="TRY" onclick="App.setDisplayCurrency('TRY', '₺', 34.2)"><span>TRY — Turkish Lira (₺)</span><span class="curr-check" style="display:none;color:#0052FF;font-weight:800;">✓</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ONBOARDING GUIDED TOUR OVERLAY (New Users Only) -->
+  <div id="av-onboarding-tour" class="av-tour-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="av-tour-title">
+    <div id="av-tour-spotlight" class="av-tour-spotlight"></div>
+    <div id="av-tour-card" class="av-tour-card">
+      <div class="av-tour-head">
+        <span id="av-tour-step-pill" class="av-tour-step-pill">Step 1 of 4</span>
+        <button type="button" class="av-tour-skip-btn" onclick="App.skipOnboardingTour()">Skip Tour</button>
+      </div>
+      <h4 id="av-tour-title" class="av-tour-title">Deposit Funds</h4>
+      <p id="av-tour-desc" class="av-tour-desc"></p>
+      <div class="av-tour-actions">
+        <div id="av-tour-dots" class="av-tour-dots"></div>
+        <div class="av-tour-btns">
+          <button type="button" id="av-tour-prev-btn" class="av-tour-prev-btn" onclick="App.prevTourStep()">Back</button>
+          <button type="button" id="av-tour-next-btn" class="av-tour-next-btn" onclick="App.nextTourStep()">Next</button>
         </div>
       </div>
     </div>
@@ -11133,7 +11236,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261125_v134_withdraw_fee_and_daily_add_sig";
+  const CACHE_VERSION = "20261126_v135_security_otp_tour_support";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -11165,18 +11268,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261125_v134_withdraw_fee_and_daily_add_sig"></script>
-  <script defer src="/assets/js/chart.js?v=20261125_v134_withdraw_fee_and_daily_add_sig"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261126_v135_security_otp_tour_support"></script>
+  <script defer src="/assets/js/chart.js?v=20261126_v135_security_otp_tour_support"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261125_v134_withdraw_fee_and_daily_add_sig"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261125_v134_withdraw_fee_and_daily_add_sig"></script>
+  <script defer src="/assets/js/app.js?v=20261126_v135_security_otp_tour_support"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261126_v135_security_otp_tour_support"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261125_v134_withdraw_fee_and_daily_add_sig";
+      var SW_BUILD = "20261126_v135_security_otp_tour_support";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

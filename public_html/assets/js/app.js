@@ -482,6 +482,7 @@ const App = {
         await this.loadNotifications().catch(() => {});
         await this.loadSignals().catch(() => {});
         setTimeout(() => this.loadMarketingData(), 1200);
+        setTimeout(() => this.maybeStartOnboardingTour(), 450);
       }
     }).catch(() => {});
 
@@ -1248,7 +1249,8 @@ const App = {
       this.loadBalances();
       this.loadWalletHistoryPreview();
     } else if (view === 'copytrading') {
-      this.loadCopyTrading();
+      this.navigate('signals');
+      return;
     } else if (view === 'referrals') {
       this.loadReferrals();
     } else if (view === 'signals') {
@@ -2704,15 +2706,213 @@ const App = {
 
   toggleBalanceVisibility() {
     this.state.hideBalance = !this.state.hideBalance;
-    const eyeIcon = document.getElementById('balance-eye-icon');
-    if (eyeIcon) {
-      if (this.state.hideBalance) {
-        eyeIcon.innerHTML = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>`;
-      } else {
-        eyeIcon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
-      }
+    const isHidden = Boolean(this.state.hideBalance);
+    const eyePath = isHidden
+      ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>`
+      : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
+
+    ['balance-eye-icon', 'wallet-balance-eye-icon'].forEach(id => {
+      const icon = document.getElementById(id);
+      if (icon) icon.innerHTML = eyePath;
+    });
+
+    const fadeTargets = Array.from(document.querySelectorAll('.av-bal-fade'));
+    if (this._balFadeTimer) {
+      clearTimeout(this._balFadeTimer);
+      this._balFadeTimer = null;
     }
-    this.updateHomeHeroBalance();
+    if (fadeTargets.length) {
+      fadeTargets.forEach(el => el.classList.add('is-fading'));
+      this._balFadeTimer = setTimeout(() => {
+        this.updateHomeHeroBalance();
+        this.renderWalletView();
+        requestAnimationFrame(() => {
+          fadeTargets.forEach(el => el.classList.remove('is-fading'));
+        });
+      }, 155);
+    } else {
+      this.updateHomeHeroBalance();
+      this.renderWalletView();
+    }
+  },
+
+  /* Guided New-User Onboarding Tour (Deposit, Withdrawal, KYC, Avatar) */
+  getOnboardingTourSteps() {
+    return [
+      {
+        view: 'home',
+        targetId: 'home-action-deposit',
+        title: '1. Deposit Funds',
+        desc: 'Tap Deposit to view your USDT wallet address and submit transfers. Minimum deposit is $100, and $300+ unlocks Additional Signals.'
+      },
+      {
+        view: 'home',
+        targetId: 'home-action-withdraw',
+        title: '2. Withdraw Earnings',
+        desc: 'Tap Withdrawal anytime to request payouts using your bound USDT address and 6-digit fund withdrawal PIN.'
+      },
+      {
+        view: 'home',
+        targetId: 'home-user-kyc-badge',
+        title: '3. Submit KYC Verification',
+        desc: 'Tap your verification status badge here to submit your ID document and selfie for fast Tier 2 verification.'
+      },
+      {
+        view: 'settings',
+        targetId: 'settings-avatar-row',
+        title: '4. Choose Your Avatar',
+        desc: 'Customize your account avatar from our collection right here in Settings—it updates across your header and profile.'
+      }
+    ];
+  },
+
+  getOnboardingTourKey(suffix) {
+    const uid = this.state.user?.id || this.state.user?.numeric_uid || this.state.user?.email || 'guest';
+    return `primex_tour_${suffix}_${String(uid).toLowerCase()}`;
+  },
+
+  maybeStartOnboardingTour() {
+    const user = this.state.user;
+    if (!user) return;
+    const role = String(user.role || '').toUpperCase();
+    if (user.is_admin || ['ADMIN', 'SUPER_ADMIN', 'FINANCE_MANAGER', 'KYC_MANAGER'].includes(role)) return;
+    try {
+      const pending = localStorage.getItem(this.getOnboardingTourKey('pending')) === '1';
+      const done = localStorage.getItem(this.getOnboardingTourKey('done')) === '1';
+      if (!pending || done) return;
+    } catch (e) {
+      return;
+    }
+    const authModal = document.getElementById('modal-auth');
+    if (authModal && authModal.classList.contains('open')) return;
+    if (this.state.currentView && this.state.currentView !== 'home') return;
+    this.startOnboardingTour();
+  },
+
+  startOnboardingTour() {
+    const overlay = document.getElementById('av-onboarding-tour');
+    if (!overlay) return;
+    this.state._tourStep = 0;
+    this.state._tourActive = true;
+    overlay.style.display = 'block';
+    if (!this._tourResizeHandler) {
+      this._tourResizeHandler = () => {
+        if (this.state._tourActive) this.positionTourSpotlight();
+      };
+      window.addEventListener('resize', this._tourResizeHandler);
+    }
+    this.renderTourStep();
+  },
+
+  renderTourStep() {
+    const steps = this.getOnboardingTourSteps();
+    const idx = Math.max(0, Math.min(steps.length - 1, Number(this.state._tourStep || 0)));
+    this.state._tourStep = idx;
+    const step = steps[idx];
+
+    if (step.view && this.state.currentView !== step.view) {
+      this.navigate(step.view);
+    }
+
+    const pillEl = document.getElementById('av-tour-step-pill');
+    const titleEl = document.getElementById('av-tour-title');
+    const descEl = document.getElementById('av-tour-desc');
+    const dotsEl = document.getElementById('av-tour-dots');
+    const prevBtn = document.getElementById('av-tour-prev-btn');
+    const nextBtn = document.getElementById('av-tour-next-btn');
+
+    if (pillEl) pillEl.textContent = `Step ${idx + 1} of ${steps.length}`;
+    if (titleEl) titleEl.textContent = step.title;
+    if (descEl) descEl.textContent = step.desc;
+    if (dotsEl) {
+      dotsEl.innerHTML = steps.map((_, i) => `<span class="av-tour-dot${i === idx ? ' active' : ''}"></span>`).join('');
+    }
+    if (prevBtn) prevBtn.style.visibility = idx === 0 ? 'hidden' : 'visible';
+    if (nextBtn) nextBtn.textContent = idx === steps.length - 1 ? 'Finish' : 'Next';
+
+    setTimeout(() => this.positionTourSpotlight(), 80);
+  },
+
+  positionTourSpotlight() {
+    const steps = this.getOnboardingTourSteps();
+    const idx = Math.max(0, Math.min(steps.length - 1, Number(this.state._tourStep || 0)));
+    const step = steps[idx];
+    const target = document.getElementById(step.targetId);
+    const spot = document.getElementById('av-tour-spotlight');
+    const card = document.getElementById('av-tour-card');
+    if (!spot || !card) return;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (!target) {
+      spot.style.display = 'none';
+      card.style.left = `${Math.max(16, (vw - card.offsetWidth) / 2)}px`;
+      card.style.top = `${Math.max(24, (vh - card.offsetHeight) / 2)}px`;
+      return;
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => {
+      if (!this.state._tourActive) return;
+      const rect = target.getBoundingClientRect();
+      const pad = 8;
+      const left = Math.max(8, rect.left - pad);
+      const top = Math.max(8, rect.top - pad);
+      const width = Math.min(vw - left - 8, rect.width + pad * 2);
+      const height = Math.min(vh - top - 8, rect.height + pad * 2);
+
+      spot.style.display = 'block';
+      spot.style.left = `${left}px`;
+      spot.style.top = `${top}px`;
+      spot.style.width = `${width}px`;
+      spot.style.height = `${height}px`;
+
+      const cardW = Math.min(340, vw - 32);
+      const cardH = card.offsetHeight || 200;
+      const spaceBelow = vh - (top + height) - 16;
+      let cardTop = spaceBelow >= cardH
+        ? (top + height + 14)
+        : Math.max(16, top - cardH - 14);
+      if (cardTop + cardH > vh - 12) cardTop = Math.max(16, vh - cardH - 16);
+      const centeredLeft = left + (width / 2) - (cardW / 2);
+      const cardLeft = Math.max(16, Math.min(vw - cardW - 16, centeredLeft));
+
+      card.style.left = `${cardLeft}px`;
+      card.style.top = `${cardTop}px`;
+    }, 180);
+  },
+
+  nextTourStep() {
+    const steps = this.getOnboardingTourSteps();
+    if ((this.state._tourStep || 0) >= steps.length - 1) {
+      this.finishOnboardingTour();
+      return;
+    }
+    this.state._tourStep = (this.state._tourStep || 0) + 1;
+    this.renderTourStep();
+  },
+
+  prevTourStep() {
+    if ((this.state._tourStep || 0) <= 0) return;
+    this.state._tourStep = (this.state._tourStep || 0) - 1;
+    this.renderTourStep();
+  },
+
+  finishOnboardingTour() {
+    this.state._tourActive = false;
+    const overlay = document.getElementById('av-onboarding-tour');
+    if (overlay) overlay.style.display = 'none';
+    try {
+      localStorage.removeItem(this.getOnboardingTourKey('pending'));
+      localStorage.setItem(this.getOnboardingTourKey('done'), '1');
+    } catch (e) {}
+    if (this.state.currentView !== 'home') {
+      this.navigate('home');
+    }
+  },
+
+  skipOnboardingTour() {
+    this.finishOnboardingTour();
   },
 
   getUserUID() {
@@ -4262,7 +4462,7 @@ const App = {
     }
   },
 
-  /* Signals: 2 Daily Signals (6 PM / 8 PM PKT) + Additional Signals (9:30 PM PKT, $4 Fixed) */
+  /* Signals: Daily Trading & Additional Signals */
   setSignalScheduleTab(tab = 'first') {
     this.state.signalScheduleTab = tab;
     document.querySelectorAll('.av-sig-sched-tab').forEach(btn => {
@@ -4271,60 +4471,9 @@ const App = {
     this.renderSignalScheduleTable(tab);
   },
 
-  renderSignalScheduleTable(tab = 'first') {
+  renderSignalScheduleTable() {
     const host = document.getElementById('sig-schedule-countries');
-    if (!host) return;
-    const tables = {
-      first: [
-        { name: 'UK', time: '1:00 PM', utc: 'UTC+0' },
-        { name: 'Ghana', time: '1:00 PM', utc: 'UTC+0' },
-        { name: 'Nigeria', time: '2:00 PM', utc: 'UTC+1' },
-        { name: 'South Africa', time: '3:00 PM', utc: 'UTC+2' },
-        { name: 'Egypt', time: '4:00 PM', utc: 'UTC+3' },
-        { name: 'Kenya', time: '4:00 PM', utc: 'UTC+3' },
-        { name: 'Tanzania', time: '4:00 PM', utc: 'UTC+3' },
-        { name: 'Turkey', time: '5:00 PM', utc: 'UTC+4' },
-        { name: 'UAE', time: '5:00 PM', utc: 'UTC+4' },
-        { name: 'Pakistan', time: '6:00 PM', utc: 'UTC+5', pkt: true },
-        { name: 'India', time: '6:30 PM', utc: 'UTC+5:30' },
-        { name: 'China', time: '9:00 PM', utc: 'UTC+8' }
-      ],
-      second: [
-        { name: 'UK', time: '3:00 PM', utc: 'UTC+0' },
-        { name: 'Ghana', time: '3:00 PM', utc: 'UTC+0' },
-        { name: 'Nigeria', time: '4:00 PM', utc: 'UTC+1' },
-        { name: 'South Africa', time: '5:00 PM', utc: 'UTC+2' },
-        { name: 'Egypt', time: '6:00 PM', utc: 'UTC+3' },
-        { name: 'Kenya', time: '6:00 PM', utc: 'UTC+3' },
-        { name: 'Tanzania', time: '6:00 PM', utc: 'UTC+3' },
-        { name: 'Turkey', time: '7:00 PM', utc: 'UTC+4' },
-        { name: 'UAE', time: '7:00 PM', utc: 'UTC+4' },
-        { name: 'Pakistan', time: '8:00 PM', utc: 'UTC+5', pkt: true },
-        { name: 'India', time: '8:30 PM', utc: 'UTC+5:30' },
-        { name: 'China', time: '11:00 PM', utc: 'UTC+8' }
-      ],
-      additional: [
-        { name: 'UK', time: '4:30 PM', utc: 'UTC+0' },
-        { name: 'Ghana', time: '4:30 PM', utc: 'UTC+0' },
-        { name: 'Nigeria', time: '5:30 PM', utc: 'UTC+1' },
-        { name: 'South Africa', time: '6:30 PM', utc: 'UTC+2' },
-        { name: 'Egypt', time: '7:30 PM', utc: 'UTC+3' },
-        { name: 'Kenya', time: '7:30 PM', utc: 'UTC+3' },
-        { name: 'Tanzania', time: '7:30 PM', utc: 'UTC+3' },
-        { name: 'Turkey', time: '8:30 PM', utc: 'UTC+4' },
-        { name: 'UAE', time: '8:30 PM', utc: 'UTC+4' },
-        { name: 'Pakistan', time: '9:30 PM', utc: 'UTC+5', pkt: true },
-        { name: 'India', time: '10:00 PM', utc: 'UTC+5:30' },
-        { name: 'China', time: '12:30 AM', utc: 'UTC+8' }
-      ]
-    };
-    const rows = tables[tab] || tables.first;
-    host.innerHTML = rows.map(r => `
-      <div class="av-sig-country-row${r.pkt ? ' is-pkt' : ''}">
-        <span class="av-sig-country-name">${this.escapeHtml(r.name)}</span>
-        <span class="av-sig-country-time">${this.escapeHtml(r.time)} <span class="av-sig-country-utc">(${this.escapeHtml(r.utc)})</span></span>
-      </div>
-    `).join('');
+    if (host) host.innerHTML = '';
   },
 
   async loadSignals() {
@@ -4383,7 +4532,7 @@ const App = {
     }
     if (kpiFutMetaEl) {
       kpiFutMetaEl.textContent = tradingUsdt >= minReq
-        ? `Qualified ($${minReq.toFixed(0)} Min) · Daily 6:00 PM & 8:00 PM PKT unlocked`
+        ? `Qualified ($${minReq.toFixed(0)} Min) · Daily signals unlocked`
         : `Minimum $${minReq.toFixed(0)} USDT Future Balance required for daily signals`;
     }
     if (kpiAddEl) {
@@ -4393,8 +4542,8 @@ const App = {
     }
     if (kpiAddMetaEl) {
       kpiAddMetaEl.textContent = addTotalEarned > 0
-        ? `Earned ${addTotalEarned} (${addDepositCredits} deposit + ${addReferralCredits} referral) · Used ${addUsed} · 1/day · $4.00/signal`
-        : `Deposit $300+ or invite a $300+ depositor to unlock $4.00 signals`;
+        ? `Earned ${addTotalEarned} (${addDepositCredits} deposit + ${addReferralCredits} referral) · Used ${addUsed} · 1/day`
+        : `Deposit $300+ or invite a $300+ depositor to unlock Additional Signals`;
     }
 
     // Highlight highest unlocked tier row in tier table
@@ -4476,7 +4625,7 @@ const App = {
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <span class="badge badge-positive">FUTURE ACCOUNT QUALIFIED</span>
                 <span style="font-size: 12px; color: #111827; font-weight: 600;">
-                  Future Balance ($${tradingUsdt.toFixed(2)} USDT) &bull; Daily 6:00 PM &amp; 8:00 PM PKT Unlocked
+                  Future Balance ($${tradingUsdt.toFixed(2)} USDT) &bull; Daily Signals Unlocked
                 </span>
               </div>
               <span style="font-size: 11px; color: #059669; font-weight: 700;">Additional Credits: ${addRemaining} (1/Day · ${addCanToday ? 'Ready Today' : (addRemaining > 0 ? 'Daily Limit Used' : 'Locked')})</span>
@@ -4538,7 +4687,7 @@ const App = {
                   <tr>
                     <td data-label="Signal"><strong>${this.escapeHtml(symbol)}</strong> <span class="badge ${direction === 'BUY' ? 'badge-positive' : 'badge-negative'}">${this.escapeHtml(direction)}</span></td>
                     <td data-label="Type / Stake" class="mono">${isAddExec ? 'Additional Signal' : `$${stake.toFixed(2)} USDT`}</td>
-                    <td data-label="Reward Rate" class="mono positive">${isAddExec ? '$4.00 FIXED' : `+${pct.toFixed(2)}%`}</td>
+                    <td data-label="Reward Rate" class="mono positive">${isAddExec ? 'ADDITIONAL' : `+${pct.toFixed(2)}%`}</td>
                     <td data-label="Profit Credited" class="mono positive"><strong>+$${profit.toFixed(2)} USDT</strong></td>
                     <td data-label="Execution Time" class="mono" style="font-size: 11px; color: var(--text-muted);">${this.escapeHtml(executedAt)}</td>
                     <td data-label="Status"><span class="badge badge-positive">PAID</span></td>
@@ -4629,7 +4778,7 @@ const App = {
           const isBuy = ['BUY', 'LONG', 'UP'].includes(String(s.direction || 'BUY').toUpperCase());
           const isAdd = Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
           const selected = activeSig && s.id === activeSig.id;
-          return `<button type="button" class="av-sig-sel-pill ${selected ? 'active' : ''}" onclick="App.setSignalTerminalSignal('${this.escapeHtml(s.id)}')">${this.escapeHtml(s.symbol)} ${isBuy ? '▲ UP' : '▼ DOWN'}${isAdd ? ' · $4 Add' : ''}</button>`;
+          return `<button type="button" class="av-sig-sel-pill ${selected ? 'active' : ''}" onclick="App.setSignalTerminalSignal('${this.escapeHtml(s.id)}')">${this.escapeHtml(s.symbol)} ${isBuy ? '▲ UP' : '▼ DOWN'}${isAdd ? ' · Additional' : ''}</button>`;
         }).join('');
       } else {
         pillsEl.style.display = 'none';
@@ -4673,7 +4822,7 @@ const App = {
       if (isLive) {
         statEl.style.background = isAdditional ? '#EFF4FF' : '#ECFDF5';
         statEl.style.color = isAdditional ? '#0052FF' : '#059669';
-        statEl.textContent = isAdditional ? 'ADDITIONAL SIGNAL • $4.00 FIXED' : 'LIVE EXECUTING';
+        statEl.textContent = isAdditional ? 'ADDITIONAL SIGNAL' : 'LIVE EXECUTING';
       } else {
         statEl.style.background = '#EFF4FF';
         statEl.style.color = '#0052FF';
@@ -4687,9 +4836,9 @@ const App = {
     if (noteEl) {
       noteEl.textContent = isLive
         ? (isAdditional
-            ? '9:30 PM PKT Additional Signal · +$4.00 USDT Fixed (Separate from 30d 2× plan)'
+            ? 'Additional Signal Session · Separate from 30d 2× plan'
             : `${activeSig?.slot_label || 'Daily Session'} · +${levels.pct}% Return toward 30-day 2× target`)
-        : 'Daily: 6:00 PM & 8:00 PM PKT · Additional: 9:30 PM PKT ($4.00)';
+        : 'Daily Signal Sessions · Live Trading Terminal';
     }
 
     if (actionWrap) {
@@ -4704,10 +4853,10 @@ const App = {
         if (isTest) {
           actionWrap.innerHTML = `<button type="button" class="btn-secondary" style="padding:9px 16px;font-size:12px;font-weight:800;background:#F5F3FF;border:1px solid #DDD6FE;color:#7C3AED;border-radius:999px;cursor:pointer;" onclick="App.openExecuteSignalModal('${this.escapeHtml(activeSig.id)}')">🧪 Open Testing Signal — No Profit</button>`;
         } else if (hasUsed) {
-          actionWrap.innerHTML = `<span class="badge badge-positive" style="padding:8px 14px;">✅ Confirmed (${isAdditional ? '+$4.00 Fixed' : `+${levels.pct}%`})</span>`;
+          actionWrap.innerHTML = `<span class="badge badge-positive" style="padding:8px 14px;">✅ Confirmed (${isAdditional ? 'Additional' : `+${levels.pct}%`})</span>`;
         } else if (isAdditional) {
           if (addRemaining > 0 && addUsedToday < 1) {
-            actionWrap.innerHTML = `<button type="button" class="btn-primary" style="padding:10px 18px;font-size:13px;font-weight:800;border-radius:999px;" data-alpha-action="signal:${this.escapeHtml(activeSig.id)}" onclick="App.confirmSignalDirectly('${this.escapeHtml(activeSig.id)}')">🎁 Confirm Additional Signal (+$4.00 USDT Fixed)</button>`;
+            actionWrap.innerHTML = `<button type="button" class="btn-primary" style="padding:10px 18px;font-size:13px;font-weight:800;border-radius:999px;" data-alpha-action="signal:${this.escapeHtml(activeSig.id)}" onclick="App.confirmSignalDirectly('${this.escapeHtml(activeSig.id)}')">🎁 Confirm Additional Signal</button>`;
           } else if (addRemaining > 0 && addUsedToday >= 1) {
             actionWrap.innerHTML = `<span class="badge badge-positive" style="padding:8px 14px;">✅ Today's Additional Signal (1/Day) Used · ${addRemaining} Remaining</span>`;
           } else {
@@ -4818,7 +4967,7 @@ const App = {
       const wiggle = (Math.random() - 0.5) * levels.entry * (levels.isForex ? 0.00018 : 0.0006);
       nextPrice = nextPrice + wiggle + (levels.entry - nextPrice) * 0.12;
       const cdEl = document.getElementById('sig-term-countdown');
-      if (cdEl) cdEl.textContent = '6 PM / 8 PM / 9:30 PM PKT';
+      if (cdEl) cdEl.textContent = 'Standby';
     }
 
     meta.lastPrice = nextPrice;
@@ -4884,7 +5033,7 @@ const App = {
     this.setActionButtons(actionScope, true, 'Confirming...');
 
     try {
-      this.toast(isAdditional ? '🎁 Confirming Additional Signal (+$4.00 USDT Fixed)...' : '⚡ Confirming signal & automatically crediting profit...', 'info');
+      this.toast(isAdditional ? '🎁 Confirming Additional Signal...' : '⚡ Confirming signal & automatically crediting profit...', 'info');
       const res = await this.api('/signals/execute.php', 'POST', {
         signal_id: signalId,
         stake_amount: isAdditional ? 0 : 100,
@@ -4892,8 +5041,8 @@ const App = {
       });
 
       if (res.success) {
-        const profitAmt = res.data?.profit_amount !== undefined ? Number(res.data.profit_amount).toFixed(2) : (isAdditional ? '4.00' : '1.67');
-        this.toast(res.message || `Signal confirmed! +$${profitAmt} USDT profit automatically added to your balance!`, 'success');
+        const profitPrefix = res.data?.profit_amount !== undefined ? `+$${Number(res.data.profit_amount).toFixed(2)} USDT ` : '';
+        this.toast(res.message || `Signal confirmed! ${profitPrefix}profit automatically added to your balance!`, 'success');
         this.state.signals = (this.state.signals || []).filter(sig => sig.id !== signalId);
         this.renderHomeSignals();
         await this.loadBalances();
@@ -4934,7 +5083,7 @@ const App = {
     if (!signals.length) {
       container.innerHTML = `
         <div style="text-align: center; padding: 16px 12px; color: #6B7280; font-size: 12px; background: #F8FAFC; border-radius: 10px; border: 1px dashed #CBD5E1;">
-          📡 No active signals broadcasted right now. Next windows: 6:00 PM / 8:00 PM / 9:30 PM PKT.
+          📡 No active signals broadcasted right now. Check back when the next live session starts.
         </div>
       `;
       return;
@@ -4973,7 +5122,7 @@ const App = {
         timerBadgeHtml = `
           <div style="display: flex; justify-content: space-between; align-items: center; background: #ECFDF5; border: 1px solid #A7F3D0; padding: 6px 10px; border-radius: 8px; margin-bottom: 8px; font-size: 11px;">
             <span style="color: #059669; font-weight: 700;">✅ Succeeded:</span>
-            <span style="color: #059669; font-weight: 700;">${isAdditional ? '+$4.00 Fixed' : `+${profitPct}% Credited`}</span>
+            <span style="color: #059669; font-weight: 700;">${isAdditional ? 'Additional Credited' : `+${profitPct}% Credited`}</span>
           </div>
         `;
       } else if (isExpired) {
@@ -4995,7 +5144,7 @@ const App = {
         if (addRemaining > 0) {
           actionHtml = `
             <button class="btn-primary" style="width: 100%; padding: 9px 14px; font-size: 12px; font-weight: 800; background: #0052FF; color: #FFFFFF; border-radius: 999px; box-shadow: 0 4px 12px rgba(0, 82, 255, 0.25); cursor: pointer;" data-alpha-action="signal:${s.id}" onclick="App.confirmSignalDirectly('${s.id}')">
-              🎁 Confirm Additional Signal (+$4.00 USDT)
+              🎁 Confirm Additional Signal
             </button>
           `;
         } else {
@@ -5046,7 +5195,7 @@ const App = {
               ${isTesting ? `<span class="badge" style="font-size: 10px; background:#F5F3FF; color:#7C3AED;">🧪 TEST • NO PROFIT</span>` : ''}
             </div>
             <span class="badge" style="background:${isTesting ? '#F5F3FF' : (isAdditional ? '#EFF4FF' : '#ECFDF5')}; color:${isTesting ? '#7C3AED' : (isAdditional ? '#0052FF' : '#059669')}; font-weight:700; font-size:11px;">
-              ${isTesting ? 'TEST ONLY' : (isAdditional ? '+$4.00 Fixed' : `+${profitPct}% Return`)}
+              ${isTesting ? 'TEST ONLY' : (isAdditional ? 'Additional Signal' : `+${profitPct}% Return`)}
             </span>
           </div>
 
@@ -5087,9 +5236,9 @@ const App = {
     const isAdditionalModal = !isTestingModal && Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
     const profitPct = (isTestingModal || isAdditionalModal) ? 0 : (s.profit_percentage || 1.67);
     const profitBadge = document.getElementById('exec-sig-profit-badge');
-    if (profitBadge) profitBadge.textContent = isTestingModal ? '🧪 TESTING • NO PROFIT' : (isAdditionalModal ? '+$4.00 USDT Fixed Reward' : `+${profitPct}% Guaranteed Profit`);
+    if (profitBadge) profitBadge.textContent = isTestingModal ? '🧪 TESTING • NO PROFIT' : (isAdditionalModal ? 'Additional Signal Reward' : `+${profitPct}% Guaranteed Profit`);
     const profitRate = document.getElementById('exec-sig-profit-rate');
-    if (profitRate) profitRate.textContent = isTestingModal ? 'NO PROFIT' : (isAdditionalModal ? '$4.00 FIXED' : `+${profitPct}%`);
+    if (profitRate) profitRate.textContent = isTestingModal ? 'NO PROFIT' : (isAdditionalModal ? 'ADDITIONAL' : `+${profitPct}%`);
 
     const schedTimeEl = document.getElementById('exec-sig-schedule-time');
     if (schedTimeEl) schedTimeEl.textContent = '';
@@ -5109,7 +5258,7 @@ const App = {
       amountEl.value = Math.max(0, tradingBal).toFixed(2);
       amountEl.readOnly = true;
       amountEl.title = isAdditionalModal
-        ? 'Additional Signals pay a fixed $4.00 USDT reward.'
+        ? 'Additional Signals reward is credited separately from the 30-day 2× plan.'
         : 'Signal profit is calculated from your Future USDT balance.';
     }
 
@@ -5124,7 +5273,7 @@ const App = {
     const isTestingCalc = Boolean(s.is_testing || s.no_profit || String(s.id || '').startsWith('sig_test_'));
     const isAdditionalCalc = !isTestingCalc && Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
     const profitPct = (isTestingCalc || isAdditionalCalc) ? 0 : (s.profit_percentage || 1.67);
-    const profit = isTestingCalc ? 0 : (isAdditionalCalc ? 4.00 : (amount * profitPct) / 100);
+    const profit = isTestingCalc ? 0 : (isAdditionalCalc ? 4 : (amount * profitPct) / 100);
     const total = amount + profit;
 
     const estProfitEl = document.getElementById('exec-sig-est-profit');
@@ -5598,6 +5747,9 @@ const App = {
         this.closeModal('modal-auth');
         try { this.updateHeaderAuth(); } catch (uiErr) { console.warn('[Register UI]', uiErr); }
         this.toast(res.message || 'Account created and email verified successfully!', 'success');
+        if (this.state.user && !this.state.user.is_admin) {
+          try { localStorage.setItem(this.getOnboardingTourKey('pending'), '1'); } catch (e) {}
+        }
         this.navigate('home');
         Promise.allSettled([
           this.checkAuth(),
@@ -5605,6 +5757,7 @@ const App = {
           this.loadNotifications(),
           this.loadSignals()
         ]).catch(() => {});
+        setTimeout(() => this.maybeStartOnboardingTour(), 500);
       } else {
         const msg = (res && (res.message || (res.error && res.error.message))) || 'Registration failed.';
         this.toast(msg, 'error');
@@ -5654,23 +5807,166 @@ const App = {
     this.loadBalances();
   },
 
+  /* Shared 6-Digit Email OTP Sender & Cooldown Controller */
+  _startOtpCooldown(btnId, defaultLabel = 'Send Code') {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    this._otpCooldownTimers = this._otpCooldownTimers || {};
+    if (this._otpCooldownTimers[btnId]) clearInterval(this._otpCooldownTimers[btnId]);
+    let left = 60;
+    btn.disabled = true;
+    btn.textContent = `${left}s`;
+    this._otpCooldownTimers[btnId] = setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(this._otpCooldownTimers[btnId]);
+        delete this._otpCooldownTimers[btnId];
+        btn.disabled = false;
+        btn.textContent = defaultLabel;
+      } else {
+        btn.textContent = `${left}s`;
+      }
+    }, 1000);
+  },
+
+  async sendSecurityOtp(context) {
+    let action = '';
+    let payloadEmail = '';
+    let btnId = '';
+    let statusId = '';
+    let inputId = '';
+
+    if (context === 'chpwd') {
+      action = this.state.changePwdForgotMode ? 'forgot_password' : 'change_password';
+      payloadEmail = this.state.changePwdForgotMode ? (this.state.user?.email || '') : '';
+      btnId = 'btn-send-chpwd-otp';
+      statusId = 'chpwd-otp-status';
+      inputId = 'chpwd-otp';
+    } else if (context === 'pin') {
+      action = this.state.pinForgotMode ? 'forgot_pin' : 'change_pin';
+      btnId = 'btn-send-pin-otp';
+      statusId = 'pin-otp-status';
+      inputId = 'pin-otp';
+    } else if (context === 'email') {
+      action = 'change_email';
+      payloadEmail = (document.getElementById('update-email-new')?.value || '').trim();
+      if (!payloadEmail || !payloadEmail.includes('@')) {
+        this.toast('Enter your valid new email address first.', 'warning');
+        document.getElementById('update-email-new')?.focus();
+        return;
+      }
+      btnId = 'btn-send-email-otp';
+      statusId = 'update-email-otp-status';
+      inputId = 'update-email-otp';
+    } else if (context === 'forgot_pwd') {
+      action = 'forgot_password';
+      payloadEmail = (document.getElementById('forgot-pwd-email')?.value || '').trim();
+      if (!payloadEmail || !payloadEmail.includes('@')) {
+        this.toast('Enter your registered email address first.', 'warning');
+        document.getElementById('forgot-pwd-email')?.focus();
+        return;
+      }
+      btnId = 'btn-send-forgot-otp';
+      statusId = 'forgot-pwd-otp-status';
+      inputId = 'forgot-pwd-otp';
+    } else {
+      return;
+    }
+
+    const btn = document.getElementById(btnId);
+    const statusEl = document.getElementById(statusId);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+    }
+    if (statusEl) {
+      statusEl.className = 'av-sec-otp-status';
+      statusEl.textContent = 'Sending 6-digit verification code...';
+    }
+
+    try {
+      const body = { action };
+      if (payloadEmail) body.email = payloadEmail;
+      const res = await this.api('/auth/send-security-code.php', 'POST', body);
+      if (res && res.success) {
+        if (statusEl) {
+          statusEl.className = 'av-sec-otp-status is-sent';
+          statusEl.textContent = res.message || '6-digit verification code sent. Check your inbox (and spam).';
+        }
+        this.toast(res.message || 'Verification code sent!', 'success');
+        this._startOtpCooldown(btnId, 'Resend Code');
+        document.getElementById(inputId)?.focus();
+      } else {
+        if (statusEl) {
+          statusEl.className = 'av-sec-otp-status is-err';
+          statusEl.textContent = (res && res.message) || 'Could not send verification code.';
+        }
+        this.toast((res && res.message) || 'Could not send verification code.', 'error');
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Send Code';
+        }
+      }
+    } catch (e) {
+      if (statusEl) {
+        statusEl.className = 'av-sec-otp-status is-err';
+        statusEl.textContent = 'Network error sending verification code.';
+      }
+      this.toast('Network error sending verification code.', 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Send Code';
+      }
+    }
+  },
+
   /* Fund Withdrawal PIN Management */
   openChangePinModal() {
     this.closeModal('modal-profile');
     const curr = document.getElementById('pin-current');
     const n = document.getElementById('pin-new');
     const c = document.getElementById('pin-confirm');
+    const otp = document.getElementById('pin-otp');
+    const status = document.getElementById('pin-otp-status');
     if (curr) curr.value = '';
     if (n) n.value = '';
     if (c) c.value = '';
+    if (otp) otp.value = '';
+    if (status) {
+      status.className = 'av-sec-otp-status';
+      status.textContent = 'Click Send Code to receive a 6-digit code on your account email.';
+    }
+    this.toggleForgotPinMode(false);
     this.openModal('modal-change-pin');
+  },
+
+  toggleForgotPinMode(forceVal) {
+    this.state.pinForgotMode = typeof forceVal === 'boolean' ? forceVal : !this.state.pinForgotMode;
+    const isForgot = Boolean(this.state.pinForgotMode);
+    const currGroup = document.getElementById('group-current-pin');
+    const toggleBtn = document.getElementById('btn-toggle-forgot-pin');
+    const status = document.getElementById('pin-otp-status');
+    if (currGroup) currGroup.style.display = isForgot ? 'none' : 'block';
+    if (toggleBtn) toggleBtn.textContent = isForgot ? 'Use current PIN instead' : 'Forgot PIN?';
+    if (status && isForgot) {
+      status.className = 'av-sec-otp-status';
+      status.textContent = 'Forgot PIN mode: click Send Code to reset your PIN with a 6-digit email code.';
+    }
   },
 
   async submitChangeWithdrawalPin() {
     const currentPin = (document.getElementById('pin-current')?.value || '').trim();
     const newPin = (document.getElementById('pin-new')?.value || '').trim();
     const confirmPin = (document.getElementById('pin-confirm')?.value || '').trim();
+    const verificationCode = (document.getElementById('pin-otp')?.value || '').trim();
+    const isForgot = Boolean(this.state.pinForgotMode);
     const btn = document.getElementById('btn-save-withdrawal-pin');
+
+    if (!isForgot && this.state.user?.has_withdrawal_pin && !/^\d{6}$/.test(currentPin)) {
+      this.toast('Enter your current 6-digit PIN or click "Forgot PIN?" to reset via email.', 'error');
+      document.getElementById('pin-current')?.focus();
+      return;
+    }
 
     if (!newPin || !/^\d{6}$/.test(newPin)) {
       this.toast('New withdrawal PIN must be exactly 6 numeric digits', 'error');
@@ -5684,20 +5980,28 @@ const App = {
       return;
     }
 
+    if (!/^\d{6}$/.test(verificationCode)) {
+      this.toast('Please enter the 6-digit email verification code.', 'error');
+      document.getElementById('pin-otp')?.focus();
+      return;
+    }
+
     if (btn) {
       btn.disabled = true;
-      btn.textContent = 'Updating PIN...';
+      btn.textContent = 'Verifying & Updating PIN...';
     }
 
     try {
       const res = await this.api('/user/withdrawal-pin.php', 'POST', {
-        current_pin: currentPin,
+        mode: isForgot ? 'forgot' : 'change',
+        current_pin: isForgot ? '' : currentPin,
         new_pin: newPin,
-        pin: newPin
+        pin: newPin,
+        verification_code: verificationCode
       });
 
       if (res.success) {
-        this.toast('6-Digit Fund Withdrawal PIN updated successfully!', 'success');
+        this.toast(res.message || '6-Digit Fund Withdrawal PIN updated successfully!', 'success');
         if (this.state.user) {
           this.state.user.has_withdrawal_pin = true;
           delete this.state.user.withdrawal_pin;
@@ -10613,26 +10917,50 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     }
     const currentInput = document.getElementById('update-email-current');
     const newInput = document.getElementById('update-email-new');
+    const otpInput = document.getElementById('update-email-otp');
+    const statusEl = document.getElementById('update-email-otp-status');
     if (currentInput) currentInput.value = this.state.user.email || '';
     if (newInput) newInput.value = '';
+    if (otpInput) otpInput.value = '';
+    if (statusEl) {
+      statusEl.className = 'av-sec-otp-status';
+      statusEl.textContent = 'Code will be sent to your NEW email address.';
+    }
     this.openModal('modal-update-email');
   },
 
   async submitUpdateEmail() {
     const newEmail = (document.getElementById('update-email-new')?.value || '').trim();
+    const verificationCode = (document.getElementById('update-email-otp')?.value || '').trim();
+    const btn = document.getElementById('btn-submit-update-email');
+
     if (!newEmail || !newEmail.includes('@')) {
       this.toast('Please enter a valid new email address', 'error');
+      document.getElementById('update-email-new')?.focus();
+      return;
+    }
+    if (!/^\d{6}$/.test(verificationCode)) {
+      this.toast('Please enter the 6-digit verification code sent to your new email.', 'error');
+      document.getElementById('update-email-otp')?.focus();
       return;
     }
 
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Verifying & Updating...';
+    }
+
     try {
-      const res = await this.api('/user/update-email.php', 'POST', { email: newEmail });
+      const res = await this.api('/user/update-email.php', 'POST', {
+        email: newEmail,
+        verification_code: verificationCode
+      });
       if (res.success) {
         if (this.state.user) {
           this.state.user = res.data?.user || {
             ...this.state.user,
             email: res.data?.email || newEmail,
-            email_verified: false
+            email_verified: true
           };
           localStorage.setItem('alphavest_local_user', JSON.stringify(this.state.user));
         }
@@ -10640,12 +10968,17 @@ STORAGE_BUCKET_MARKETING=marketing-assets
         this.syncProfileEmailBadge(this.state.user);
         this.loadSettingsView();
         this.closeModal('modal-update-email');
-        this.toast(res.message || 'Account email updated! Please check your inbox to confirm your new email.', 'success');
+        this.toast(res.message || 'Account email verified and updated successfully!', 'success');
       } else {
         this.toast(res.message || 'Failed to update email address', 'error');
       }
     } catch (err) {
       this.toast('Error updating email: ' + (err.message || err), 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Verify Code & Update Email';
+      }
     }
   },
 
@@ -11262,8 +11595,19 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     if (!this.state.user) {
       const loginEmail = (document.getElementById('auth-email')?.value || '').trim();
       const forgotInput = document.getElementById('forgot-pwd-email');
+      const forgotOtp = document.getElementById('forgot-pwd-otp');
+      const forgotNew = document.getElementById('forgot-pwd-new');
+      const forgotConf = document.getElementById('forgot-pwd-confirm');
+      const forgotStatus = document.getElementById('forgot-pwd-otp-status');
       if (forgotInput) {
         forgotInput.value = loginEmail && loginEmail.includes('@') ? loginEmail : '';
+      }
+      if (forgotOtp) forgotOtp.value = '';
+      if (forgotNew) forgotNew.value = '';
+      if (forgotConf) forgotConf.value = '';
+      if (forgotStatus) {
+        forgotStatus.className = 'av-sec-otp-status';
+        forgotStatus.textContent = 'We will email a 6-digit reset verification code.';
       }
       this.closeModal('modal-auth');
       this.openModal('modal-forgot-password');
@@ -11428,7 +11772,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
           Daily Trading Signals
         </div>
         <div style="font-size: 12px; color: #4B5563; line-height: 1.5;">
-          All members with minimum 100 USDT Future balance qualify for daily institutional dispatches at 6:00 PM &amp; 8:00 PM PKT (30-day 2&times; plan), plus 9:30 PM PKT Additional Signals ($4.00 fixed) on $300+ deposits &amp; friend invites.
+          All members with minimum 100 USDT Future balance qualify for daily institutional dispatches toward the 30-day 2&times; growth plan, plus Additional Signals unlocked via $300+ deposits and friend referrals.
         </div>
       </div>
 
@@ -11459,7 +11803,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
           Welcome to the PRIME X CAPITAL Trading Network, ${this.escapeHtml(userEmail.split('@')[0])}
         </div>
         <div style="font-size: 12px; color: #4B5563; line-height: 1.5;">
-          Your account is assigned to high-priority order routing. Maintain at least 100 USDT in your Future Balance to unlock daily 6:00 PM &amp; 8:00 PM PKT signals, and deposit $300+ or invite friends to unlock $4.00 Additional Signals at 9:30 PM PKT.
+          Your account is assigned to high-priority order routing. Maintain at least 100 USDT in your Future Balance to unlock daily trading signals, and deposit $300+ or invite friends to earn Additional Signal credits.
         </div>
       </div>
     `;
@@ -11738,76 +12082,68 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     const list = this.state.notifications || [];
     if (!list.length) {
       listEl.innerHTML = `
-        <div style="text-align: center; padding: 40px 20px; color: #6B7280;">
-          <div style="font-size: 36px; margin-bottom: 8px;">📭</div>
-          <div style="font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 4px;">No Notifications Yet</div>
-          <div style="font-size: 12px;">Admin approvals, deposits, KYC status, and trading signals will appear here.</div>
+        <div class="av-notif-empty">
+          <div class="av-notif-empty-ico">🔔</div>
+          <h4>No Notifications Yet</h4>
+          <p>Admin approvals, deposits, KYC reviews, and live signals will appear here automatically.</p>
         </div>
       `;
       return;
     }
 
     listEl.innerHTML = list.map(item => {
+      const nType = String(item.type || '').toUpperCase();
+      const isUnread = Number(item.is_read || 0) === 0;
       let icon = '🔔';
-      let tagBg = '#F3F5F8';
-      let tagColor = '#4B5563';
+      let toneClass = 'is-info';
       let tagText = 'ALERT';
       let actionBtn = '';
 
-      if (item.type === 'DEPOSIT_APPROVED') {
+      if (nType === 'DEPOSIT_APPROVED') {
         icon = '💰';
-        tagBg = '#ECFDF5';
-        tagColor = '#059669';
+        toneClass = 'is-success';
         tagText = 'DEPOSIT APPROVED';
-        actionBtn = `<button onclick="App.closeModal('modal-notifications'); App.navigate('wallet');" style="background: #ECFDF5; border: 1px solid #A7F3D0; color: #059669; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; margin-top: 6px;">Check Funding Wallet</button>`;
-      } else if (item.type === 'DEPOSIT_REJECTED') {
+        actionBtn = `<button type="button" class="av-notif-action-btn" onclick="App.closeModal('modal-notifications'); App.navigate('wallet');">View Wallet →</button>`;
+      } else if (nType === 'DEPOSIT_REJECTED') {
         icon = '⚠️';
-        tagBg = '#FEF2F2';
-        tagColor = '#DC2626';
+        toneClass = 'is-danger';
         tagText = 'DEPOSIT DECLINED';
-        actionBtn = `<button onclick="App.closeModal('modal-notifications'); App.openDepositModal();" style="background: #FEF2F2; border: 1px solid #FECACA; color: #DC2626; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; margin-top: 6px;">Retry Deposit</button>`;
-      } else if (item.type === 'KYC_APPROVED') {
+        actionBtn = `<button type="button" class="av-notif-action-btn" onclick="App.closeModal('modal-notifications'); App.openDepositModal();">Retry Deposit →</button>`;
+      } else if (nType === 'KYC_APPROVED') {
         icon = '🛡️';
-        tagBg = '#ECFDF5';
-        tagColor = '#059669';
+        toneClass = 'is-success';
         tagText = 'KYC VERIFIED';
-        actionBtn = `<button onclick="App.closeModal('modal-notifications'); App.navigate('futures');" style="background: #ECFDF5; border: 1px solid #A7F3D0; color: #059669; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; margin-top: 6px;">Trade Options</button>`;
-      } else if (item.type === 'KYC_REJECTED') {
+        actionBtn = `<button type="button" class="av-notif-action-btn" onclick="App.closeModal('modal-notifications'); App.navigate('futures');">Start Trading →</button>`;
+      } else if (nType === 'KYC_REJECTED') {
         icon = '❌';
-        tagBg = '#FEF2F2';
-        tagColor = '#DC2626';
+        toneClass = 'is-danger';
         tagText = 'KYC DECLINED';
-        actionBtn = `<button onclick="App.closeModal('modal-notifications'); App.navigate('kyc');" style="background: #FEF2F2; border: 1px solid #FECACA; color: #DC2626; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; margin-top: 6px;">Resubmit KYC</button>`;
-      } else if (item.type === 'SIGNAL_AVAILABLE' || item.type === 'SIGNAL_SETTLED') {
+        actionBtn = `<button type="button" class="av-notif-action-btn" onclick="App.closeModal('modal-notifications'); App.navigate('kyc');">Resubmit KYC →</button>`;
+      } else if (nType === 'SIGNAL_AVAILABLE' || nType === 'SIGNAL_SETTLED') {
         icon = '⚡';
-        tagBg = '#EFF4FF';
-        tagColor = '#0052FF';
-        tagText = 'SIGNAL RELEASE';
-        actionBtn = `<button onclick="App.closeModal('modal-notifications'); App.navigate('signals');" style="background: #EFF4FF; border: 1px solid #DBEAFE; color: #0052FF; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; margin-top: 6px;">View &amp; Confirm Signal</button>`;
-      } else if (item.type?.includes('WITHDRAWAL')) {
+        toneClass = 'is-info';
+        tagText = 'LIVE SIGNAL';
+        actionBtn = `<button type="button" class="av-notif-action-btn" onclick="App.closeModal('modal-notifications'); App.navigate('signals');">Open Signal Terminal →</button>`;
+      } else if (nType.includes('WITHDRAWAL')) {
         icon = '💸';
-        tagBg = '#EFF4FF';
-        tagColor = '#0052FF';
+        toneClass = nType.includes('REJECTED') ? 'is-danger' : 'is-info';
         tagText = 'WITHDRAWAL';
-        actionBtn = `<button onclick="App.closeModal('modal-notifications'); App.navigate('wallet');" style="background: #EFF4FF; border: 1px solid #DBEAFE; color: #0052FF; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; margin-top: 6px;">View History</button>`;
+        actionBtn = `<button type="button" class="av-notif-action-btn" onclick="App.closeModal('modal-notifications'); App.navigate('wallet');">View History →</button>`;
       }
 
+      const whenLabel = this.escapeHtml(this.formatSupportListTime(item.created_at) || this.formatAdminDate(item.created_at));
       return `
-        <div style="background: #F8FAFC; border: 1px solid #E5E9F0; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; transition: all 0.2s;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 16px;">${icon}</span>
-              <span style="font-size: 10.5px; font-weight: 800; color: ${tagColor}; background: ${tagBg}; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px;">${tagText}</span>
+        <div class="av-notif-card${isUnread ? ' is-unread' : ''}">
+          <div class="av-notif-icon ${toneClass}" aria-hidden="true">${icon}</div>
+          <div class="av-notif-card-content">
+            <div class="av-notif-card-top">
+              <span class="av-notif-tag ${toneClass}">${this.escapeHtml(tagText)}</span>
+              <span class="av-notif-time">${whenLabel}</span>
             </div>
-            <span style="font-size: 11px; color: #6B7280; white-space: nowrap;">${this.escapeHtml(this.formatAdminDate(item.created_at))}</span>
+            <div class="av-notif-title">${this.escapeHtml(item.title || 'Account Update')}</div>
+            <div class="av-notif-msg">${this.escapeHtml(item.message || '')}</div>
+            ${actionBtn}
           </div>
-          <div style="font-size: 13.5px; font-weight: 700; color: #111827; margin-bottom: 4px;">
-            ${this.escapeHtml(item.title)}
-          </div>
-          <div style="font-size: 12px; color: #4B5563; line-height: 1.45;">
-            ${this.escapeHtml(item.message)}
-          </div>
-          ${actionBtn}
         </div>
       `;
     }).join('');
@@ -11921,8 +12257,15 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   },
 
+  parseSupportTopicMessage(rawMessage) {
+    const text = String(rawMessage || '');
+    const m = text.match(/^\[([^\]]{2,45})\]\s*([\s\S]*)$/);
+    if (!m) return { topic: '', body: text };
+    return { topic: m[1].trim(), body: m[2].trim() || text };
+  },
+
   openCustomerService() {
-    this.openModal('modal-customer-service');
+    this.openLiveSupportChat();
   },
 
   async openLiveSupportChat(subject = '', prefillMessage = '') {
@@ -11932,25 +12275,23 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       this.openModal('modal-auth');
       return;
     }
+
     this.openModal('modal-support-chat');
-    const hasCustomTopic = typeof subject === 'string' && subject.trim().length > 0;
-    this.state.userSupportForceNew = hasCustomTopic;
-    this.state.userSupportSubject = hasCustomTopic ? subject.trim() : '';
-    if (hasCustomTopic) {
-      this.state.userSupportActiveTicketId = null;
-      this.state.userSupportTicket = null;
-      this.state.userSupportMessages = [];
-      this.renderUserSupportChat(true);
-    }
+    const cleanSubject = typeof subject === 'string' ? subject.trim() : '';
+    this.state.userSupportForceNew = false;
+    this.state.userSupportSubject = cleanSubject;
+
     await this.loadUserSupportChat(false);
-    if (typeof prefillMessage === 'string' && prefillMessage.trim()) {
-      const input = document.getElementById('chat-input-text');
-      if (input) {
-        input.value = prefillMessage.trim();
-        this.updateSupportCharCount();
-        input.focus();
-      }
+    const hasMessages = Array.isArray(this.state.userSupportMessages) && this.state.userSupportMessages.length > 0;
+
+    if (cleanSubject) {
+      this.openSupportIntake(cleanSubject, prefillMessage);
+    } else if (!hasMessages) {
+      this.openSupportIntake('', prefillMessage);
+    } else {
+      this.closeSupportIntake();
     }
+
     if (this._userSupportPollTimer) clearInterval(this._userSupportPollTimer);
     this._userSupportPollTimer = setInterval(() => {
       const modal = document.getElementById('modal-support-chat');
@@ -11960,28 +12301,114 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     }, 5000);
   },
 
-  startNewSupportTicket(subject = '', prefillMessage = '') {
-    this.state.userSupportForceNew = true;
-    this.state.userSupportSubject = (typeof subject === 'string' && subject.trim()) ? subject.trim() : '';
-    this.state.userSupportActiveTicketId = null;
-    this.state.userSupportTicket = null;
-    this.state.userSupportMessages = [];
-    this.renderUserSupportThreads();
-    this.renderUserSupportChat(true);
-    const input = document.getElementById('chat-input-text');
-    if (input) {
-      if (typeof prefillMessage === 'string' && prefillMessage.trim()) {
-        input.value = prefillMessage.trim();
-        this.updateSupportCharCount();
-      }
-      input.focus();
+  openSupportIntake(preselectTopic = '', prefillDesc = '') {
+    const intake = document.getElementById('chat-intake-view');
+    const stream = document.getElementById('chat-stream-view');
+    const backBtn = document.getElementById('btn-chat-back-stream');
+    const descBox = document.getElementById('chat-intake-desc-box');
+    const descInp = document.getElementById('chat-intake-desc');
+    const hasMsgs = Array.isArray(this.state.userSupportMessages) && this.state.userSupportMessages.length > 0;
+
+    if (intake) intake.style.display = 'flex';
+    if (stream) stream.style.display = 'none';
+    if (backBtn) backBtn.style.display = hasMsgs ? 'inline-flex' : 'none';
+
+    document.querySelectorAll('#chat-intake-view .av-sup-topic-card').forEach(btn => btn.classList.remove('active'));
+    this.state.userSupportSelectedTopic = '';
+    if (descBox) descBox.style.display = 'none';
+    if (descInp) descInp.value = typeof prefillDesc === 'string' ? prefillDesc : '';
+
+    if (preselectTopic) {
+      const matchingBtn = Array.from(document.querySelectorAll('#chat-intake-view .av-sup-topic-card'))
+        .find(b => b.getAttribute('data-topic') === preselectTopic);
+      this.selectSupportIssueOption(preselectTopic, matchingBtn || null);
     }
+  },
+
+  closeSupportIntake() {
+    const intake = document.getElementById('chat-intake-view');
+    const stream = document.getElementById('chat-stream-view');
+    if (intake) intake.style.display = 'none';
+    if (stream) stream.style.display = 'flex';
+    this.renderUserSupportChat(true);
+  },
+
+  selectSupportIssueOption(topic, btnEl) {
+    const cleanTopic = String(topic || '').trim();
+    if (!cleanTopic) return;
+    this.state.userSupportSelectedTopic = cleanTopic;
+    document.querySelectorAll('#chat-intake-view .av-sup-topic-card').forEach(b => {
+      b.classList.toggle('active', b === btnEl || b.getAttribute('data-topic') === cleanTopic);
+    });
+    const descBox = document.getElementById('chat-intake-desc-box');
+    const selLabel = document.getElementById('chat-intake-selected-label');
+    const descInp = document.getElementById('chat-intake-desc');
+    if (selLabel) selLabel.textContent = cleanTopic;
+    if (descBox) descBox.style.display = 'flex';
+    if (descInp) setTimeout(() => descInp.focus(), 60);
+  },
+
+  async submitSupportIntake() {
+    if (!this.state.user) {
+      this.openModal('modal-auth');
+      return;
+    }
+    const topic = (this.state.userSupportSelectedTopic || '').trim();
+    const descEl = document.getElementById('chat-intake-desc');
+    const desc = (descEl?.value || '').trim();
+    const btn = document.getElementById('btn-chat-intake-submit');
+
+    if (!topic) {
+      this.toast('Please choose an issue category first.', 'warning');
+      return;
+    }
+    if (!desc) {
+      this.toast('Please describe your issue completely before sending.', 'warning');
+      descEl?.focus();
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Sending to Support...';
+    }
+
+    try {
+      const formattedMessage = `[${topic}] ${desc}`;
+      const res = await this.api('/support/chat.php', 'POST', {
+        message: formattedMessage,
+        subject: topic,
+        ticket_id: this.state.userSupportActiveTicketId || '',
+        new_ticket: false
+      });
+
+      if (res && res.success && res.data) {
+        if (descEl) descEl.value = '';
+        this.state.userSupportTicket = res.data.ticket || null;
+        this.state.userSupportActiveTicketId = res.data.ticket?.id || this.state.userSupportActiveTicketId;
+        this.state.userSupportTickets = Array.isArray(res.data.tickets) ? res.data.tickets : [];
+        this.state.userSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
+        this.closeSupportIntake();
+        this.toast('Your issue description has been sent to Support.', 'success');
+      } else {
+        this.toast(res?.message || 'Unable to submit support description.', 'error');
+      }
+    } catch (e) {
+      this.toast('Network error submitting issue.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Send Description & Start Chat';
+      }
+    }
+  },
+
+  startNewSupportTicket(subject = '', prefillMessage = '') {
+    this.openSupportIntake(subject, prefillMessage);
   },
 
   async selectUserSupportTicket(ticketId) {
     if (!ticketId) return;
-    this.state.userSupportForceNew = false;
-    this.state.userSupportSubject = '';
     this.state.userSupportActiveTicketId = ticketId;
     await this.loadUserSupportChat(false);
   },
@@ -12010,10 +12437,10 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   async loadUserSupportChat(silent = false) {
     if (!this.state.user) return;
     const chatBox = document.getElementById('chat-messages-container');
-    if (!silent && !this.state.userSupportForceNew && chatBox && (!Array.isArray(this.state.userSupportMessages) || !this.state.userSupportMessages.length)) {
+    if (!silent && chatBox && (!Array.isArray(this.state.userSupportMessages) || !this.state.userSupportMessages.length)) {
       chatBox.innerHTML = '<div style="margin:auto;color:#6B7280;font-size:13px;">Loading conversation...</div>';
     }
-    const qs = (!this.state.userSupportForceNew && this.state.userSupportActiveTicketId)
+    const qs = this.state.userSupportActiveTicketId
       ? `?ticket_id=${encodeURIComponent(this.state.userSupportActiveTicketId)}`
       : '';
     const res = await this.api(`/support/chat.php${qs}`);
@@ -12021,13 +12448,10 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       const prevCount = Array.isArray(this.state.userSupportMessages) ? this.state.userSupportMessages.length : 0;
       const nextMsgs = Array.isArray(res.data.messages) ? res.data.messages : [];
       this.state.userSupportTickets = Array.isArray(res.data.tickets) ? res.data.tickets : [];
-      this.renderUserSupportThreads();
-      if (!this.state.userSupportForceNew) {
-        this.state.userSupportTicket = res.data.ticket || null;
-        this.state.userSupportActiveTicketId = res.data.ticket?.id || null;
-        this.state.userSupportMessages = nextMsgs;
-        this.renderUserSupportChat(nextMsgs.length !== prevCount || !silent);
-      }
+      this.state.userSupportTicket = res.data.ticket || null;
+      this.state.userSupportActiveTicketId = res.data.ticket?.id || null;
+      this.state.userSupportMessages = nextMsgs;
+      this.renderUserSupportChat(nextMsgs.length !== prevCount || !silent);
     } else if (!silent) {
       this.toast(res?.message || 'Unable to load support conversation.', 'error');
     }
@@ -12035,23 +12459,10 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
   renderUserSupportThreads() {
     const bar = document.getElementById('chat-thread-switcher');
-    if (!bar) return;
-    const tickets = Array.isArray(this.state.userSupportTickets) ? this.state.userSupportTickets : [];
-    const showBar = tickets.length > 1 || (this.state.userSupportForceNew && tickets.length >= 1);
-    if (!showBar) {
+    if (bar) {
       bar.style.display = 'none';
       bar.innerHTML = '';
-      return;
     }
-    const activeId = this.state.userSupportForceNew ? '' : String(this.state.userSupportActiveTicketId || '');
-    bar.style.display = 'flex';
-    bar.innerHTML = tickets.slice(0, 8).map((t, idx) => {
-      const tid = String(t.id || '');
-      const isSelected = tid === activeId;
-      const subj = String(t.subject || `Thread #${idx + 1}`).trim();
-      const shortLabel = subj.length > 24 ? `${subj.slice(0, 24)}…` : subj;
-      return `<button type="button" class="av-chat-thread-tab${isSelected ? ' active' : ''}" onclick="App.selectUserSupportTicket('${this.escapeHtml(tid)}')">${this.escapeHtml(shortLabel)}</button>`;
-    }).join('');
   },
 
   renderUserSupportChat(scrollToBottom = true) {
@@ -12065,7 +12476,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     const msgs = Array.isArray(this.state.userSupportMessages) ? this.state.userSupportMessages : [];
 
     if (badge) {
-      if (!this.state.userSupportForceNew && ticket && ticket.status) {
+      if (ticket && ticket.status) {
         const st = String(ticket.status).toUpperCase();
         const prettyStatus = st.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
         badge.textContent = prettyStatus;
@@ -12079,46 +12490,36 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     }
 
     if (subtitle) {
-      if (this.state.userSupportForceNew) {
-        subtitle.textContent = this.state.userSupportSubject
-          ? `New inquiry · ${this.state.userSupportSubject}`
-          : 'New conversation · Send your message below';
-      } else if (ticket?.subject && ticket.subject !== 'Platform Support Inquiry') {
+      if (ticket?.subject && ticket.subject !== 'Platform Support Inquiry') {
         subtitle.textContent = ticket.subject;
       } else if (ticket?.status === 'WAITING_FOR_USER') {
         subtitle.textContent = 'Specialist replied below';
       } else {
-        subtitle.textContent = 'Direct administrator desk';
+        subtitle.textContent = 'Online · Direct Support Desk';
       }
     }
 
     if (!msgs.length) {
-      const heading = this.state.userSupportForceNew && this.state.userSupportSubject
-        ? this.escapeHtml(this.state.userSupportSubject)
-        : 'PRIME X CAPITAL Support Desk';
-      const subcopy = this.state.userSupportForceNew
-        ? 'Type your message below or pick a quick starter to open this inquiry.'
-        : 'Messages go straight to an account specialist with live reply updates.';
       chatBox.innerHTML = `
         <div class="av-chat-welcome-card">
           <div class="av-chat-welcome-head">
             <span class="av-chat-welcome-mark">PX</span>
             <div>
-              <strong>${heading}</strong>
-              <span>${this.escapeHtml(subcopy)}</span>
+              <strong>PRIME X CAPITAL Support Desk</strong>
+              <span>Tap "New Issue" above to pick a category and describe your concern.</span>
             </div>
-          </div>
-          <div class="av-chat-starters">
-            <button type="button" onclick="App.insertUserSupportStarter('Please check the verification status of my recent deposit.')">Check deposit status</button>
-            <button type="button" onclick="App.insertUserSupportStarter('I need help verifying my bound withdrawal address.')">Withdrawal verification</button>
-            <button type="button" onclick="App.insertUserSupportStarter('Could you review my submitted KYC documents?')">KYC document review</button>
           </div>
         </div>
       `;
       return;
     }
 
+    const userAvatarUrl = this.getUserAvatar(this.state.user);
     const userInitials = this.getSupportInitials(this.state.user?.first_name || this.state.user?.email || 'You');
+    const clientAvatarHtml = userAvatarUrl
+      ? `<img src="${this.escapeHtml(userAvatarUrl)}" alt="You">`
+      : this.escapeHtml(userInitials);
+
     let lastDivider = '';
     const htmlParts = [];
 
@@ -12130,13 +12531,17 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       }
       const isUser = String(m.sender_role || '').toUpperCase() === 'USER';
       const clock = this.formatChatClock(m.created_at) || this.formatAdminDate(m.created_at);
-      const roleTag = isUser ? 'You' : 'Support Desk';
+      const parsed = this.parseSupportTopicMessage(m.message || '');
+      const topicPillHtml = parsed.topic
+        ? `<div class="av-chat-topic-pill">${this.escapeHtml(parsed.topic)}</div>`
+        : '';
+
       htmlParts.push(`
         <div class="av-chat-row ${isUser ? 'is-outgoing' : 'is-incoming'}">
-          <div class="av-chat-avatar ${isUser ? 'is-client' : 'is-concierge'}" aria-hidden="true">${isUser ? this.escapeHtml(userInitials) : 'PX'}</div>
+          <div class="av-chat-avatar ${isUser ? 'is-client' : 'is-concierge'}" aria-hidden="true">${isUser ? clientAvatarHtml : 'PX'}</div>
           <div class="av-chat-msg-stack">
-            <div class="av-chat-bubble">${this.escapeHtml(m.message || '')}</div>
-            <span class="av-chat-meta">${roleTag} · ${this.escapeHtml(clock)}</span>
+            <div class="av-chat-bubble">${topicPillHtml}<div>${this.escapeHtml(parsed.body)}</div></div>
+            <span class="av-chat-meta">${isUser ? 'You' : 'Support Desk'} · ${this.escapeHtml(clock)}${isUser ? ' <span class="av-chat-ticks" aria-hidden="true">✓✓</span>' : ''}</span>
           </div>
         </div>
       `);
@@ -12163,9 +12568,9 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     if (sendBtn) sendBtn.disabled = true;
     const payload = {
       message: msgText,
-      subject: this.state.userSupportSubject || 'Platform Support Inquiry',
-      ticket_id: this.state.userSupportForceNew ? '' : (this.state.userSupportActiveTicketId || ''),
-      new_ticket: Boolean(this.state.userSupportForceNew)
+      subject: this.state.userSupportTicket?.subject || this.state.userSupportSelectedTopic || 'Platform Support Inquiry',
+      ticket_id: this.state.userSupportActiveTicketId || '',
+      new_ticket: false
     };
     const res = await this.api('/support/chat.php', 'POST', payload);
     if (sendBtn) sendBtn.disabled = false;
@@ -12174,12 +12579,10 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       input.value = '';
       this.updateSupportCharCount();
       this.state.userSupportForceNew = false;
-      this.state.userSupportSubject = '';
       this.state.userSupportTicket = res.data.ticket || null;
       this.state.userSupportActiveTicketId = res.data.ticket?.id || null;
-      this.state.userSupportTickets = Array.isArray(res.data.tickets) ? res.data.tickets : (this.state.userSupportTickets || []);
+      this.state.userSupportTickets = Array.isArray(res.data.tickets) ? res.data.tickets : [];
       this.state.userSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
-      this.renderUserSupportThreads();
       this.renderUserSupportChat(true);
     } else {
       this.toast(res?.message || 'Unable to send support message. Please try again.', 'error');
@@ -12412,6 +12815,8 @@ STORAGE_BUCKET_MARKETING=marketing-assets
         statusLabel = st === 'CLOSED' ? 'Closed' : 'Resolved';
       }
       const initials = this.getSupportInitials(t.user_name || t.user_email || 'U');
+      const avatarValid = this.isValidAvatarUrl(t.user_avatar) ? t.user_avatar : '';
+      const avatarInner = avatarValid ? `<img src="${this.escapeHtml(avatarValid)}" alt="">` : this.escapeHtml(initials);
       const tone = this.getSupportAvatarTone(t.user_email || tid);
       const uidPart = t.numeric_uid ? `UID #${this.escapeHtml(String(t.numeric_uid))}` : this.escapeHtml(t.user_name || 'Member');
       const msgCount = Number(t.message_count || 0);
@@ -12419,18 +12824,19 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       const rawSubj = String(t.subject || '').trim();
       const showSubj = rawSubj && rawSubj !== 'Platform Support Inquiry';
       const lastSender = String(t.last_sender_role || '').toUpperCase();
-      const snippetRaw = t.last_message || rawSubj || 'New support inquiry';
+      const parsedSnippet = this.parseSupportTopicMessage(t.last_message || '');
+      const snippetRaw = parsedSnippet.body || rawSubj || 'New support inquiry';
       const snippetText = (lastSender === 'ADMIN' && t.last_message) ? `You: ${snippetRaw}` : snippetRaw;
 
       return `
         <button type="button" class="av-adm-sup-ticket-item${isSelected ? ' active' : ''}" onclick="App.selectAdminSupportTicket('${this.escapeHtml(tid)}')">
           <div class="av-adm-sup-avatar-wrap">
-            <div class="av-adm-sup-avatar ${tone}" aria-hidden="true">${this.escapeHtml(initials)}</div>
+            <div class="av-adm-sup-avatar ${tone}" aria-hidden="true">${avatarInner}</div>
             ${t.needs_reply ? '<span class="av-adm-sup-unread-dot" aria-hidden="true"></span>' : ''}
           </div>
           <div class="av-adm-sup-item-body">
             <div class="av-adm-sup-item-top">
-              <span class="av-adm-sup-user-label">${this.escapeHtml(t.user_email || t.user_name || 'User')}</span>
+              <span class="av-adm-sup-user-label">${this.escapeHtml(t.user_name || t.user_email || 'User')}</span>
               <span class="av-adm-sup-time">${this.escapeHtml(timeLabel)}</span>
             </div>
             ${showSubj ? `<div class="av-adm-sup-subject">${this.escapeHtml(rawSubj)}</div>` : ''}
@@ -12536,15 +12942,17 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     }
 
     const clientInitials = this.getSupportInitials(active.user_name || active.user_email || 'U');
+    const clientAvatarValid = this.isValidAvatarUrl(active.user_avatar) ? active.user_avatar : '';
+    const clientAvatarHtml = clientAvatarValid ? `<img src="${this.escapeHtml(clientAvatarValid)}" alt="">` : this.escapeHtml(clientInitials);
     const clientTone = this.getSupportAvatarTone(active.user_email || active.id);
     const activeStatus = String(active.status || 'OPEN').toUpperCase();
     const isResolved = activeStatus === 'RESOLVED' || activeStatus === 'CLOSED';
 
     if (headerAvatar) {
       headerAvatar.className = `av-adm-sup-avatar ${clientTone}`;
-      headerAvatar.textContent = clientInitials;
+      headerAvatar.innerHTML = clientAvatarHtml;
     }
-    if (headerUser) headerUser.textContent = `${active.user_email || 'Member'}`;
+    if (headerUser) headerUser.textContent = `${active.user_name ? `${active.user_name} · ` : ''}${active.user_email || 'Member'}`;
     if (headerMeta) {
       const uidTag = active.numeric_uid ? `UID #${active.numeric_uid} · ` : '';
       headerMeta.textContent = `${uidTag}${active.subject || 'Platform Support Inquiry'}`;
@@ -12586,12 +12994,17 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       }
       const isAdmin = String(m.sender_role || '').toUpperCase() === 'ADMIN';
       const clock = this.formatChatClock(m.created_at) || this.formatAdminDate(m.created_at);
+      const parsed = this.parseSupportTopicMessage(m.message || '');
+      const topicPillHtml = parsed.topic
+        ? `<div class="av-chat-topic-pill">${this.escapeHtml(parsed.topic)}</div>`
+        : '';
+
       htmlParts.push(`
         <div class="av-chat-row ${isAdmin ? 'is-outgoing' : 'is-incoming'}">
-          <div class="av-chat-avatar ${isAdmin ? 'is-concierge' : 'is-client'}" aria-hidden="true">${isAdmin ? 'PX' : this.escapeHtml(clientInitials)}</div>
+          <div class="av-chat-avatar ${isAdmin ? 'is-concierge' : 'is-client'}" aria-hidden="true">${isAdmin ? 'PX' : clientAvatarHtml}</div>
           <div class="av-chat-msg-stack">
-            <div class="av-chat-bubble">${this.escapeHtml(m.message || '')}</div>
-            <span class="av-chat-meta">${isAdmin ? 'Admin' : this.escapeHtml(active.user_name || 'User')} · ${this.escapeHtml(clock)}</span>
+            <div class="av-chat-bubble">${topicPillHtml}<div>${this.escapeHtml(parsed.body)}</div></div>
+            <span class="av-chat-meta">${isAdmin ? 'Admin' : this.escapeHtml(active.user_name || 'User')} · ${this.escapeHtml(clock)}${isAdmin ? ' <span class="av-chat-ticks" aria-hidden="true">✓✓</span>' : ''}</span>
           </div>
         </div>
       `);
@@ -12807,21 +13220,22 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   },
 
   switchTradeHubTab(mode = 'delivery', skipLoad = false) {
-    const modes = ['copy', 'delivery', 'perpetual', 'spot', 'earn'];
+    const activeMode = mode === 'copy' ? 'delivery' : mode;
+    const modes = ['delivery', 'perpetual', 'spot', 'earn'];
     modes.forEach(m => {
       const tab = document.getElementById(`trade-tab-${m}`);
       const panel = document.getElementById(`trade-panel-${m}`);
-      if (tab) tab.classList.toggle('active', m === mode);
-      if (panel) panel.style.display = m === mode ? 'block' : 'none';
+      if (tab) tab.classList.toggle('active', m === activeMode);
+      if (panel) panel.style.display = m === activeMode ? 'block' : 'none';
     });
+    const copyPanel = document.getElementById('trade-panel-copy');
+    if (copyPanel) copyPanel.style.display = 'none';
 
     if (skipLoad) return;
 
-    if (mode === 'copy') {
-      if (typeof this.loadCopyTrading === 'function') this.loadCopyTrading();
-    } else if (mode === 'delivery') {
+    if (activeMode === 'delivery') {
       this.renderChart();
-    } else if (mode === 'perpetual') {
+    } else if (activeMode === 'perpetual') {
       if (typeof this.loadOrderBook === 'function') this.loadOrderBook();
       if (typeof this.loadPositions === 'function') this.loadPositions();
     }
@@ -12995,7 +13409,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
           </p>
           <div style="text-align:center;margin:18px 0 14px;">
             <h4 style="font-size:20px;font-weight:800;color:#111827;margin:0 0 6px;">Partner Team &amp; Philosophy</h4>
-            <p style="font-size:13.5px;color:#4B5563;line-height:1.55;margin:0;">Combining traditional financial risk discipline with tokenized markets, automated copy trading, and segregated cold-vault custody.</p>
+            <p style="font-size:13.5px;color:#4B5563;line-height:1.55;margin:0;">Combining traditional financial risk discipline with tokenized markets, automated quantitative strategies, and segregated cold-vault custody.</p>
           </div>
           <div style="margin-top:20px;">
             <h4 style="font-size:20px;font-weight:800;color:#111827;text-align:center;margin:0 0 12px;">Development Journey</h4>
@@ -13013,7 +13427,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
               <div class="av-timeline-item">
                 <span class="av-timeline-dot"></span>
                 <div style="font-size:13px;font-weight:800;color:#0052FF;">January 2026</div>
-                <div style="font-size:13.5px;color:#4B5563;">Enhanced institutional 6-digit Fund PIN and real-time AI Copy Trading integration.</div>
+                <div style="font-size:13.5px;color:#4B5563;">Enhanced institutional 6-digit Fund PIN and real-time institutional signal execution.</div>
               </div>
             </div>
           </div>
@@ -13527,7 +13941,35 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   },
 
   openChangePasswordView() {
+    const oldEl = document.getElementById('chpwd-old');
+    const otpEl = document.getElementById('chpwd-otp');
+    const newEl = document.getElementById('chpwd-new');
+    const confEl = document.getElementById('chpwd-confirm');
+    const statusEl = document.getElementById('chpwd-otp-status');
+    if (oldEl) oldEl.value = '';
+    if (otpEl) otpEl.value = '';
+    if (newEl) newEl.value = '';
+    if (confEl) confEl.value = '';
+    if (statusEl) {
+      statusEl.className = 'av-sec-otp-status';
+      statusEl.textContent = 'Click Send Code to receive a 6-digit verification code on your registered email.';
+    }
+    this.toggleChangePwdForgotMode(false);
     this.openAppView('change-password');
+  },
+
+  toggleChangePwdForgotMode(forceVal) {
+    this.state.changePwdForgotMode = typeof forceVal === 'boolean' ? forceVal : !this.state.changePwdForgotMode;
+    const isForgot = Boolean(this.state.changePwdForgotMode);
+    const oldGroup = document.getElementById('chpwd-old-group');
+    const toggleBtn = document.getElementById('btn-toggle-forgot-chpwd');
+    const statusEl = document.getElementById('chpwd-otp-status');
+    if (oldGroup) oldGroup.style.display = isForgot ? 'none' : 'block';
+    if (toggleBtn) toggleBtn.textContent = isForgot ? 'Use old password instead' : 'Forgot old password?';
+    if (statusEl && isForgot) {
+      statusEl.className = 'av-sec-otp-status';
+      statusEl.textContent = 'Forgot password mode: verify using the 6-digit code sent to your account email.';
+    }
   },
 
   syncProfileEmailBadge(userObj) {
@@ -13634,34 +14076,67 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
   async submitForgotPassword() {
     const emailInput = document.getElementById('forgot-pwd-email');
+    const otpInput = document.getElementById('forgot-pwd-otp');
+    const newInput = document.getElementById('forgot-pwd-new');
+    const confInput = document.getElementById('forgot-pwd-confirm');
     const btn = document.getElementById('btn-submit-forgot-pwd');
+
     const email = (emailInput?.value || '').trim();
+    const verificationCode = (otpInput?.value || '').trim();
+    const newPwd = newInput?.value || '';
+    const confPwd = confInput?.value || '';
 
     if (!email || !email.includes('@')) {
-      this.toast('Please enter a valid registered email address.', 'warning');
+      this.toast('Please enter your registered email address.', 'warning');
+      emailInput?.focus();
+      return;
+    }
+    if (!/^\d{6}$/.test(verificationCode)) {
+      this.toast('Please enter the 6-digit verification code sent to your email.', 'warning');
+      otpInput?.focus();
+      return;
+    }
+    if (!newPwd || newPwd.length < 8 || newPwd.length > 128) {
+      this.toast('New password must be between 8 and 128 characters.', 'warning');
+      newInput?.focus();
+      return;
+    }
+    if (newPwd !== confPwd) {
+      this.toast('New passwords do not match.', 'warning');
+      confInput?.focus();
       return;
     }
 
     if (btn) {
       btn.disabled = true;
-      btn.textContent = 'Sending Reset Link...';
+      btn.textContent = 'Verifying & Resetting...';
     }
 
     try {
-      const res = await this.api('/auth/forgot-password.php', 'POST', { email });
+      const res = await this.api('/auth/reset-password.php', 'POST', {
+        email,
+        verification_code: verificationCode,
+        password: newPwd,
+        confirm_password: confPwd
+      });
       if (res && res.success) {
         if (emailInput) emailInput.value = '';
+        if (otpInput) otpInput.value = '';
+        if (newInput) newInput.value = '';
+        if (confInput) confInput.value = '';
         this.closeModal('modal-forgot-password');
-        this.toast(res.message || 'If an account matches that email, a password reset link has been sent.', 'success');
+        this.toast(res.message || 'Password reset successfully. Please sign in with your new password.', 'success');
+        this.openModal('modal-auth');
+        this.switchAuthBox('login');
       } else {
-        this.toast((res && res.message) || 'Unable to process password reset request.', 'error');
+        this.toast((res && res.message) || 'Invalid or expired verification code.', 'error');
       }
     } catch (e) {
-      this.toast('Network error while requesting password reset.', 'error');
+      this.toast('Network error while resetting password.', 'error');
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.textContent = 'Send Reset Link';
+        btn.textContent = 'Verify Code & Reset Password';
       }
     }
   },
@@ -13773,40 +14248,79 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       return;
     }
     const oldEl = document.getElementById('chpwd-old');
+    const otpEl = document.getElementById('chpwd-otp');
     const newEl = document.getElementById('chpwd-new');
     const confEl = document.getElementById('chpwd-confirm');
     const btn = document.getElementById('btn-submit-chpwd');
 
+    const isForgot = Boolean(this.state.changePwdForgotMode);
     const oldPwd = oldEl?.value || '';
+    const verificationCode = (otpEl?.value || '').trim();
     const newPwd = newEl?.value || '';
     const confPwd = confEl?.value || '';
 
-    if (!oldPwd || !newPwd || newPwd.length < 8 || newPwd.length > 128) {
-      this.toast('Enter your current password and a new password (8 to 128 characters).', 'warning');
+    if (!isForgot && !oldPwd) {
+      this.toast('Enter your old password or click "Forgot old password?" to reset with email code.', 'warning');
+      oldEl?.focus();
+      return;
+    }
+    if (!/^\d{6}$/.test(verificationCode)) {
+      this.toast('Enter the 6-digit email verification code.', 'warning');
+      otpEl?.focus();
+      return;
+    }
+    if (!newPwd || newPwd.length < 8 || newPwd.length > 128) {
+      this.toast('Enter a new password between 8 and 128 characters.', 'warning');
+      newEl?.focus();
       return;
     }
     if (newPwd !== confPwd) {
       this.toast('New passwords do not match.', 'warning');
+      confEl?.focus();
       return;
     }
 
     if (btn) {
       btn.disabled = true;
-      btn.textContent = 'Updating...';
+      btn.textContent = 'Verifying & Updating...';
     }
 
     try {
-      const res = await this.api('/auth/change-password.php', 'POST', {
-        old_password: oldPwd,
-        new_password: newPwd,
-        confirm_password: confPwd
-      });
+      let res;
+      if (isForgot) {
+        res = await this.api('/auth/reset-password.php', 'POST', {
+          email: this.state.user.email || '',
+          verification_code: verificationCode,
+          password: newPwd,
+          confirm_password: confPwd
+        });
+      } else {
+        res = await this.api('/auth/change-password.php', 'POST', {
+          old_password: oldPwd,
+          new_password: newPwd,
+          confirm_password: confPwd,
+          verification_code: verificationCode
+        });
+      }
+
       if (res && res.success) {
         if (oldEl) oldEl.value = '';
+        if (otpEl) otpEl.value = '';
         if (newEl) newEl.value = '';
         if (confEl) confEl.value = '';
-        this.toast(res.message || 'Password updated successfully. A confirmation email has been sent.', 'success');
-        this.openSecurityCenter();
+        if (isForgot) {
+          this.state.user = null;
+          this.state.adminPreviewUser = null;
+          this.state.adminPreviewUserId = null;
+          try { localStorage.removeItem('alphavest_local_user'); } catch (e) {}
+          this.updateHeaderAuth();
+          this.toast(res.message || 'Password updated. Please sign in with your new password.', 'success');
+          this.openModal('modal-auth');
+          this.switchAuthBox('login');
+        } else {
+          this.toast(res.message || 'Password updated successfully. A confirmation email has been sent.', 'success');
+          this.openSecurityCenter();
+        }
       } else {
         this.toast((res && res.message) || 'Failed to update password.', 'error');
       }

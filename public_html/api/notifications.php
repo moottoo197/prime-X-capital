@@ -85,7 +85,7 @@ if ($supabase->isConfigured()) {
             $lsSlot = (int)($ls['daily_slot'] ?? 0);
             $lsIsAdditional = ($lsSlot === 3 || strpos($lsId, 'sig_add_') === 0);
             $lsPct = in_array($lsSlot, [1, 2], true) ? 1.67 : (float)($ls['profit_percentage'] ?? 1.67);
-            $lsRewardTxt = $lsIsAdditional ? '+$4.00 USDT fixed reward' : "+{$lsPct}% target";
+            $lsRewardTxt = $lsIsAdditional ? 'Additional Signal reward' : "+{$lsPct}% target";
             $lsDur = max(1, (int)($ls['duration_minutes'] ?? 15));
             $lsTime = $pubRaw !== '' ? $pubRaw : gmdate('Y-m-d H:i:s');
 
@@ -221,9 +221,9 @@ if ($supabase->isConfigured()) {
                 'id' => 'notif_sig_' . ($s['id'] ?? bin2hex(random_bytes(4))),
                 'user_id' => $userId,
                 'type' => 'SIGNAL_SETTLED',
-                'title' => ($isAddExec ? "🎁 Additional Signal Reward: " : "⚡ High-Yield Signal Profit: ") . "+{$profit} USDT",
+                'title' => $isAddExec ? "🎁 Additional Signal Completed" : "⚡ High-Yield Signal Profit: +{$profit} USDT",
                 'message' => $isAddExec
-                    ? "Your Additional Signal for {$sym} settled with +$4.00 USDT fixed profit (separate from 30-day 2x plan)."
+                    ? "Your Additional Signal for {$sym} settled and bonus reward has been credited (separate from 30-day 2x plan)."
                     : "Your quantitative trading signal for {$sym} settled with +{$pct}% return. Profit has been credited to your Trading Wallet.",
                 'is_read' => 0,
                 'created_at' => $time

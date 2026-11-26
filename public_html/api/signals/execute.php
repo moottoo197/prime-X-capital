@@ -80,7 +80,7 @@ if ($isAdditionalSignal) {
     if ((int)($addStatus['remaining'] ?? 0) <= 0) {
         sendError(
             'NO_ADDITIONAL_SIGNAL_CREDITS',
-            'You have 0 Additional Signal credits remaining. Deposit $300+ or invite a friend who deposits $300+ to unlock $4.00 Additional Signals.',
+            'You have 0 Additional Signal credits remaining. Deposit $300+ or invite a friend who deposits $300+ to unlock Additional Signals.',
             400
         );
     }
@@ -199,7 +199,7 @@ if ($isAdditionalSignal) {
                         'balance_after' => $afterBal,
                         'entry_type' => 'TRADE_PNL',
                         'reference_id' => $refId,
-                        'description' => 'Additional Signal fixed reward (+4.00 USDT, separate from 30-day 2x plan) for ' . $signalId,
+                        'description' => 'Additional Signal reward credited for ' . $signalId,
                         'created_at' => $nowIso
                     ]]);
                     $credited = true;
@@ -209,7 +209,7 @@ if ($isAdditionalSignal) {
     }
 
     if (!$credited) {
-        sendError('PROFIT_CREDIT_FAILED', 'Additional signal confirmation could not credit $4.00 USDT. Please contact support.', 502);
+        sendError('PROFIT_CREDIT_FAILED', 'Additional signal confirmation could not credit your reward. Please contact support.', 502);
     }
 
     $consumeRes = primex_consume_additional_signal_credit($supabase, $userId, $signalId);
@@ -247,7 +247,7 @@ if ($isAdditionalSignal) {
         'expected_profit' => $fixedReward,
         'balance_after' => $balanceAfter,
         'additional_signals' => $consumeRes['status'] ?? null
-    ], 'Additional signal executed! +$4.00 USDT fixed profit credited (separate from 30-day 2x plan).');
+    ], 'Additional signal executed! Bonus reward credited (separate from 30-day 2x plan).');
 }
 
 // =========================================================================

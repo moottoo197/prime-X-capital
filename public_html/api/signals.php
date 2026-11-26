@@ -336,11 +336,11 @@ foreach ($allSignals as $s) {
         $activeSlot = $slot;
         $timeLeft = max(0, $expires->getTimestamp() - $nowTs);
         if ($isAdditional) {
-            $label = 'Additional Signal • $4.00 Fixed';
-            $schedule = '09:30 PM ' . $tzLabel;
+            $label = 'Additional Signal';
+            $schedule = 'LIVE';
         } else {
             $label = 'Daily Signal #' . $slot;
-            $schedule = $slot === 2 ? '08:00 PM ' . $tzLabel : '06:00 PM ' . $tzLabel;
+            $schedule = 'LIVE';
         }
     } else {
         $rawStart = (string)($s['published_at'] ?? $s['scheduled_at'] ?? '');
@@ -406,11 +406,6 @@ sendSuccess([
     'signal_profit_total' => round($userSignalProfitTotal, 2),
     'runtime_mode' => 'LIVE',
     'schedule' => [
-        'timezone' => 'Asia/Karachi',
-        'label' => 'PKT',
-        'times' => ['06:00 PM', '08:00 PM', '09:30 PM'],
-        'daily_times' => ['06:00 PM', '08:00 PM'],
-        'additional_time' => '09:30 PM',
         'duration_minutes' => !empty($liveSignals[0]['duration_minutes']) ? (int)$liveSignals[0]['duration_minutes'] : 15,
         'active_slot' => $activeSlot,
         'date' => $today

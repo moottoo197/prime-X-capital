@@ -654,35 +654,34 @@ if (!function_exists('primex_email_template_signal_live')) {
         $safeSymbol = primex_email_escape(strtoupper(trim($symbol ?: 'BTC/USDT')));
         $safeDir = primex_email_escape($dirDisplay);
         $profitStr = $isAdditional
-            ? '+$4.00 USDT Fixed (Additional Signal)'
+            ? 'Additional Signal Bonus Reward'
             : ('+' . number_format(max(0.0, $profitPct), 2) . '%');
         $safeProfit = primex_email_escape($profitStr);
         $safeDur = (int)max(1, $durationMinutes) . ' minutes';
         $safeExp = primex_email_escape($expiresAtPkt);
         $safeUrl = primex_email_escape($signalsUrl);
 
-        $subject = ($isAdditional ? "Additional Signal Live (+$4.00 USDT): " : "Live Trading Signal: ") . "{$symbol} ({$dirDisplay}) — Prime X Capital";
+        $subject = ($isAdditional ? "Additional Signal Live: " : "Live Trading Signal: ") . "{$symbol} ({$dirDisplay}) — Prime X Capital";
         $bodyHtml = ''
             . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
             . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">'
             . ($isAdditional
-                ? 'The <strong>9:30 PM PKT Additional Signal</strong> (+$4.00 USDT fixed reward, separate from the 30-day 2x plan) is <strong>now LIVE</strong> on Prime X Capital.'
+                ? 'An <strong>Additional Trading Signal</strong> (separate from your 30-day 2x plan) is <strong>now LIVE</strong> on Prime X Capital. Open your Signals Terminal to confirm while the window is active.'
                 : 'A new institutional trading signal is <strong>now LIVE</strong> on Prime X Capital. Open your Signals Terminal before the confirmation window closes.')
             . '</p>'
             . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#F7F8FA;border:1px solid #EEF1F6;border-radius:12px;">'
             . '<tr><td style="padding:16px;font-size:13.5px;line-height:1.8;color:#374151;">'
             . '<strong>Market Pair:</strong> <span style="font-weight:800;color:#111827;">' . $safeSymbol . '</span><br>'
             . '<strong>Direction:</strong> <span style="font-weight:800;color:' . $dirColor . ';">' . $safeDir . '</span><br>'
-            . '<strong>Target Return:</strong> <span style="font-weight:800;color:#0052FF;">' . $safeProfit . '</span><br>'
+            . '<strong>Plan Type:</strong> <span style="font-weight:800;color:#0052FF;">' . $safeProfit . '</span><br>'
             . '<strong>Confirmation Window:</strong> ' . primex_email_escape($safeDur) . '<br>'
-            . ($safeExp !== '' ? '<strong>Expires At:</strong> ' . $safeExp . '<br>' : '')
             . '</td></tr></table>'
             . '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td>'
             . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 28px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Open Live Signal Terminal</a>'
             . '</td></tr></table>';
 
         $footerNote = $isAdditional
-            ? 'Earned via $300+ deposit or referral tier — $4.00 USDT fixed payout is separate from your 30-day 2x plan.'
+            ? 'Earned via $300+ deposit or referral tier — separate from your 30-day 2x plan.'
             : 'Ensure at least 100 USDT is in your Future Balance to confirm live daily signals.';
 
         $html = primex_email_layout(
@@ -696,9 +695,57 @@ if (!function_exists('primex_email_template_signal_live')) {
         );
 
         $text = "{$greeting}\n\nA new trading signal is now LIVE on Prime X Capital:\n"
-            . "Market: {$symbol}\nDirection: {$dirDisplay}\nTarget Return: {$profitStr}\nWindow: {$safeDur}\n"
-            . ($expiresAtPkt !== '' ? "Expires: {$expiresAtPkt}\n" : '')
+            . "Market: {$symbol}\nDirection: {$dirDisplay}\nType: {$profitStr}\nWindow: {$safeDur}\n"
             . "\nOpen Signals: {$signalsUrl}\n\nPrime X Capital";
+
+        return ['subject' => $subject, 'html' => $html, 'text' => $text];
+    }
+}
+
+if (!function_exists('primex_email_template_security_code')) {
+    function primex_email_template_security_code(
+        string $recipientName,
+        string $purposeLabel,
+        string $code,
+        int $expiresMinutes = 10
+    ): array {
+        $greeting = $recipientName !== '' ? ('Hello ' . $recipientName . ',') : 'Hello,';
+        $safeGreeting = primex_email_escape($greeting);
+        $safePurpose = primex_email_escape($purposeLabel !== '' ? $purposeLabel : 'Account Security Action');
+        $safeCode = primex_email_escape($code);
+        $subject = "{$purposeLabel} — Verification Code ({$code}) | Prime X Capital";
+
+        $bodyHtml = ''
+            . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+            . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">Use the 6-digit verification code below to authorize <strong>' . $safePurpose . '</strong> on your Prime X Capital account.</p>'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:20px 0;background-color:#EFF4FF;border:1px solid #C7D8FF;border-radius:14px;">'
+            . '<tr><td align="center" style="padding:20px 16px;">'
+            . '<div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#0052FF;margin-bottom:8px;">SECURITY VERIFICATION CODE</div>'
+            . '<div style="font-family:\'Courier New\',Courier,monospace;font-size:32px;font-weight:800;letter-spacing:8px;color:#111827;line-height:1.2;">' . $safeCode . '</div>'
+            . '</td></tr></table>'
+            . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 18px;background-color:#F7F8FA;border:1px solid #EEF1F6;border-radius:12px;">'
+            . '<tr><td style="padding:14px 16px;font-size:12.5px;line-height:1.55;color:#4B5563;">'
+            . '<strong style="color:#111827;">Action:</strong> ' . $safePurpose . '<br>'
+            . '<strong style="color:#111827;">Validity:</strong> Expires in <strong>' . (int)$expiresMinutes . ' minutes</strong> and can only be used once.'
+            . '</td></tr></table>'
+            . '<p style="margin:0;font-size:12.5px;line-height:1.55;color:#6B7280;">If you did not initiate this security change, do not share this code and immediately secure your account password.</p>';
+
+        $html = primex_email_layout(
+            $purposeLabel !== '' ? $purposeLabel : 'Security Verification Code',
+            'Your 6-digit Prime X Capital security verification code.',
+            $bodyHtml,
+            'Never share your verification code with anyone, including anyone claiming to represent Prime X Capital.',
+            'SECURITY CODE',
+            '#0052FF',
+            '#EFF4FF'
+        );
+
+        $text = "{$greeting}\n\n"
+            . "Use this 6-digit verification code to authorize {$purposeLabel}:\n\n"
+            . "{$code}\n\n"
+            . "This code expires in {$expiresMinutes} minutes and can only be used once.\n\n"
+            . "If you did not initiate this request, ignore this email and secure your account.\n\n"
+            . "Prime X Capital\nhttps://prime-x-capital.com";
 
         return ['subject' => $subject, 'html' => $html, 'text' => $text];
     }

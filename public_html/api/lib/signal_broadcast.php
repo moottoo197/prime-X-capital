@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/mailer.php';
 require_once __DIR__ . '/email_templates.php';
+require_once __DIR__ . '/wallet_breakdown.php';
+require_once __DIR__ . '/additional_signals.php';
 
 if (!function_exists('primex_is_signal_live_for_broadcast')) {
     function primex_is_signal_live_for_broadcast(array $signal): bool {
@@ -82,7 +84,7 @@ if (!function_exists('primex_broadcast_signal_live_if_needed')) {
 
         $profilesRes = $supabase->selectAll('profiles', [
             'is_active' => 'eq.true',
-            'select' => 'id,email,full_name',
+            'select' => 'id,email,full_name,first_name,last_name,role',
             'order' => 'created_at.asc'
         ], 500);
         if (empty($profilesRes['success']) || !is_array($profilesRes['data'])) {
@@ -95,35 +97,48 @@ if (!function_exists('primex_broadcast_signal_live_if_needed')) {
         $isAdditional = ($slot === 3 || strpos($sigId, 'sig_add_') === 0 || !empty($signal['is_additional']));
         $profitPct = $isAdditional ? 0.0 : (float)($signal['profit_percentage'] ?? 1.67);
         $duration = max(1, (int)($signal['duration_minutes'] ?? 15));
-        $expiresAtPkt = '';
-        $expRaw = (string)($signal['expires_at'] ?? '');
-        if ($expRaw !== '') {
-            try {
-                $dt = new DateTime($expRaw, new DateTimeZone('UTC'));
-                $dt->setTimezone(new DateTimeZone('Asia/Karachi'));
-                $expiresAtPkt = $dt->format('d M Y, h:i A') . ' PKT';
-            } catch (Throwable $e) {
-                $expiresAtPkt = $expRaw;
-            }
-        }
         $signalsUrl = primex_app_url() . '/?view=signals';
+        $minDepositRequired = 100.0;
 
         $sentCount = 0;
         $seenEmails = [];
         foreach ($profilesRes['data'] as $profile) {
+            $uid = trim((string)($profile['id'] ?? ''));
             $email = strtolower(trim((string)($profile['email'] ?? '')));
-            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) continue;
+            if ($uid === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) continue;
             if (isset($seenEmails[$email])) continue;
             $seenEmails[$email] = true;
 
+            $wb = primex_compute_wallet_breakdown($supabase, $uid);
+            $fundedPrincipal = (float)($wb['funded_deposit_principal_usdt'] ?? 0.0);
+            $depositPlusBonus = round((float)($wb['deposit_balance_usdt'] ?? 0.0) + (float)($wb['deposit_bonus_usdt'] ?? 0.0), 2);
+            $futureBal = (float)($wb['future_total_usdt'] ?? 0.0);
+            $transferableSpot = (float)($wb['transferable_spot_usdt'] ?? 0.0);
+            $eligibleCapital = round(max($fundedPrincipal, $depositPlusBonus), 2);
+            $nonReferralAssets = round($transferableSpot + $futureBal, 2);
+
+            if ($eligibleCapital < $minDepositRequired || $nonReferralAssets < $minDepositRequired) {
+                continue;
+            }
+
+            if ($isAdditional) {
+                $addStatus = primex_get_additional_signal_status($supabase, $uid);
+                if ((int)($addStatus['remaining'] ?? 0) <= 0 || empty($addStatus['can_use_today'])) {
+                    continue;
+                }
+            }
+
             $name = trim((string)($profile['full_name'] ?? ''));
+            if ($name === '') {
+                $name = trim((string)($profile['first_name'] ?? '') . ' ' . (string)($profile['last_name'] ?? ''));
+            }
             $template = primex_email_template_signal_live(
                 $name,
                 $symbol,
                 $direction,
                 $profitPct,
                 $duration,
-                $expiresAtPkt,
+                '',
                 $signalsUrl,
                 $isAdditional
             );

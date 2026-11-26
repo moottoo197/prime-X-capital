@@ -31,6 +31,7 @@ $body = getJsonBody();
 $oldPassword = (string)($body['old_password'] ?? $body['current_password'] ?? '');
 $newPassword = (string)($body['new_password'] ?? $body['password'] ?? '');
 $confirmPassword = (string)($body['confirm_password'] ?? '');
+$verificationCode = trim((string)($body['verification_code'] ?? $body['code'] ?? $body['otp'] ?? ''));
 
 if ($oldPassword === '' || strlen($newPassword) < 8 || strlen($newPassword) > 128) {
     sendError('VALIDATION_ERROR', 'Current password and a new password (8 to 128 characters) are required.', 400);
@@ -40,6 +41,9 @@ if ($confirmPassword !== '' && !hash_equals($newPassword, $confirmPassword)) {
 }
 if (hash_equals($oldPassword, $newPassword)) {
     sendError('VALIDATION_ERROR', 'Your new password must be different from your current password.', 400);
+}
+if (!preg_match('/^\d{6}$/', preg_replace('/\s+/', '', $verificationCode))) {
+    sendError('VERIFICATION_CODE_REQUIRED', 'Please enter the 6-digit verification code sent to your email.', 400);
 }
 
 $profRes = $supabase->select('profiles', ['id' => 'eq.' . $userId, 'limit' => '1']);
@@ -58,6 +62,12 @@ if (!empty($profile['password_hash']) && password_verify($oldPassword, (string)$
 if (!$verifiedOld) {
     primex_record_log('SECURITY', 'CHANGE_PASSWORD_BAD_CURRENT', 'Current password verification failed', [], 'WARNING', $userId, $email);
     sendError('INVALID_CURRENT_PASSWORD', 'Current password is incorrect.', 401);
+}
+
+$otpCheck = primex_consume_scoped_otp($supabase, 'change_password', $email, $verificationCode);
+if (empty($otpCheck['success'])) {
+    $status = (($otpCheck['error_code'] ?? '') === 'RATE_LIMITED') ? 429 : 400;
+    sendError((string)($otpCheck['error_code'] ?? 'INVALID_VERIFICATION_CODE'), (string)($otpCheck['message'] ?? 'Invalid or expired verification code.'), $status);
 }
 
 $newHash = primex_hash_password($newPassword);
