@@ -124,12 +124,16 @@ $authRes = $supabase->authAdminCreateUser($email, $password, [
     'whatsapp_number' => $whatsappNumber,
     'phone' => $whatsappNumber,
     'country' => $country,
-    'timezone' => $timezone
+    'timezone' => $timezone,
+    'has_withdrawal_pin' => true
 ]);
 
 if ($authRes['success'] && !empty($authRes['data']['id'])) {
     $userId = $authRes['data']['id'];
 }
+
+// Persist hashed withdrawal PIN in fallback store so verification and admin status stay accurate
+primex_save_user_pin_hash($userId, $pinHash, $email);
 
 // 3. Upsert Profile (matching verified Supabase columns)
 $profilePayload = [
@@ -190,6 +194,8 @@ if (!$profileRes['success']) {
     sendError('PROFILE_CREATE_FAILED', 'Unable to create the account profile. ' . ($profileRes['message'] ?? ''), 502);
 }
 
+primex_save_user_pin_hash($userId, $pinHash, $email);
+
 // Read the database-generated numeric UID (never derive a UID by concatenating the UUID).
 $uidRes = $supabase->select('profiles', ['id' => "eq.{$userId}", 'select' => 'numeric_uid', 'limit' => '1']);
 $numericUid = (!empty($uidRes['data'][0]['numeric_uid'])) ? (string)$uidRes['data'][0]['numeric_uid'] : null;
@@ -207,6 +213,7 @@ primex_mark_email_verified_local($userId, $email);
 
 // 5. Create Session
 $profilePayload['numeric_uid'] = $numericUid;
+$profilePayload['has_withdrawal_pin'] = true;
 primex_create_session($profilePayload);
 
 // Set preference cookies

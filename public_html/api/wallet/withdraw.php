@@ -3,6 +3,7 @@
  * User Withdrawal Request - Direct Supabase REST
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/auth_tokens.php';
 require_once dirname(__DIR__) . '/lib/mailer.php';
 require_once dirname(__DIR__) . '/lib/email_templates.php';
 require_once dirname(__DIR__) . '/lib/withdrawal_policy.php';
@@ -44,9 +45,13 @@ if (!$profRes['success'] || empty($profRes['data'][0])) {
     sendError('PROFILE_LOOKUP_FAILED', 'Unable to verify withdrawal PIN right now. Please try again.', 502);
 }
 $prof = $profRes['data'][0];
+$profEmail = strtolower(trim((string)($prof['email'] ?? ($user['email'] ?? ''))));
 
 $storedPin = (string)($prof['withdrawal_pin'] ?? '');
 $storedHash = (string)($prof['withdrawal_pin_hash'] ?? '');
+if ($storedHash === '') {
+    $storedHash = primex_get_user_pin_hash((string)$user['id'], $profEmail);
+}
 
 $pinMatches = false;
 if ($storedHash !== '' && password_verify($withdrawalPin, $storedHash)) {
@@ -54,13 +59,18 @@ if ($storedHash !== '' && password_verify($withdrawalPin, $storedHash)) {
 } elseif ($storedPin !== '' && hash_equals($storedPin, $withdrawalPin)) {
     $pinMatches = true;
 } elseif ($storedPin === '' && $storedHash === '') {
+    $newPinHash = password_hash($withdrawalPin, PASSWORD_BCRYPT);
+    primex_save_user_pin_hash((string)$user['id'], $newPinHash, $profEmail);
     $initPinRes = $supabase->update('profiles', [
         'withdrawal_pin' => null,
-        'withdrawal_pin_hash' => password_hash($withdrawalPin, PASSWORD_BCRYPT),
+        'withdrawal_pin_hash' => $newPinHash,
         'updated_at' => gmdate('Y-m-d H:i:s')
     ], ['id' => "eq.{$user['id']}"]);
     if (empty($initPinRes['success'])) {
-        sendError('PIN_UPDATE_FAILED', 'Unable to initialize withdrawal PIN. Please try again.', 502);
+        $errMsg = strtolower((string)($initPinRes['message'] ?? ''));
+        if (strpos($errMsg, 'withdrawal_pin') === false) {
+            sendError('PIN_UPDATE_FAILED', 'Unable to initialize withdrawal PIN. Please try again.', 502);
+        }
     }
     $pinMatches = true;
 }
@@ -72,11 +82,15 @@ if (!$pinMatches) {
 
 clearWithdrawalPinFailures((string)$user['id']);
 if ($storedPin !== '') {
-    $supabase->update('profiles', [
+    $migratedHash = password_hash($withdrawalPin, PASSWORD_BCRYPT);
+    primex_save_user_pin_hash((string)$user['id'], $migratedHash, $profEmail);
+    @$supabase->update('profiles', [
         'withdrawal_pin' => null,
-        'withdrawal_pin_hash' => password_hash($withdrawalPin, PASSWORD_BCRYPT),
+        'withdrawal_pin_hash' => $migratedHash,
         'updated_at' => gmdate('Y-m-d H:i:s')
     ], ['id' => "eq.{$user['id']}"]);
+} elseif ($storedHash !== '') {
+    primex_save_user_pin_hash((string)$user['id'], $storedHash, $profEmail);
 }
 
 $idempotencyKey = trim((string)($input['idempotency_key'] ?? ($_SERVER['HTTP_X_IDEMPOTENCY_KEY'] ?? '')));

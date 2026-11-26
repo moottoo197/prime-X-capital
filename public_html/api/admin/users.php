@@ -3,6 +3,7 @@
  * Admin Users Management - Pure Supabase REST Architecture
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/auth_tokens.php';
 
 $admin = requireAdmin();
 
@@ -18,17 +19,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // Detailed single-user dossier. This branch is intentionally admin-only and
     // reads the same source-of-truth tables used by the financial/admin desks.
     $requestedUserId = trim((string)($_GET['user_id'] ?? ''));
-    if ($requestedUserId !== '') {
-        if (!preg_match('/^[A-Za-z0-9._:-]{1,128}$/', $requestedUserId)) {
+    $requestedEmail = strtolower(trim((string)($_GET['email'] ?? '')));
+    if ($requestedUserId !== '' || $requestedEmail !== '') {
+        if ($requestedUserId !== '' && !preg_match('/^[A-Za-z0-9._:@-]{1,160}$/', $requestedUserId)) {
             sendError('VALIDATION_ERROR', 'Invalid user ID format.');
         }
-        $profileRes = $supabase->select('profiles', ['id' => 'eq.' . $requestedUserId, 'limit' => '1']);
-        if (!$profileRes['success'] || empty($profileRes['data'][0])) {
+        $profile = null;
+        if ($requestedUserId !== '') {
+            $profileRes = $supabase->select('profiles', ['id' => 'eq.' . $requestedUserId, 'limit' => '1']);
+            if ($profileRes['success'] && !empty($profileRes['data'][0])) {
+                $profile = $profileRes['data'][0];
+            } elseif (strpos($requestedUserId, '@') !== false) {
+                $profile = primex_find_profile_by_email($supabase, strtolower($requestedUserId));
+            }
+        }
+        if (!$profile && $requestedEmail !== '') {
+            $profile = primex_find_profile_by_email($supabase, $requestedEmail);
+        }
+        $authMeta = [];
+        $authUserData = null;
+        $lookupUid = (string)($profile['id'] ?? $requestedUserId);
+        if ($lookupUid !== '' && method_exists($supabase, 'authAdminGetUser')) {
+            try {
+                $authGet = $supabase->authAdminGetUser($lookupUid);
+                if (!empty($authGet['success']) && is_array($authGet['data'] ?? null)) {
+                    $authUserData = $authGet['data'];
+                    $authMeta = is_array($authUserData['user_metadata'] ?? null) ? $authUserData['user_metadata'] : [];
+                    if (!$profile && !empty($authUserData['email'])) {
+                        $profile = primex_find_profile_by_email($supabase, strtolower((string)$authUserData['email']));
+                    }
+                    if (!$profile) {
+                        $profile = [
+                            'id' => (string)($authUserData['id'] ?? $lookupUid),
+                            'email' => (string)($authUserData['email'] ?? $requestedEmail),
+                            'role' => (string)($authMeta['role'] ?? 'USER'),
+                            'is_active' => 1,
+                            'kyc_status' => (string)($authMeta['kyc_status'] ?? 'NOT_SUBMITTED'),
+                            'referral_code' => (string)($authMeta['referral_code'] ?? ''),
+                            'referred_by' => $authMeta['referred_by'] ?? null,
+                            'country' => (string)($authMeta['country'] ?? ''),
+                            'timezone' => (string)($authMeta['timezone'] ?? 'Asia/Karachi'),
+                            'whatsapp_number' => (string)($authMeta['whatsapp_number'] ?? ($authMeta['phone'] ?? '')),
+                            'created_at' => (string)($authUserData['created_at'] ?? gmdate('Y-m-d H:i:s'))
+                        ];
+                    }
+                }
+            } catch (Throwable $e) {}
+        }
+        if (!$profile || empty($profile['id'])) {
             sendError('USER_NOT_FOUND', 'User account was not found.', 404);
         }
-        $profile = $profileRes['data'][0];
-        $userId = (string)($profile['id'] ?? '');
-        if ($userId === '') sendError('USER_NOT_FOUND', 'User account was not found.', 404);
+        $userId = (string)$profile['id'];
+        if (!empty($authMeta)) {
+            if (empty($profile['country']) && !empty($authMeta['country'])) $profile['country'] = $authMeta['country'];
+            if (empty($profile['whatsapp_number']) && !empty($authMeta['whatsapp_number'])) $profile['whatsapp_number'] = $authMeta['whatsapp_number'];
+            if (empty($profile['phone']) && !empty($authMeta['phone'])) $profile['phone'] = $authMeta['phone'];
+            if (empty($profile['timezone']) && !empty($authMeta['timezone'])) $profile['timezone'] = $authMeta['timezone'];
+            if (empty($profile['referral_code']) && !empty($authMeta['referral_code'])) $profile['referral_code'] = $authMeta['referral_code'];
+            if (empty($profile['referred_by']) && !empty($authMeta['referred_by'])) $profile['referred_by'] = $authMeta['referred_by'];
+        }
 
         $mode = strtolower(trim((string)($_GET['mode'] ?? 'full')));
         $isSummaryMode = ($mode === 'summary');
@@ -315,9 +364,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             // Never expose private password/PIN material even to an admin browser.
             foreach (['password_hash','withdrawal_pin','withdrawal_pin_hash'] as $secretField) unset($kyc[$secretField]);
         }
+        $hasWithdrawalPin = primex_has_withdrawal_pin_resolved($profile, $supabase)
+            || !empty($authMeta['has_withdrawal_pin'])
+            || !empty($withdrawalRows);
+        $emailVerified = primex_is_email_verified_resolved($profile, $supabase)
+            || !empty($authUserData['email_confirmed_at']);
         $safeProfile = $profile;
         foreach (['password_hash','withdrawal_pin','withdrawal_pin_hash'] as $secretField) unset($safeProfile[$secretField]);
-        $safeProfile['has_withdrawal_pin'] = !empty($profile['withdrawal_pin']) || !empty($profile['withdrawal_pin_hash']);
+        $safeProfile['has_withdrawal_pin'] = $hasWithdrawalPin;
+        $safeProfile['email_verified'] = $emailVerified;
+        $safeProfile['avatar'] = primex_get_user_avatar($profile);
+        $safeProfile['pin_source'] = (!empty($profile['withdrawal_pin_hash']) || !empty($profile['withdrawal_pin']))
+            ? 'DB_HASH'
+            : (primex_get_user_pin_hash($userId, (string)($profile['email'] ?? '')) !== '' ? 'SERVER_STORE' : (!empty($authMeta['has_withdrawal_pin']) ? 'AUTH_META' : (!empty($withdrawalRows) ? 'VERIFIED_WITHDRAWAL' : 'NONE')));
 
         $recentTransactions = [];
         foreach (array_slice($ledgerRows, 0, 200) as $entry) {

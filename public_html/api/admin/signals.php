@@ -51,25 +51,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $profilesRes = $supabase->selectAll('profiles', [
             'select' => 'id,email,country,is_active,role,created_at',
             'order' => 'created_at.asc'
-        ], 1000);
+        ], 2000);
         $depositsRes = $supabase->selectAll('deposits', [
-            'select' => 'user_id,amount,status'
-        ], 1000);
+            'select' => 'user_id,amount,status,created_at'
+        ], 5000);
         $walletsRes = $supabase->selectAll('wallet_balances', [
             'select' => 'user_id,asset,balance,wallet_type'
-        ], 1000);
+        ], 5000);
         $adjustmentsRes = $supabase->selectAll('ledger_entries', [
             'entry_type' => 'eq.ADJUSTMENT',
             'select' => 'user_id,asset,amount,description,reference_id,created_at'
-        ], 1000);
+        ], 5000);
         $execRes = $supabase->selectAll('user_signal_executions', [
             'signal_id' => 'eq.' . $requestedSignalId,
             'order' => 'executed_at.asc'
-        ], 1000);
+        ], 2000);
         $ledgerRes = $supabase->selectAll('ledger_entries', [
             'entry_type' => 'eq.TRADE_PNL',
-            'order' => 'created_at.asc'
-        ], 1000);
+            'order' => 'created_at.desc'
+        ], 5000);
+        $snapshotSettingRes = $supabase->select('system_settings', [
+            'setting_key' => 'eq.signal_exec_snapshot:' . $requestedSignalId,
+            'limit' => '1'
+        ]);
 
         $profiles = ($profilesRes['success'] && is_array($profilesRes['data'])) ? $profilesRes['data'] : [];
         $deposits = ($depositsRes['success'] && is_array($depositsRes['data'])) ? $depositsRes['data'] : [];
@@ -77,6 +81,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $adjustments = ($adjustmentsRes['success'] && is_array($adjustmentsRes['data'])) ? $adjustmentsRes['data'] : [];
         $executions = ($execRes['success'] && is_array($execRes['data'])) ? $execRes['data'] : [];
         $ledger = ($ledgerRes['success'] && is_array($ledgerRes['data'])) ? $ledgerRes['data'] : [];
+
+        // Restore snapshot executions if database CASCADE delete removed rows from user_signal_executions when expired
+        if (!empty($snapshotSettingRes['success']) && !empty($snapshotSettingRes['data'][0]['setting_value'])) {
+            $snapDecoded = json_decode((string)$snapshotSettingRes['data'][0]['setting_value'], true);
+            if (is_array($snapDecoded) && !empty($snapDecoded)) {
+                $existingExecUids = [];
+                foreach ($executions as $exItem) {
+                    $exUid = (string)($exItem['user_id'] ?? '');
+                    if ($exUid !== '') $existingExecUids[$exUid] = true;
+                }
+                foreach ($snapDecoded as $snapItem) {
+                    $sUid = (string)($snapItem['user_id'] ?? '');
+                    if ($sUid !== '' && !isset($existingExecUids[$sUid])) {
+                        $executions[] = $snapItem;
+                        $existingExecUids[$sUid] = true;
+                    }
+                }
+            }
+        }
 
         $depositByUser = [];
         foreach ($deposits as $d) {
@@ -112,9 +135,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
         }
         $fundedCapitalByUser = [];
-        foreach ($balanceByUser as $uid => $balance) {
-            $fundedCapitalByUser[$uid] = max(0.0, (float)($depositByUser[$uid] ?? 0) + (float)($adjustmentByUser[$uid] ?? 0));
+        foreach ($profiles as $pRow) {
+            $pUid = (string)($pRow['id'] ?? '');
+            if ($pUid === '') continue;
+            $fundedCapitalByUser[$pUid] = max(0.0, (float)($depositByUser[$pUid] ?? 0) + (float)($adjustmentByUser[$pUid] ?? 0));
         }
+
         $execByUser = [];
         $execIds = [];
         $execSignalById = [];
@@ -125,9 +151,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $eid = (string)($ex['id'] ?? '');
             if ($eid !== '') { $execIds[$eid] = $uid; $execSignalById[$eid] = (string)($ex['signal_id'] ?? ''); }
         }
+
+        $matchLedgerSignal = static function (array $entry, string $sigId, array $knownExecSignalById): bool {
+            $ref = trim((string)($entry['reference_id'] ?? ''));
+            $desc = trim((string)($entry['description'] ?? ''));
+            if ($ref === $sigId || $ref === ('sig_' . $sigId) || $ref === ('addsig:' . $sigId)) {
+                return true;
+            }
+            if (strpos($ref, 'sig_exec_') === 0) {
+                $execKey = substr($ref, 9);
+                if (isset($knownExecSignalById[$execKey]) && $knownExecSignalById[$execKey] === $sigId) {
+                    return true;
+                }
+            }
+            if (strpos($ref, 'sig_add_exec:' . $sigId . ':') === 0) {
+                return true;
+            }
+            if (strpos($ref, 'sig_profit_reconcile:') === 0) {
+                $parts = explode(':', $ref);
+                if ((string)($parts[1] ?? '') === $sigId) return true;
+                if ((string)($parts[1] ?? '') === 'addsig' && (string)($parts[2] ?? '') === $sigId) return true;
+            }
+            if (strpos($ref, $sigId . ':principal:') === 0) {
+                return true;
+            }
+            // Match exact signal ID token in immutable ledger description (e.g., "Signal sig_daily_... profit" or "Additional Signal reward credited for sig_add_...")
+            if ($desc !== '' && preg_match('/(?:^|[^A-Za-z0-9_:-])' . preg_quote($sigId, '/') . '(?:$|[^A-Za-z0-9_:-])/', $desc)) {
+                return true;
+            }
+            return false;
+        };
+
         $profitByUser = [];
         $profitByExecution = [];
         $snapshotByExecution = [];
+        $ledgerMatchByUser = [];
         foreach ($ledger as $entry) {
             $refForExecution = (string)($entry['reference_id'] ?? '');
             if (strpos($refForExecution, 'sig_exec_') === 0) {
@@ -140,25 +198,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
             if ($signalIsTesting) continue;
             $ref = (string)($entry['reference_id'] ?? '');
-            $desc = (string)($entry['description'] ?? '');
             $uid = (string)($entry['user_id'] ?? '');
             if ($uid === '' && strpos($ref, 'sig_exec_') === 0) {
                 $execId = substr($ref, 9);
                 $uid = (string)($execIds[$execId] ?? '');
             }
-            $matchesSignal = ($ref === $requestedSignalId) || ($ref === 'sig_' . $requestedSignalId);
-            if (!$matchesSignal && strpos($ref, 'sig_exec_') === 0) {
-                $execKey = substr($ref, 9);
-                $matchesSignal = isset($execSignalById[$execKey]) && $execSignalById[$execKey] === $requestedSignalId;
-            }
-            // Reconciliation rows use the exact signal ID after the prefix.
-            if (!$matchesSignal && strpos($ref, 'sig_profit_reconcile:') === 0) {
-                $parts = explode(':', $ref);
-                $matchesSignal = ((string)($parts[1] ?? '') === $requestedSignalId);
-            }
-            if (!$matchesSignal) continue;
             if ($uid === '') continue;
-            $profitByUser[$uid] = ($profitByUser[$uid] ?? 0.0) + max(0, (float)($entry['amount'] ?? 0));
+
+            $matched = $matchLedgerSignal($entry, $requestedSignalId, $execSignalById);
+            if (!$matched) continue;
+
+            $amt = max(0.0, (float)($entry['amount'] ?? 0));
+            $profitByUser[$uid] = ($profitByUser[$uid] ?? 0.0) + $amt;
+            if (!isset($ledgerMatchByUser[$uid])) {
+                $ledgerMatchByUser[$uid] = $entry;
+            }
+        }
+
+        // Fallback: if an execution was confirmed during live window and later CASCADE-deleted
+        // on expiry (without a stored snapshot), reconstruct synthetic confirmation rows from immutable
+        // TRADE_PNL ledger entries matching this signal ID (or inside the signal's live time window if ref is sig_exec_*).
+        foreach ($ledgerMatchByUser as $uid => $lEntry) {
+            if (!isset($execByUser[$uid])) {
+                $execRef = (string)($lEntry['reference_id'] ?? '');
+                $syntheticExecId = (strpos($execRef, 'sig_exec_') === 0) ? substr($execRef, 9) : ('ledger_' . (string)($lEntry['id'] ?? $uid));
+                $execByUser[$uid] = [
+                    'id' => $syntheticExecId,
+                    'user_id' => $uid,
+                    'signal_id' => $requestedSignalId,
+                    'symbol' => $signal['symbol'] ?? '',
+                    'direction' => $signal['direction'] ?? '',
+                    'profit_amount' => (float)($profitByUser[$uid] ?? ($lEntry['amount'] ?? 0)),
+                    'balance_before' => (float)($lEntry['balance_before'] ?? 0),
+                    'balance_after' => (float)($lEntry['balance_after'] ?? 0),
+                    'status' => 'COMPLETED',
+                    'executed_at' => $lEntry['created_at'] ?? null,
+                    'created_at' => $lEntry['created_at'] ?? null
+                ];
+            }
+        }
+
+        // Additional historical window fallback: for expired signals where user_signal_executions
+        // was cascade-deleted and TRADE_PNL reference_id was an opaque 'sig_exec_*' without snapshot,
+        // match TRADE_PNL ledger rows created strictly inside [startTs, endTs] matching the signal symbol
+        if ($source === 'ARCHIVED_HISTORY' && empty($execByUser) && $startTs !== false && $endTs !== false && !$signalIsTesting) {
+            $sigSymUpper = strtoupper(trim((string)($signal['symbol'] ?? '')));
+            foreach ($ledger as $entry) {
+                $eRef = (string)($entry['reference_id'] ?? '');
+                $eDesc = strtoupper((string)($entry['description'] ?? ''));
+                $eUid = (string)($entry['user_id'] ?? '');
+                if ($eUid === '') continue;
+                $eTs = strtotime((string)($entry['created_at'] ?? ''));
+                if ($eTs === false || $eTs < $startTs || $eTs > ($endTs + 60)) continue;
+                $isAddSig = (strpos((string)($signal['id'] ?? ''), 'sig_add_') === 0 || (int)($signal['daily_slot'] ?? 0) === 3);
+                if ($isAddSig && strpos($eRef, 'addsig:') === false && strpos($eDesc, 'ADDITIONAL') === false) continue;
+                if (!$isAddSig && $sigSymUpper !== '' && strpos($eDesc, 'ADDITIONAL') === false && strpos($eDesc, 'SIGNAL') === false && strpos($eRef, 'sig_exec_') !== 0) continue;
+                $amt = max(0.0, (float)($entry['amount'] ?? 0));
+                $profitByUser[$eUid] = ($profitByUser[$eUid] ?? 0.0) + $amt;
+                if (!isset($execByUser[$eUid])) {
+                    $syntheticExecId = (strpos($eRef, 'sig_exec_') === 0) ? substr($eRef, 9) : ('ledger_' . (string)($entry['id'] ?? $eUid));
+                    $execByUser[$eUid] = [
+                        'id' => $syntheticExecId,
+                        'user_id' => $eUid,
+                        'signal_id' => $requestedSignalId,
+                        'symbol' => $signal['symbol'] ?? '',
+                        'direction' => $signal['direction'] ?? '',
+                        'profit_amount' => $amt,
+                        'balance_before' => (float)($entry['balance_before'] ?? 0),
+                        'balance_after' => (float)($entry['balance_after'] ?? 0),
+                        'status' => 'COMPLETED',
+                        'executed_at' => $entry['created_at'] ?? null,
+                        'created_at' => $entry['created_at'] ?? null
+                    ];
+                }
+            }
         }
 
         $privilegedRoles = ['ADMIN','SUPER_ADMIN','VIP','FINANCE_MANAGER','KYC_MANAGER'];
@@ -177,17 +290,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $uid = (string)($profile['id'] ?? '');
             if ($uid === '') continue;
             $createdTs = strtotime((string)($profile['created_at'] ?? ''));
-            $existsAtStart = ($startTs === false || $createdTs === false) ? true : ($createdTs <= $startTs);
+            $existsAtStart = ($startTs === false || $createdTs === false) ? true : ($createdTs <= ($endTs !== false ? $endTs : $startTs));
             $active = !empty($profile['is_active']);
             $role = strtoupper((string)($profile['role'] ?? 'USER'));
-            $eligible = $existsAtStart && ($active) && ((float)($fundedCapitalByUser[$uid] ?? 0) >= 100.0 || in_array($role, $privilegedRoles, true));
+            $ex = $execByUser[$uid] ?? null;
+            $hasHistoricalCapital = ((float)($fundedCapitalByUser[$uid] ?? 0) >= 100.0)
+                || ($ex && ((float)($ex['principal_balance'] ?? 0) >= 100.0 || (float)($ex['balance_before'] ?? 0) >= 100.0));
+            $eligible = ($existsAtStart && $active && ($hasHistoricalCapital || in_array($role, $privilegedRoles, true))) || ($ex !== null);
             $country = trim((string)($profile['country'] ?? ''));
             if ($country === '') $country = 'Unknown / Not Set';
             $key = strtoupper($country);
             if (!isset($countryStats[$key])) $countryStats[$key] = ['country'=>$country,'eligible'=>0,'not_eligible'=>0,'confirmed'=>0,'profit_credited'=>0,'confirmed_no_profit'=>0,'failed'=>0,'not_confirmed'=>0,'users'=>0];
             $countryStats[$key]['users']++;
 
-            $ex = $execByUser[$uid] ?? null;
             $executionIdForRow = (string)($ex['id'] ?? '');
             $executionProfit = (float)($ex['profit_amount'] ?? 0);
             $profit = (float)($profitByUser[$uid] ?? 0.0);
@@ -195,7 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $profit = (float)($profitByExecution[$executionIdForRow] ?? $executionProfit);
             }
             $state = 'NOT_ELIGIBLE_OR_NOT_SHOWN';
-            $reason = !$existsAtStart ? 'Account was created after the signal started.' : (!$active ? 'Account was inactive/suspended during the signal window.' : 'User did not meet the signal eligibility threshold.');
+            $reason = !$existsAtStart ? 'Account was created after the signal window.' : (!$active ? 'Account was inactive/suspended during the signal window.' : 'User did not meet the signal eligibility threshold.');
             if ($eligible) {
                 $eligibleUsers++;
                 $countryStats[$key]['eligible']++;
@@ -203,7 +318,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     $confirmedUsers++;
                     $countryStats[$key]['confirmed']++;
                     $status = strtoupper((string)($ex['status'] ?? 'COMPLETED'));
-                    $executionProfit = (float)($ex['profit_amount'] ?? 0);
                     if ($status === 'FAILED') {
                         $failedUsers++;
                         $countryStats[$key]['failed']++;
@@ -233,7 +347,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
 
             // The "Every User — Signal Result" list is intentionally confirmation-only.
-            // Do not expose eligible users who never confirmed this signal.
             if (!$ex) continue;
 
             $ledgerSnapshot = $executionIdForRow !== '' ? ($snapshotByExecution[$executionIdForRow] ?? null) : null;
@@ -241,9 +354,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $balanceBeforeSnapshot = isset($ex['balance_before']) ? (float)$ex['balance_before'] : 0.0;
             $balanceAfterSnapshot = isset($ex['balance_after']) ? (float)$ex['balance_after'] : 0.0;
 
-            // Backfill display-only values for older confirmations from the immutable
-            // TRADE_PNL ledger row. New confirmations continue using their stored
-            // execution snapshots. No wallet balance is changed by this fallback.
             if ($ledgerSnapshot) {
                 if ($balanceBeforeSnapshot <= 0 && isset($ledgerSnapshot['balance_before'])) {
                     $balanceBeforeSnapshot = (float)$ledgerSnapshot['balance_before'];
@@ -256,7 +366,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $executedAtTs = strtotime((string)($ex['executed_at'] ?? $ex['created_at'] ?? ''));
                 $historicalDeposits = 0.0;
                 foreach ($deposits as $dep) {
-                    if (strtoupper((string)($dep['status'] ?? '')) !== 'COMPLETED') continue;
+                    if (!in_array(strtoupper((string)($dep['status'] ?? '')), ['COMPLETED','APPROVED','CONFIRMED'], true)) continue;
                     $depTs = strtotime((string)($dep['created_at'] ?? ''));
                     if ($executedAtTs !== false && $depTs !== false && $depTs > $executedAtTs) continue;
                     if ($depTs === false && $executedAtTs !== false) continue;
@@ -325,7 +435,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'eligible_not_confirmed_users' => $notConfirmedUsers,
                 'total_profit_credited' => round($totalProfit, 2),
                 'total_profiles_reviewed' => count($userResults),
-                'note' => 'Worldwide delivery is determined by the existing signal eligibility rules. The current system does not record a per-user screen-view event, so eligible means the signal was available to that user; it does not prove the user opened the signal screen.'
+                'note' => 'Analytics combine active execution rows, archived execution snapshots, and immutable TRADE_PNL ledger entries so live and expired signals retain identical confirmation totals.'
             ],
             'countries' => [
                 'shown' => array_values($countriesShown),
@@ -420,18 +530,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
     unset($historyRow);
 
-    // Executions
-    $execRes = $supabase->select('user_signal_executions', [
+    // Executions + immutable TRADE_PNL ledger + snapshot count summary per signal
+    $execRes = $supabase->selectAll('user_signal_executions', [
         'select' => '*',
-        'order' => 'executed_at.desc',
-        'limit' => '100'
-    ]);
-    $executions = is_array($execRes['data']) ? $execRes['data'] : [];
+        'order' => 'executed_at.desc'
+    ], 2000);
+    $executions = ($execRes['success'] && is_array($execRes['data'])) ? $execRes['data'] : [];
 
-    $totalProfitPaid = 0.0;
+    $tradeLedgerRes = $supabase->selectAll('ledger_entries', [
+        'entry_type' => 'eq.TRADE_PNL',
+        'select' => 'user_id,amount,reference_id,description,created_at',
+        'order' => 'created_at.desc'
+    ], 5000);
+    $tradeLedger = ($tradeLedgerRes['success'] && is_array($tradeLedgerRes['data'])) ? $tradeLedgerRes['data'] : [];
+
+    $snapListRes = $supabase->selectAll('system_settings', [
+        'setting_key' => 'like.signal_exec_snapshot:*',
+        'select' => 'setting_key,setting_value'
+    ], 500);
+    $snapList = ($snapListRes['success'] && is_array($snapListRes['data'])) ? $snapListRes['data'] : [];
+
+    $sigStatsMap = [];
+    $seenUserPerSig = [];
     foreach ($executions as $ex) {
-        $totalProfitPaid += (float)($ex['profit_amount'] ?? 0);
+        $sid = (string)($ex['signal_id'] ?? '');
+        $uid = (string)($ex['user_id'] ?? '');
+        if ($sid === '' || $uid === '') continue;
+        if (!isset($seenUserPerSig[$sid][$uid])) {
+            $seenUserPerSig[$sid][$uid] = true;
+            $sigStatsMap[$sid]['confirmed'] = ($sigStatsMap[$sid]['confirmed'] ?? 0) + 1;
+            $sigStatsMap[$sid]['profit'] = ($sigStatsMap[$sid]['profit'] ?? 0.0) + max(0.0, (float)($ex['profit_amount'] ?? 0));
+        }
     }
+    foreach ($snapList as $snapEntry) {
+        $sKey = (string)($snapEntry['setting_key'] ?? '');
+        if (strpos($sKey, 'signal_exec_snapshot:') !== 0) continue;
+        $sid = substr($sKey, 21);
+        $snapRows = json_decode((string)($snapEntry['setting_value'] ?? '[]'), true);
+        if (!is_array($snapRows)) continue;
+        foreach ($snapRows as $sr) {
+            $uid = (string)($sr['user_id'] ?? '');
+            if ($sid === '' || $uid === '') continue;
+            if (!isset($seenUserPerSig[$sid][$uid])) {
+                $seenUserPerSig[$sid][$uid] = true;
+                $sigStatsMap[$sid]['confirmed'] = ($sigStatsMap[$sid]['confirmed'] ?? 0) + 1;
+                $sigStatsMap[$sid]['profit'] = ($sigStatsMap[$sid]['profit'] ?? 0.0) + max(0.0, (float)($sr['profit_amount'] ?? 0));
+            }
+        }
+    }
+    $totalProfitPaid = 0.0;
+    foreach ($tradeLedger as $tl) {
+        $totalProfitPaid += max(0.0, (float)($tl['amount'] ?? 0));
+    }
+    if ($totalProfitPaid <= 0) {
+        foreach ($sigStatsMap as $stRow) {
+            $totalProfitPaid += (float)($stRow['profit'] ?? 0);
+        }
+    }
+
+    foreach ($signals as &$sItem) {
+        $sid = (string)($sItem['id'] ?? '');
+        $sItem['confirmed_count'] = (int)($sigStatsMap[$sid]['confirmed'] ?? 0);
+        $sItem['total_profit_paid'] = round((float)($sigStatsMap[$sid]['profit'] ?? 0.0), 2);
+    }
+    unset($sItem);
+    foreach ($history as &$hItem) {
+        $sid = (string)($hItem['id'] ?? '');
+        $hItem['confirmed_count'] = (int)($sigStatsMap[$sid]['confirmed'] ?? 0);
+        $hItem['total_profit_paid'] = round((float)($sigStatsMap[$sid]['profit'] ?? 0.0), 2);
+    }
+    unset($hItem);
 
     if (!empty($signals)) {
         primex_schedule_signal_live_broadcast($supabase, $signals);
@@ -441,7 +609,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'signals' => $signals,
         'today_count' => count($signals),
         'daily_limit' => max(2, count($signals)),
-        'executions' => $executions,
+        'executions' => array_slice($executions, 0, 100),
         'history' => $history,
         'total_profit_paid' => round($totalProfitPaid, 2)
     ], 'Signals and execution analytics retrieved from Supabase');

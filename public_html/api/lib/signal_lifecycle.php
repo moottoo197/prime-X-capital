@@ -25,6 +25,24 @@ if (!function_exists('alphavest_archive_expired_signals')) {
             $signalId = trim((string)($signal['id'] ?? ''));
             if ($signalId === '') continue;
 
+            // Snapshot user_signal_executions before deleting from trading_signals so
+            // foreign key ON DELETE CASCADE never erases historical confirmation metrics.
+            try {
+                $execSnapRes = $supabase->selectAll('user_signal_executions', [
+                    'signal_id' => 'eq.' . $signalId,
+                    'select' => '*',
+                    'order' => 'executed_at.asc'
+                ], 2000);
+                if (!empty($execSnapRes['success']) && !empty($execSnapRes['data']) && is_array($execSnapRes['data'])) {
+                    $supabase->upsert('system_settings', [[
+                        'setting_key' => 'signal_exec_snapshot:' . $signalId,
+                        'setting_value' => json_encode($execSnapRes['data'], JSON_UNESCAPED_SLASHES),
+                        'description' => 'Archived execution snapshot for ' . $signalId,
+                        'updated_at' => gmdate('Y-m-d H:i:s')
+                    ]], 'setting_key');
+                }
+            } catch (Throwable $e) {}
+
             // If the archive already contains this signal, simply remove the live
             // copy. This makes retries safe after a partially completed operation.
             $historyExisting = $supabase->select('trading_signal_history', [

@@ -4191,7 +4191,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261126_v135_security_otp_tour_support">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261126_v136_fixes_details_history">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -5988,7 +5988,7 @@ window.gtranslateSettings = {
             </div>
             <button class="btn-secondary" style="padding: 5px 11px; font-size: 11px; border-radius: 999px;" onclick="App.loadReferralTree()">↻ Refresh Tree</button>
           </div>
-          <div id="referral-tree-container" style="background: #F8FAFC; border: 1px solid #EEF1F6; border-radius: 10px; padding: 14px; min-height: 120px; overflow-x: hidden;">
+          <div id="referral-tree-container" style="background: #F8FAFC; border: 1px solid #EEF1F6; border-radius: 10px; padding: 14px; min-height: 120px; overflow-x: auto; -webkit-overflow-scrolling: touch;">
             <div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 12px;">Loading referral network tree...</div>
           </div>
         </div>
@@ -10171,6 +10171,7 @@ window.gtranslateSettings = {
           </div>
         </div>
         <div class="av-concierge-topbar-actions">
+          <button type="button" id="btn-chat-history" class="av-concierge-history-btn" onclick="App.toggleSupportHistory()">History <span id="chat-history-badge" class="av-concierge-history-badge" style="display:none;">0</span></button>
           <button type="button" id="btn-chat-report-issue" class="av-concierge-new-btn" onclick="App.openSupportIntake()">New Issue</button>
           <button type="button" class="av-concierge-icon-btn" onclick="App.closeModal('modal-support-chat')" aria-label="Close">✕</button>
         </div>
@@ -10224,6 +10225,35 @@ window.gtranslateSettings = {
           </div>
           <textarea id="chat-intake-desc" class="av-sup-intake-desc" maxlength="2000" placeholder="Enter a complete description of the issue you are facing (amount, TXN ID, date, or details)..."></textarea>
           <button type="button" id="btn-chat-intake-submit" class="av-sup-intake-submit" onclick="App.submitSupportIntake()">Send Description &amp; Start Chat</button>
+        </div>
+      </div>
+
+      <!-- Resolved Issues History View -->
+      <div id="chat-history-view" class="av-sup-history-view" style="display:none;">
+        <div id="chat-history-list-pane" class="av-sup-history-pane">
+          <div class="av-sup-intake-head">
+            <div>
+              <h4>Resolved Support History</h4>
+              <p>Closed and resolved conversations with our support team.</p>
+            </div>
+            <button type="button" id="btn-chat-history-back" class="av-sup-back-chat-btn" onclick="App.closeSupportHistory()">Back</button>
+          </div>
+          <div id="chat-history-list" class="av-sup-history-list"></div>
+        </div>
+
+        <div id="chat-history-detail-pane" class="av-sup-history-detail-pane" style="display:none;">
+          <div class="av-sup-history-detail-head">
+            <button type="button" class="av-sup-back-chat-btn" onclick="App.closeSupportHistoryDetail()">‹ All History</button>
+            <div class="av-sup-history-detail-meta">
+              <strong id="chat-history-detail-subject">Resolved Issue</strong>
+              <span id="chat-history-detail-status">Resolved</span>
+            </div>
+          </div>
+          <div id="chat-history-detail-messages" class="av-chat-canvas"></div>
+          <div class="av-sup-history-detail-foot">
+            <span>This issue is marked resolved and archived.</span>
+            <button type="button" class="av-sup-back-chat-btn" onclick="App.openSupportIntake()">Start New Issue</button>
+          </div>
         </div>
       </div>
 
@@ -11236,7 +11266,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261126_v135_security_otp_tour_support";
+  const CACHE_VERSION = "20261126_v136_fixes_details_history";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -11268,18 +11298,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261126_v135_security_otp_tour_support"></script>
-  <script defer src="/assets/js/chart.js?v=20261126_v135_security_otp_tour_support"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261126_v136_fixes_details_history"></script>
+  <script defer src="/assets/js/chart.js?v=20261126_v136_fixes_details_history"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261126_v135_security_otp_tour_support"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261126_v135_security_otp_tour_support"></script>
+  <script defer src="/assets/js/app.js?v=20261126_v136_fixes_details_history"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261126_v136_fixes_details_history"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261126_v135_security_otp_tour_support";
+      var SW_BUILD = "20261126_v136_fixes_details_history";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

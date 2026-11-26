@@ -36,7 +36,7 @@ if (!$supabase->isConfigured()) {
 
 $profRes = $supabase->select('profiles', [
     'id' => 'eq.' . $user['id'],
-    'select' => 'id,email,withdrawal_pin,withdrawal_pin_hash',
+    'select' => '*',
     'limit' => '1'
 ]);
 if (!$profRes['success'] || empty($profRes['data'][0])) {
@@ -51,6 +51,9 @@ if ($accountEmail === '') {
 
 $storedPin = (string)($prof['withdrawal_pin'] ?? '');
 $storedHash = (string)($prof['withdrawal_pin_hash'] ?? '');
+if ($storedHash === '') {
+    $storedHash = primex_get_user_pin_hash((string)$user['id'], $accountEmail);
+}
 $isForgotMode = ($mode === 'forgot');
 
 if (!$isForgotMode && ($storedPin !== '' || $storedHash !== '')) {
@@ -79,6 +82,8 @@ if (empty($otpCheck['success'])) {
 }
 
 $pinHash = password_hash($pin, PASSWORD_BCRYPT);
+primex_save_user_pin_hash((string)$user['id'], $pinHash, $accountEmail);
+
 $updRes = $supabase->update('profiles', [
     'withdrawal_pin' => null,
     'withdrawal_pin_hash' => $pinHash,
@@ -86,7 +91,14 @@ $updRes = $supabase->update('profiles', [
 ], ['id' => "eq.{$user['id']}"]);
 
 if (empty($updRes['success'])) {
-    sendError('PIN_UPDATE_FAILED', 'Unable to save fund withdrawal PIN right now. Please try again.', 502);
+    $msg = strtolower((string)($updRes['message'] ?? ''));
+    if (strpos($msg, 'withdrawal_pin') !== false) {
+        @$supabase->authAdminUpdateUser((string)$user['id'], null, ['has_withdrawal_pin' => true]);
+    } else {
+        sendError('PIN_UPDATE_FAILED', 'Unable to save fund withdrawal PIN right now. Please try again.', 502);
+    }
+} else {
+    @$supabase->authAdminUpdateUser((string)$user['id'], null, ['has_withdrawal_pin' => true]);
 }
 
 clearWithdrawalPinFailures((string)$user['id']);

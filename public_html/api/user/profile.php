@@ -16,7 +16,8 @@ if (!$supabase->isConfigured()) {
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $res = $supabase->select('profiles', ['id' => "eq.{$userId}", 'limit' => '1']);
     $prof = ($res['success'] && !empty($res['data'][0])) ? $res['data'][0] : $user;
-    $prof['has_withdrawal_pin'] = !empty($prof['withdrawal_pin']) || !empty($prof['withdrawal_pin_hash']);
+    $prof['has_withdrawal_pin'] = primex_has_withdrawal_pin_resolved($prof, $supabase);
+    $prof['email_verified'] = primex_is_email_verified_resolved($prof, $supabase);
     $prof['avatar'] = primex_get_user_avatar($prof);
     unset($prof['withdrawal_pin'], $prof['withdrawal_pin_hash'], $prof['password_hash']);
 

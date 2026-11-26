@@ -201,6 +201,13 @@ const App = {
     adminSupportActiveId: null,
     adminSupportFilter: 'ALL',
     adminSupportLoaded: false,
+    userSupportTicket: null,
+    userSupportTickets: [],
+    userSupportHistory: [],
+    userSupportHistoryActiveId: null,
+    userSupportActiveTicketId: null,
+    userSupportMessages: [],
+    userSupportSelectedTopic: '',
     marketingAssets: [],
     marketingPromotions: null,
     marketingClaims: [],
@@ -4294,9 +4301,22 @@ const App = {
       }
 
       container.innerHTML = treeHtml;
+      this.centerReferralTreeScroll(container);
     } catch (err) {
       container.innerHTML = `<div style="text-align: center; color: var(--negative); padding: 18px; font-size: 12px;">Failed to load referral tree hierarchy.</div>`;
     }
+  },
+
+  centerReferralTreeScroll(container) {
+    if (!container) return;
+    requestAnimationFrame(() => {
+      try {
+        const overflow = container.scrollWidth - container.clientWidth;
+        if (overflow > 12) {
+          container.scrollLeft = Math.round(overflow / 2);
+        }
+      } catch (e) {}
+    });
   },
 
   toggleUserTreeNode(childrenId, btn) {
@@ -6794,7 +6814,7 @@ const App = {
       const executionRows = tableRows(executions, 'No signal confirmations recorded.', x => `
         <tr>
           <td>${esc(x.signal_id || '—')}</td><td>${esc(x.symbol || '—')}</td><td>${esc(x.direction || '—')}</td>
-          <td>${esc(x.status || 'COMPLETED')}</td><td style="font-weight:700;">${money(x.profit_amount)}</td>
+          <td>${esc(x.status || 'COMPLETED')}</td><td style="font-weight:700; color:#059669;">${money(x.profit_amount)}</td>
           <td>${money(x.balance_before)}</td><td>${money(x.balance_after)}</td><td>${esc(dt(x.executed_at || x.created_at))}</td>
         </tr>`);
       const noProfitRows = tableRows(noProfit, 'No confirmed executions currently missing a positive profit-credit record.', x => `
@@ -6802,117 +6822,245 @@ const App = {
       const missedRows = tableRows(missed, 'No expired, unconfirmed signal windows found in the recorded history.', x => `
         <tr><td>${esc(x.signal_id)}</td><td>${esc(x.symbol)}</td><td>${esc(x.direction)}</td><td>${Number(x.profit_percentage || 0).toFixed(2)}%</td><td>${esc(x.status)}</td><td>${esc(dt(x.published_at))}</td><td>${esc(dt(x.expires_at))}</td></tr>`);
 
+      // Authentic Wallet Allocation SVG Donut (from real wallets: Funding / Exchange / Trading)
+      const fundAmt = Math.max(0, Number(w.funding || 0));
+      const exchAmt = Math.max(0, Number(w.exchange || 0));
+      const tradAmt = Math.max(0, Number(w.trading || 0));
+      const totalBal = Math.max(0, Number(d.total_balance_usdt ?? (fundAmt + exchAmt + tradAmt)));
+      const donutTotal = Math.max(0, fundAmt + exchAmt + tradAmt);
+      const r = 42;
+      const circ = 2 * Math.PI * r;
+      const segs = [
+        { label: 'Funding Wallet', val: fundAmt, color: '#0052FF' },
+        { label: 'Exchange Wallet', val: exchAmt, color: '#00B87C' },
+        { label: 'Trading Wallet', val: tradAmt, color: '#64748B' }
+      ];
+      let offsetAcc = 0;
+      const donutCircles = donutTotal > 0
+        ? segs.filter(s => s.val > 0).map(s => {
+            const len = (s.val / donutTotal) * circ;
+            const dash = `${len.toFixed(2)} ${(circ - len).toFixed(2)}`;
+            const segHtml = `<circle class="av-ring-seg" cx="59" cy="59" r="${r}" fill="none" stroke="${s.color}" stroke-width="14" stroke-dasharray="${dash}" stroke-dashoffset="${(-offsetAcc).toFixed(2)}" style="--av-circ:${circ.toFixed(1)}"></circle>`;
+            offsetAcc += len;
+            return segHtml;
+          }).join('')
+        : `<circle cx="59" cy="59" r="${r}" fill="none" stroke="#E2E8F0" stroke-width="14"></circle>`;
+
+      // Authentic Capital & Profit Flow Horizontal Bars
+      const depTotal = Math.max(0, Number(f.deposit_completed_total || 0));
+      const sigProfitTotal = Math.max(0, Number(sig.profit_credited_total || 0));
+      const withTotal = Math.max(0, Number(f.withdrawal_completed_total || 0));
+      const adjCredits = Math.max(0, Number(f.adjustment_credits || 0));
+      const adjDebits = Math.max(0, Number(f.adjustment_debits || 0));
+      const maxFlow = Math.max(1, depTotal, sigProfitTotal, withTotal, adjCredits, adjDebits);
+      const flowBars = [
+        { label: `Completed Deposits (${Number(f.deposit_completed_count || 0)})`, val: depTotal, color: '#0052FF' },
+        { label: `Signal Profits Credited (${Number(sig.confirmed_count || 0)})`, val: sigProfitTotal, color: '#00B87C' },
+        { label: `Completed Withdrawals (${Number(f.withdrawal_completed_count || 0)})`, val: withTotal, color: '#DC2626' },
+        { label: 'Admin Credits', val: adjCredits, color: '#2563EB' },
+        { label: 'Admin Debits', val: adjDebits, color: '#D97706' }
+      ];
+
+      // Authentic Signal Confirmation Gauge
+      const sigConf = Number(sig.confirmed_count || 0);
+      const sigMissed = Number(sig.missed_signal_count || 0);
+      const sigFailed = Number(sig.failed_execution_count || 0);
+      const sigWindowsTotal = sigConf + sigMissed + sigFailed;
+      const sigConfRate = sigWindowsTotal > 0 ? Math.round((sigConf / sigWindowsTotal) * 100) : (sigConf > 0 ? 100 : 0);
+
+      const displayName = [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || 'Account Holder';
+      const avatarValid = this.isValidAvatarUrl(u.avatar) ? u.avatar : '';
+      const initials = this.getSupportInitials(displayName);
+      const hasPin = Boolean(u.has_withdrawal_pin);
+      const isEmailVerified = Boolean(u.email_verified);
+
       const kycHtml = k ? `
-        <div class="card" style="padding:12px;">
-          <div style="font-weight:800; margin-bottom:10px; font-size:13px;">KYC / Identity Detail</div>
-          <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; font-size:12px; line-height:1.5;">
-            <div><strong>Status:</strong> <span class="badge ${statusClass(k.status)}">${esc(k.status || u.kyc_status || 'UNKNOWN')}</span></div>
-            <div><strong>Legal Name:</strong> ${esc(k.legal_name)}</div>
-            <div><strong>Date of Birth:</strong> ${esc(k.date_of_birth)}</div>
-            <div><strong>Country:</strong> ${esc(k.country)}</div>
-            <div><strong>Document Type:</strong> ${esc(k.document_type)}</div>
-            <div><strong>Document Number:</strong> ${esc(k.document_number)}</div>
-            <div style="grid-column:1/-1;"><strong>Address:</strong> ${esc(k.address)}</div>
-            <div style="grid-column:1/-1;"><strong>Reviewer Notes:</strong> ${esc(k.reviewer_notes)}</div>
-            <div style="grid-column:1/-1;"><strong>Rejection Reason:</strong> ${esc(k.rejection_reason || '—')}</div>
-            <div><strong>Submitted:</strong> ${esc(dt(k.created_at))}</div>
-            <div><strong>Reviewed:</strong> ${esc(dt(k.reviewed_at))}</div>
+        <div class="card" style="padding:14px;">
+          <div class="av-detail-chart-head" style="margin-bottom:10px;">
+            <h5>KYC &amp; Identity Verification Record</h5>
+            <span class="badge ${statusClass(k.status)}">${esc(k.status || u.kyc_status || 'UNKNOWN')}</span>
           </div>
-          <div style="margin-top:10px; padding:9px; border-radius:8px; background:#F7F8FA; border:1px solid #EEF1F6; color:#4B5563; font-size:11px;">
-            Private KYC document files are not exposed directly in this dossier. Use the admin KYC desk for authenticated document viewing.
+          <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; font-size:12px;">
+            <div class="av-detail-meta-cell"><span>Legal Name</span><strong>${esc(k.legal_name)}</strong></div>
+            <div class="av-detail-meta-cell"><span>Date of Birth</span><strong>${esc(k.date_of_birth)}</strong></div>
+            <div class="av-detail-meta-cell"><span>Country</span><strong>${esc(k.country)}</strong></div>
+            <div class="av-detail-meta-cell"><span>Document Type</span><strong>${esc(k.document_type)}</strong></div>
+            <div class="av-detail-meta-cell"><span>Document Number</span><strong>${esc(k.document_number)}</strong></div>
+            <div class="av-detail-meta-cell"><span>Submitted / Reviewed</span><strong>${esc(dt(k.created_at))}</strong></div>
+            <div class="av-detail-meta-cell" style="grid-column:1/-1;"><span>Address</span><strong>${esc(k.address)}</strong></div>
           </div>
         </div>` : `
-        <div class="card" style="padding:12px;"><div style="font-weight:800; margin-bottom:6px; font-size:13px;">KYC / Identity Detail</div><div style="font-size:12px; color:var(--text-muted);">No KYC submission is recorded for this user. Profile KYC status: ${esc(u.kyc_status || 'NOT_SUBMITTED')}.</div></div>`;
+        <div class="card" style="padding:14px;">
+          <div class="av-detail-chart-head">
+            <h5>KYC &amp; Identity Verification</h5>
+            <span class="badge ${statusClass(u.kyc_status)}">${esc(u.kyc_status || 'NOT_SUBMITTED')}</span>
+          </div>
+          <div style="font-size:12px; color:#64748B; margin-top:6px;">No KYC submission document record found for this account.</div>
+        </div>`;
 
       body.innerHTML = `
-        <div class="card" style="padding:14px;">
-          <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
-            <div>
-              <h4 style="margin:0; font-size:17px;">${esc(u.email)}</h4>
-              <div style="font-size:11px; font-family:var(--font-mono); color:var(--text-muted); margin-top:4px; word-break:break-all;">UID: ${esc(u.id)}</div>
+        <div class="av-detail-shell">
+          <div class="av-detail-hero">
+            <div class="av-detail-hero-top">
+              <div class="av-detail-ident">
+                <div class="av-detail-avatar">${avatarValid ? `<img src="${esc(avatarValid)}" alt="">` : esc(initials)}</div>
+                <div style="min-width:0;">
+                  <h4 class="av-detail-title">${esc(displayName)}</h4>
+                  <div class="av-detail-sub">${esc(u.email)} · UID ${u.numeric_uid ? `#${esc(u.numeric_uid)}` : esc(u.id)}</div>
+                </div>
+              </div>
+              <div class="av-detail-status-strip">
+                <span class="badge ${u.is_active ? 'badge-positive' : 'badge-negative'}">${u.is_active ? 'ACTIVE' : 'SUSPENDED'}</span>
+                <span class="badge ${statusClass(u.kyc_status)}">KYC: ${esc(u.kyc_status || 'NOT_SUBMITTED')}</span>
+                <span class="badge">ROLE: ${esc(u.role || 'USER')}</span>
+              </div>
             </div>
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-              <span class="badge ${u.is_active ? 'badge-positive' : 'badge-negative'}">${u.is_active ? 'ACTIVE' : 'SUSPENDED'}</span>
-              <span class="badge ${statusClass(u.kyc_status)}">KYC: ${esc(u.kyc_status || 'NOT_SUBMITTED')}</span>
-              <span class="badge">ROLE: ${esc(u.role || 'USER')}</span>
+            <div class="av-detail-meta-grid">
+              <div class="av-detail-meta-cell"><span>Withdrawal PIN</span><strong class="${hasPin ? 'ok' : 'warn'}">${hasPin ? 'Configured' : 'Not configured'}</strong></div>
+              <div class="av-detail-meta-cell"><span>Email Verification</span><strong class="${isEmailVerified ? 'ok' : 'warn'}">${isEmailVerified ? 'Verified' : 'Unverified'}</strong></div>
+              <div class="av-detail-meta-cell"><span>Country</span><strong>${esc(u.country || 'Global')}</strong></div>
+              <div class="av-detail-meta-cell"><span>Registered</span><strong>${esc(dt(u.created_at))}</strong></div>
+              <div class="av-detail-meta-cell"><span>Referral Code</span><strong class="cobalt">${esc(u.referral_code || '—')}</strong></div>
+              <div class="av-detail-meta-cell"><span>Referred By</span><strong>${esc(u.referred_by || 'Direct')}</strong></div>
+              <div class="av-detail-meta-cell"><span>Signal Confirmation Rate</span><strong class="cobalt">${sigConfRate}% (${sigConf}/${Math.max(sigConf, sigWindowsTotal)})</strong></div>
+              <div class="av-detail-meta-cell"><span>Account ID</span><strong style="font-size:11px; font-family:var(--font-mono);">${esc(u.id || '—')}</strong></div>
             </div>
           </div>
-          <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:12px; font-size:11px;">
-            <div><strong>Referral Code</strong><br>${esc(u.referral_code || '—')}</div>
-            <div><strong>Referred By</strong><br>${esc(u.referred_by || '—')}</div>
-            <div><strong>Country</strong><br>${esc(u.country || '—')}</div>
-            <div><strong>Registered</strong><br>${esc(dt(u.created_at))}</div>
-            <div><strong>Withdrawal PIN</strong><br>${u.has_withdrawal_pin ? 'Configured' : 'Not configured'}</div>
-            <div><strong>Account ID</strong><br>${esc(u.id || '—')}</div>
+
+          <div class="av-detail-kpi-grid">
+            <div class="av-detail-kpi"><div class="av-detail-kpi-lbl">Total Balance</div><div class="av-detail-kpi-val">${money(totalBal)}</div><div class="av-detail-kpi-sub">All active wallets</div></div>
+            <div class="av-detail-kpi"><div class="av-detail-kpi-lbl">Completed Deposits</div><div class="av-detail-kpi-val" style="color:#0052FF;">${money(depTotal)}</div><div class="av-detail-kpi-sub">${Number(f.deposit_completed_count || 0)} approved</div></div>
+            <div class="av-detail-kpi"><div class="av-detail-kpi-lbl">Signal Profit Earned</div><div class="av-detail-kpi-val" style="color:#059669;">${money(sigProfitTotal)}</div><div class="av-detail-kpi-sub">${sigConf} confirmed</div></div>
+            <div class="av-detail-kpi"><div class="av-detail-kpi-lbl">Withdrawals Paid</div><div class="av-detail-kpi-val">${money(withTotal)}</div><div class="av-detail-kpi-sub">${Number(f.withdrawal_completed_count || 0)} completed</div></div>
+            <div class="av-detail-kpi is-cobalt"><div class="av-detail-kpi-lbl">Signal Profit Principal</div><div class="av-detail-kpi-val">${money(f.funded_capital_principal)}</div><div class="av-detail-kpi-sub">Net funded capital</div></div>
           </div>
-        </div>
 
-        <div class="dossier-stat-grid" style="display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px;">
-          <div class="card" style="padding:11px;text-align:center;"><div style="font-size:10px;color:var(--text-muted);">CURRENT TOTAL BALANCE</div><div style="font-size:16px;font-weight:800;margin-top:3px;">${money(d.total_balance_usdt)}</div></div>
-          <div class="card" style="padding:11px;text-align:center;"><div style="font-size:10px;color:var(--text-muted);">COMPLETED DEPOSITS</div><div style="font-size:16px;font-weight:800;margin-top:3px;">${money(f.deposit_completed_total)}</div><div style="font-size:10px;color:var(--text-muted);">${Number(f.deposit_completed_count || 0)} transactions</div></div>
-          <div class="card" style="padding:11px;text-align:center;"><div style="font-size:10px;color:var(--text-muted);">COMPLETED WITHDRAWALS</div><div style="font-size:16px;font-weight:800;margin-top:3px;">${money(f.withdrawal_completed_total)}</div><div style="font-size:10px;color:var(--text-muted);">${Number(f.withdrawal_completed_count || 0)} transactions</div></div>
-          <div class="card" style="padding:11px;text-align:center;"><div style="font-size:10px;color:var(--text-muted);">ADMIN ADJUSTMENT NET</div><div style="font-size:16px;font-weight:800;margin-top:3px;">${money(f.adjustment_net)}</div><div style="font-size:10px;color:var(--text-muted);">Credits ${money(f.adjustment_credits)} / Debits ${money(f.adjustment_debits)}</div></div>
-          <div class="card" style="padding:11px;text-align:center;border-color:#DBEAFE!important;background:#EFF4FF!important;"><div style="font-size:10px;color:#0052FF;font-weight:700;">SIGNAL PROFIT PRINCIPAL</div><div style="font-size:16px;font-weight:900;margin-top:3px;color:#111827;">${money(f.funded_capital_principal)}</div><div style="font-size:10px;color:#4B5563;">Approved deposits + Deposit-type admin adjustments only</div></div>
-        </div>
+          <div class="av-detail-charts-row">
+            <div class="av-detail-chart-card">
+              <div class="av-detail-chart-head">
+                <h5>Wallet Allocation</h5>
+                <span>Total: ${money(totalBal)}</span>
+              </div>
+              <div class="av-detail-donut-wrap">
+                <div class="av-detail-svg-ring-box">
+                  <svg class="av-detail-svg-ring" viewBox="0 0 118 118">
+                    <circle cx="59" cy="59" r="${r}" fill="none" stroke="#F1F5F9" stroke-width="14"></circle>
+                    ${donutCircles}
+                  </svg>
+                  <div class="av-detail-ring-center">
+                    <strong>${money(totalBal)}</strong>
+                    <span>Total Equity</span>
+                  </div>
+                </div>
+                <div class="av-detail-legend">
+                  ${segs.map(s => {
+                    const pct = donutTotal > 0 ? ((s.val / donutTotal) * 100).toFixed(1) : '0.0';
+                    return `<div class="av-detail-legend-row">
+                      <span class="av-detail-legend-lhs"><span class="av-detail-dot" style="background:${s.color};"></span>${esc(s.label)}</span>
+                      <span class="av-detail-legend-val">${money(s.val)} <small style="color:#64748B;font-weight:600;">(${pct}%)</small></span>
+                    </div>`;
+                  }).join('')}
+                </div>
+              </div>
+            </div>
 
-        <div class="card" style="padding:12px;">
-          <div style="font-weight:800; margin-bottom:9px; font-size:13px;">Wallet Balances</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px;">
-            <div><strong>Funding</strong><br>${money(w.funding)}</div><div><strong>Exchange</strong><br>${money(w.exchange)}</div><div><strong>Trading</strong><br>${money(w.trading)}</div>
+            <div class="av-detail-chart-card">
+              <div class="av-detail-chart-head">
+                <h5>Verified Financial &amp; Profit Flows</h5>
+                <span>${Number(f.adjustment_count || 0)} adjustments (${money(f.adjustment_net)})</span>
+              </div>
+              <div class="av-detail-bars">
+                ${flowBars.map(b => {
+                  const pct = Math.min(100, Math.round((b.val / maxFlow) * 100));
+                  return `<div class="av-detail-bar-item">
+                    <div class="av-detail-bar-top"><span>${esc(b.label)}</span><strong>${money(b.val)}</strong></div>
+                    <div class="av-detail-bar-track"><div class="av-detail-bar-fill" style="width:${pct}%; background:${b.color};"></div></div>
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>
           </div>
-        </div>
 
-        ${kycHtml}
-
-        <div class="card" style="padding:12px;">
-          <div style="font-weight:800; margin-bottom:9px; font-size:13px;">Deposit History &amp; Totals</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">All recorded: ${money(f.deposit_total_requested)} across ${Number(f.deposit_count || 0)} requests.</div>
-          <div class="table-responsive" style="max-height:260px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:10px;"><thead><tr><th>Asset</th><th>Amount</th><th>Net</th><th>Status</th><th>TX Hash</th><th>Rejection</th><th>Date</th></tr></thead><tbody>${depositRows}</tbody></table></div>
-        </div>
-
-        <div class="card" style="padding:12px;">
-          <div style="font-weight:800; margin-bottom:9px; font-size:13px;">Withdrawal History &amp; Totals</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">All recorded requests: ${money(f.withdrawal_total_requested)} across ${Number(f.withdrawal_count || 0)} requests.</div>
-          <div class="table-responsive" style="max-height:260px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:10px;"><thead><tr><th>Asset</th><th>Amount</th><th>Net</th><th>Status</th><th>Destination</th><th>Rejection</th><th>Date</th></tr></thead><tbody>${withdrawalRows}</tbody></table></div>
-        </div>
-
-        <div class="card" style="padding:12px;">
-          <div style="font-weight:800; margin-bottom:9px; font-size:13px;">Administrative Financial Adjustments</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">${Number(f.adjustment_count || 0)} recorded adjustments. Net change: ${money(f.adjustment_net)}.</div>
-          <div class="table-responsive" style="max-height:240px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:10px;"><thead><tr><th>Wallet</th><th>Asset</th><th>Amount</th><th>Before</th><th>After</th><th>Reason</th><th>Date</th></tr></thead><tbody>${adjustmentRows}</tbody></table></div>
-        </div>
-
-        <div class="card" style="padding:12px;">
-          <div style="font-weight:800; margin-bottom:9px; font-size:13px;">Trading Signal Analytics</div>
-          <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;font-size:11px;">
-            <div><strong>Confirmed</strong><br>${Number(sig.confirmed_count || 0)}</div>
-            <div><strong>Profit Credited</strong><br>${money(sig.profit_credited_total)}</div>
-            <div><strong>Confirmed / No Profit</strong><br>${Number(sig.confirmed_without_profit_count || 0)}</div>
-            <div><strong>Failed Executions</strong><br>${Number(sig.failed_execution_count || 0)}</div>
-            <div><strong>Missed Windows</strong><br>${Number(sig.missed_signal_count || 0)}</div>
+          <div class="av-detail-tabs" role="tablist" aria-label="User detail sections">
+            <button type="button" class="av-detail-tab-btn active" onclick="App.switchDossierTab('all', this)">All Records</button>
+            <button type="button" class="av-detail-tab-btn" onclick="App.switchDossierTab('capital', this)">KYC, Deposits &amp; Withdrawals (${deposits.length + withdrawals.length + adjustments.length})</button>
+            <button type="button" class="av-detail-tab-btn" onclick="App.switchDossierTab('signals', this)">Signals &amp; Executions (${executions.length + missed.length})</button>
           </div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:9px;">Signal profit principal uses funded capital only: completed deposits plus net Admin Financial Adjustments. Referral bonuses and previous signal profits are excluded. “Confirmed / No Profit” means an execution record exists but no positive profit credit is recorded in the matching signal ledger evidence. “Missed” means a recorded signal window ended after account creation without a matching execution.</div>
-        </div>
 
-        <div class="card" style="padding:12px;">
-          <div style="font-weight:800; margin-bottom:9px; font-size:13px;">Confirmed Signals</div>
-          <div class="table-responsive" style="max-height:260px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:10px;"><thead><tr><th>Signal ID</th><th>Symbol</th><th>Direction</th><th>Status</th><th>Profit</th><th>Balance Before</th><th>Balance After</th><th>Confirmed</th></tr></thead><tbody>${executionRows}</tbody></table></div>
-        </div>
+          <div class="av-dossier-sec" data-sec="capital">${kycHtml}</div>
 
-        <div class="card" style="padding:12px;">
-          <div style="font-weight:800; margin-bottom:9px; font-size:13px;">Confirmed Signals With No Recorded Profit Credit</div>
-          <div class="table-responsive" style="max-height:220px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:10px;"><thead><tr><th>Signal ID</th><th>Execution ID</th><th>Status</th><th>Profit</th><th>Reason</th><th>Date</th></tr></thead><tbody>${noProfitRows}</tbody></table></div>
-        </div>
+          <div class="av-dossier-sec" data-sec="capital">
+            <div class="card" style="padding:14px;">
+              <div class="av-detail-chart-head" style="margin-bottom:8px;">
+                <h5>Deposit History</h5>
+                <span>Requested: ${money(f.deposit_total_requested)} across ${Number(f.deposit_count || 0)}</span>
+              </div>
+              <div class="table-responsive" style="max-height:240px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:11px;"><thead><tr><th>Asset</th><th>Amount</th><th>Net</th><th>Status</th><th>TX Hash</th><th>Rejection</th><th>Date</th></tr></thead><tbody>${depositRows}</tbody></table></div>
+            </div>
+          </div>
 
-        <div class="card" style="padding:12px;">
-          <div style="font-weight:800; margin-bottom:9px; font-size:13px;">Missed Signal Windows</div>
-          <div class="table-responsive" style="max-height:240px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:10px;"><thead><tr><th>Signal ID</th><th>Symbol</th><th>Direction</th><th>Profit %</th><th>Status</th><th>Published</th><th>Expired</th></tr></thead><tbody>${missedRows}</tbody></table></div>
-        </div>
+          <div class="av-dossier-sec" data-sec="capital">
+            <div class="card" style="padding:14px;">
+              <div class="av-detail-chart-head" style="margin-bottom:8px;">
+                <h5>Withdrawal History</h5>
+                <span>Requested: ${money(f.withdrawal_total_requested)} across ${Number(f.withdrawal_count || 0)}</span>
+              </div>
+              <div class="table-responsive" style="max-height:240px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:11px;"><thead><tr><th>Asset</th><th>Amount</th><th>Net</th><th>Status</th><th>Destination</th><th>Rejection</th><th>Date</th></tr></thead><tbody>${withdrawalRows}</tbody></table></div>
+            </div>
+          </div>
 
-        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:2px; flex-wrap:wrap;">
-          <button class="btn-secondary" style="color:#0052FF; border-color:#DBEAFE; background:#EFF4FF;" onclick="App.closeModal('modal-user-dossier'); App.openAdminResetPassword(decodeURIComponent('${encodeURIComponent(String(u.id || ''))}'), decodeURIComponent('${encodeURIComponent(String(u.email || ''))}'))">Reset Password</button>
-          <button class="btn-primary" onclick="App.closeModal('modal-user-dossier'); App.quickAdjust('${esc(u.id)}');">Adjust Balance</button>
-          <button class="btn-secondary" onclick="App.closeModal('modal-user-dossier')">Close</button>
+          <div class="av-dossier-sec" data-sec="capital">
+            <div class="card" style="padding:14px;">
+              <div class="av-detail-chart-head" style="margin-bottom:8px;">
+                <h5>Administrative Financial Adjustments</h5>
+                <span>Net: ${money(f.adjustment_net)} (${Number(f.adjustment_count || 0)} records)</span>
+              </div>
+              <div class="table-responsive" style="max-height:220px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:11px;"><thead><tr><th>Wallet</th><th>Asset</th><th>Amount</th><th>Before</th><th>After</th><th>Reason</th><th>Date</th></tr></thead><tbody>${adjustmentRows}</tbody></table></div>
+            </div>
+          </div>
+
+          <div class="av-dossier-sec" data-sec="signals">
+            <div class="card" style="padding:14px;">
+              <div class="av-detail-chart-head" style="margin-bottom:10px;">
+                <h5>Signal Execution Breakdown</h5>
+                <span>${sigConf} confirmed · ${sigMissed} missed · ${sigFailed} failed</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;">
+                <div class="stat-card"><div class="stat-label">Confirmed</div><div class="stat-value" style="color:#0052FF;">${sigConf}</div></div>
+                <div class="stat-card"><div class="stat-label">Profit Credited</div><div class="stat-value" style="color:#059669;">${money(sigProfitTotal)}</div></div>
+                <div class="stat-card"><div class="stat-label">No Profit</div><div class="stat-value">${Number(sig.confirmed_without_profit_count || 0)}</div></div>
+                <div class="stat-card"><div class="stat-label">Failed</div><div class="stat-value" style="color:#DC2626;">${sigFailed}</div></div>
+                <div class="stat-card"><div class="stat-label">Missed Windows</div><div class="stat-value">${sigMissed}</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="av-dossier-sec" data-sec="signals">
+            <div class="card" style="padding:14px;">
+              <div class="av-detail-chart-head" style="margin-bottom:8px;"><h5>Confirmed Signals</h5><span>${executions.length} executions</span></div>
+              <div class="table-responsive" style="max-height:250px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:11px;"><thead><tr><th>Signal ID</th><th>Symbol</th><th>Direction</th><th>Status</th><th>Profit</th><th>Balance Before</th><th>Balance After</th><th>Confirmed</th></tr></thead><tbody>${executionRows}</tbody></table></div>
+            </div>
+          </div>
+
+          <div class="av-dossier-sec" data-sec="signals">
+            <div class="card" style="padding:14px;">
+              <div class="av-detail-chart-head" style="margin-bottom:8px;"><h5>Confirmed Signals Without Profit</h5><span>${noProfit.length} items</span></div>
+              <div class="table-responsive" style="max-height:210px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:11px;"><thead><tr><th>Signal ID</th><th>Execution ID</th><th>Status</th><th>Profit</th><th>Reason</th><th>Date</th></tr></thead><tbody>${noProfitRows}</tbody></table></div>
+            </div>
+          </div>
+
+          <div class="av-dossier-sec" data-sec="signals">
+            <div class="card" style="padding:14px;">
+              <div class="av-detail-chart-head" style="margin-bottom:8px;"><h5>Missed Signal Windows</h5><span>${missed.length} windows</span></div>
+              <div class="table-responsive" style="max-height:230px;overflow:auto;"><table class="admin-table mobile-detail-table" style="font-size:11px;"><thead><tr><th>Signal ID</th><th>Symbol</th><th>Direction</th><th>Profit %</th><th>Status</th><th>Published</th><th>Expired</th></tr></thead><tbody>${missedRows}</tbody></table></div>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:2px; flex-wrap:wrap;">
+            <button class="btn-secondary" style="color:#0052FF; border-color:#DBEAFE; background:#EFF4FF;" onclick="App.closeModal('modal-user-dossier'); App.openAdminResetPassword(decodeURIComponent('${encodeURIComponent(String(u.id || ''))}'), decodeURIComponent('${encodeURIComponent(String(u.email || ''))}'))">Reset Password</button>
+            <button class="btn-primary" onclick="App.closeModal('modal-user-dossier'); App.quickAdjust('${esc(u.id)}');">Adjust Balance</button>
+            <button class="btn-secondary" onclick="App.closeModal('modal-user-dossier')">Close</button>
+          </div>
         </div>
       `;
       body.querySelectorAll('.mobile-detail-table').forEach(table => {
@@ -6924,6 +7072,16 @@ const App = {
     } catch (e) {
       body.innerHTML = `<div style="color:var(--negative); padding:14px;">Unable to load user detail. ${this.escapeHtml(e.message || e)}</div>`;
     }
+  },
+
+  switchDossierTab(tab, btnEl) {
+    const body = document.getElementById('dossier-body');
+    if (!body) return;
+    body.querySelectorAll('.av-detail-tab-btn').forEach(b => b.classList.toggle('active', b === btnEl));
+    body.querySelectorAll('.av-dossier-sec').forEach(sec => {
+      const cat = sec.getAttribute('data-sec') || '';
+      sec.style.display = (tab === 'all' || cat === tab) ? '' : 'none';
+    });
   },
 
   openAdminResetPassword(userId, email) {
@@ -7830,7 +7988,7 @@ const App = {
           <span class="signal-lane-profit" style="${isTesting ? 'color:#D97706;' : ''}">${isTesting ? 'TEST • NO PROFIT' : (isAdditional ? '+$4.00 FIXED' : '+' + profitPct.toFixed(2) + '%')}</span>
         </div>
         <div class="av-adm-sig-bar ${statusCls}"><span style="width:${isPublished ? '72%' : (isScheduled ? '40%' : '100%')};"></span></div>
-        <div class="signal-lane-meta"><span>Duration: ${duration} min</span><span>Worldwide</span><span>${esc(start ? start.replace('T',' ').slice(0,16) : '—')} PKT</span></div>
+        <div class="signal-lane-meta"><span>Duration: ${duration} min</span><span>Confirmed: ${Number(s.confirmed_count || 0)}</span><span>${esc(start ? start.replace('T',' ').slice(0,16) : '—')} PKT</span></div>
         <div class="signal-lane-actions">
           <button class="av-adm-btn-chip soft-blue" onclick="App.viewSignalDetail('${esc(s.id)}')">Detail</button>
           <button class="av-adm-btn-chip" onclick="App.openEditSignalModal('${esc(s.id)}')">Edit</button>
@@ -7937,7 +8095,7 @@ const App = {
           <div><strong>${this.escapeHtml(h.symbol || 'Signal')}</strong><div style="color:#6B7280;font-size:11px;margin-top:2px;">${hid}</div><div style="color:#0052FF;font-size:11px;margin-top:4px;font-weight:700;">${this.escapeHtml(h.slot_label || '')}</div></div>
           <div><span class="badge ${h.direction === 'BUY' ? 'badge-positive' : 'badge-negative'}">${this.escapeHtml(h.direction || '—')}</span></div>
           <div><span class="badge badge-demo">${this.escapeHtml(h.schedule_day_label || 'HISTORY')}</span><div style="color:#111827;margin-top:4px;font-weight:700;">Start: ${this.escapeHtml(h.published_at_pkt || h.scheduled_at || h.created_at_pkt || '—')}</div><div style="color:#DC2626;margin-top:3px;font-weight:700;">Expired: ${this.escapeHtml(h.expires_at_pkt || '—')}</div><div class="signal-history-values" style="color:#6B7280;margin-top:5px;line-height:1.45;">Entry: ${entryMin.toLocaleString()}${entryMax && entryMax !== entryMin ? ' – ' + entryMax.toLocaleString() : ''} • TP1: ${tp1.toLocaleString()} • TP2: ${tp2.toLocaleString()} • SL: ${sl.toLocaleString()}</div></div>
-          <div style="font-weight:700;">${Number(h.duration_minutes || 15)} min</div>
+          <div style="font-weight:700;">${Number(h.duration_minutes || 15)} min<div style="font-size:10.5px; color:#0052FF; margin-top:3px;">${Number(h.confirmed_count || 0)} confirmed</div></div>
           <div><span class="badge badge-demo">${this.escapeHtml(h.status || 'EXPIRED')}</span><button class="av-adm-btn-chip soft-blue signal-history-detail-btn" style="margin-top:7px;" onclick="App.viewSignalDetail('${hid}')" title="View complete expired signal detail">Detail</button></div>
         </div>`;
       }).join('') : `<div style="padding:20px;text-align:center;color:#6B7280;">No archived signal history yet.</div>`;
@@ -8078,7 +8236,7 @@ const App = {
           <td style="font-size:11px;word-break:break-all;">${esc(u.email)}</td>
           <td>${esc(u.country)}</td>
           <td>${badge(u.status.replaceAll('_',' '), cls)}</td>
-          <td>${money(u.profit_credited)}</td>
+          <td style="font-weight:700; color:#059669;">${money(u.profit_credited)}</td>
           <td>${money(u.principal_balance)}</td>
           <td>${money(u.balance_before)}</td>
           <td>${money(u.balance_after)}</td>
@@ -8086,78 +8244,177 @@ const App = {
           <td style="font-size:11px;">${esc(u.reason)}</td>
           <td style="font-size:11px;">${esc(dt(u.confirmed_at))}</td>
         </tr>`;
-      }).join('') || `<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--text-muted);">No user records found.</td></tr>`;
+      }).join('') || `<tr><td colspan="10" style="text-align:center;padding:16px;color:var(--text-muted);">No user records found.</td></tr>`;
+
+      const statusUpper = String(s.status || 'EXPIRED').toUpperCase();
+      const isLive = statusUpper === 'PUBLISHED' || statusUpper === 'ACTIVE';
+      const isScheduled = statusUpper === 'SCHEDULED';
+      const beaconCls = isLive ? 'is-live' : (isScheduled ? 'is-scheduled' : 'is-expired');
+      const beaconLabel = isLive ? 'LIVE BROADCAST' : (isScheduled ? 'SCHEDULED' : 'EXPIRED ARCHIVE');
+      const isAddSig = Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_'));
+
+      // Real Execution Outcome Donut & Confirmation Rate Ring
+      const eligibleCnt = Number(audience.eligible_users || 0);
+      const confirmedCnt = Number(a.confirmed_users || 0);
+      const profitCnt = Number(a.profit_credited_users || 0);
+      const noProfitCnt = Number(a.confirmed_without_profit_users || 0);
+      const failedCnt = Number(a.failed_execution_users || 0);
+      const notConfCnt = Number(a.eligible_not_confirmed_users || 0);
+      const confRatePct = eligibleCnt > 0 ? Math.min(100, Math.round((confirmedCnt / eligibleCnt) * 100)) : (confirmedCnt > 0 ? 100 : 0);
+
+      const sigSegs = [
+        { label: 'Confirmed w/ Profit', val: profitCnt, color: '#00B87C' },
+        { label: 'Confirmed No Profit', val: noProfitCnt, color: '#0052FF' },
+        { label: 'Failed Execution', val: failedCnt, color: '#DC2626' },
+        { label: 'Eligible, Not Confirmed', val: notConfCnt, color: '#94A3B8' }
+      ];
+      const sigDonutSum = sigSegs.reduce((acc, item) => acc + item.val, 0);
+      const r = 42;
+      const circ = 2 * Math.PI * r;
+      let offsetAcc = 0;
+      const sigDonutCircles = sigDonutSum > 0
+        ? sigSegs.filter(x => x.val > 0).map(x => {
+            const len = (x.val / sigDonutSum) * circ;
+            const dash = `${len.toFixed(2)} ${(circ - len).toFixed(2)}`;
+            const c = `<circle class="av-ring-seg" cx="59" cy="59" r="${r}" fill="none" stroke="${x.color}" stroke-width="14" stroke-dasharray="${dash}" stroke-dashoffset="${(-offsetAcc).toFixed(2)}" style="--av-circ:${circ.toFixed(1)}"></circle>`;
+            offsetAcc += len;
+            return c;
+          }).join('')
+        : `<circle cx="59" cy="59" r="${r}" fill="none" stroke="#E2E8F0" stroke-width="14"></circle>`;
+
+      // Real Country Participation Horizontal Bar Chart
+      const topCountries = (Array.isArray(countries.shown) ? [...countries.shown] : [])
+        .sort((x, y) => (Number(y.confirmed || 0) - Number(x.confirmed || 0)) || (Number(y.eligible || 0) - Number(x.eligible || 0)))
+        .slice(0, 6);
+      const maxCountryVal = Math.max(1, ...topCountries.map(c => Math.max(Number(c.eligible || 0), Number(c.confirmed || 0))));
 
       body.innerHTML = `
-        <div class="card" style="padding:14px;">
-          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;">
-            <div>
-              <h4 style="margin:0;font-size:17px;">${esc(s.symbol || 'Signal')} — ${esc(s.direction || '')}</h4>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:5px;font-family:var(--font-mono);">Signal ID: ${esc(s.id || signalId)}</div>
+        <div class="av-detail-shell">
+          <div class="av-detail-hero">
+            <div class="av-detail-hero-top">
+              <div>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <h4 class="av-detail-title">${esc(s.symbol || 'Signal')}</h4>
+                  <span class="badge ${String(s.direction || '').toUpperCase() === 'BUY' ? 'badge-positive' : 'badge-negative'}">${String(s.direction || '').toUpperCase() === 'BUY' ? '▲ BUY' : '▼ SELL'}</span>
+                  <span class="av-sig-beacon ${beaconCls}">${beaconLabel}</span>
+                </div>
+                <div class="av-detail-sub">ID: ${esc(s.id || signalId)} · ${esc(audience.label || 'Worldwide — All Countries')}</div>
+              </div>
+              <div class="av-detail-status-strip">
+                ${badge(isAddSig ? '$4.00 FIXED ADDITIONAL' : `${Number(s.profit_percentage || 0).toFixed(2)}% TARGET YIELD`, 'positive')}
+              </div>
             </div>
-            <div>${badge(audience.label || 'Worldwide — All Countries','positive')} ${badge(s.status || 'UNKNOWN')}</div>
+
+            <div class="av-detail-meta-grid">
+              <div class="av-detail-meta-cell"><span>Broadcast Time</span><strong>${esc(dt(s.published_at || s.scheduled_at))}</strong></div>
+              <div class="av-detail-meta-cell"><span>Expiry Time</span><strong>${esc(dt(s.expires_at))}</strong></div>
+              <div class="av-detail-meta-cell"><span>Duration Window</span><strong class="cobalt">${Number(s.duration_minutes || 15)} min</strong></div>
+              <div class="av-detail-meta-cell"><span>Confirmation Rate</span><strong class="ok">${confRatePct}% (${confirmedCnt}/${Math.max(confirmedCnt, eligibleCnt)})</strong></div>
+            </div>
+
+            <div class="av-sig-ladder">
+              <div class="av-detail-chart-head">
+                <h5>Execution Price Levels</h5>
+                <span>${esc(s.symbol || '')}</span>
+              </div>
+              <div class="av-sig-ladder-track"></div>
+              <div class="av-sig-ladder-points">
+                <div class="av-sig-ladder-pt is-sl"><span>Stop Loss</span><strong>${Number(s.stop_loss || 0).toLocaleString()}</strong></div>
+                <div class="av-sig-ladder-pt is-entry"><span>Entry Min</span><strong>${Number(s.entry_price_min || 0).toLocaleString()}</strong></div>
+                <div class="av-sig-ladder-pt is-entry"><span>Entry Max</span><strong>${Number(s.entry_price_max || 0).toLocaleString()}</strong></div>
+                <div class="av-sig-ladder-pt is-tp"><span>Target 1</span><strong>${Number(s.target_price_1 || 0).toLocaleString()}</strong></div>
+                <div class="av-sig-ladder-pt is-tp"><span>Target 2</span><strong>${Number(s.target_price_2 || 0).toLocaleString()}</strong></div>
+              </div>
+            </div>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px;">
-            <div class="stat-card"><div class="stat-label">Broadcast</div><div class="stat-value" style="font-size:15px;">${esc(dt(s.published_at || s.scheduled_at))}</div></div>
-            <div class="stat-card"><div class="stat-label">Expires</div><div class="stat-value" style="font-size:15px;">${esc(dt(s.expires_at))}</div></div>
-            <div class="stat-card"><div class="stat-label">Duration</div><div class="stat-value" style="font-size:15px;">${Number(s.duration_minutes || 15)} min</div></div>
-            <div class="stat-card"><div class="stat-label">${Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_')) ? 'Fixed Reward' : 'Profit %'}</div><div class="stat-value" style="font-size:15px;">${Boolean(s.is_additional || Number(s.daily_slot) === 3 || String(s.id || '').startsWith('sig_add_')) ? '$4.00 FIXED' : `${Number(s.profit_percentage || 0).toFixed(2)}%`}</div></div>
+
+          <div class="av-detail-kpi-grid cols-4">
+            <div class="av-detail-kpi"><div class="av-detail-kpi-lbl">Eligible Audience</div><div class="av-detail-kpi-val">${eligibleCnt}</div><div class="av-detail-kpi-sub">${audience.countries_with_eligible_users || 0} active countries</div></div>
+            <div class="av-detail-kpi"><div class="av-detail-kpi-lbl">Confirmed Users</div><div class="av-detail-kpi-val" style="color:#0052FF;">${confirmedCnt}</div><div class="av-detail-kpi-sub">${confRatePct}% participation</div></div>
+            <div class="av-detail-kpi is-cobalt"><div class="av-detail-kpi-lbl">Profit Credited</div><div class="av-detail-kpi-val" style="color:#059669;">${money(a.total_profit_credited)}</div><div class="av-detail-kpi-sub">${profitCnt} credited executions</div></div>
+            <div class="av-detail-kpi"><div class="av-detail-kpi-lbl">Unconfirmed / Ineligible</div><div class="av-detail-kpi-val">${notConfCnt}</div><div class="av-detail-kpi-sub">${audience.not_eligible_or_not_shown_users || 0} not eligible</div></div>
           </div>
-          <div class="signal-detail-price-grid">
-            <div class="stat-card"><div class="stat-label">Entry Min</div><div class="stat-value" style="font-size:15px;">${Number(s.entry_price_min || 0).toLocaleString()}</div></div>
-            <div class="stat-card"><div class="stat-label">Entry Max</div><div class="stat-value" style="font-size:15px;">${Number(s.entry_price_max || 0).toLocaleString()}</div></div>
-            <div class="stat-card"><div class="stat-label">Target 1</div><div class="stat-value" style="font-size:15px;">${Number(s.target_price_1 || 0).toLocaleString()}</div></div>
-            <div class="stat-card"><div class="stat-label">Target 2</div><div class="stat-value" style="font-size:15px;">${Number(s.target_price_2 || 0).toLocaleString()}</div></div>
-            <div class="stat-card"><div class="stat-label">Stop Loss</div><div class="stat-value" style="font-size:15px;">${Number(s.stop_loss || 0).toLocaleString()}</div></div>
+
+          <div class="av-detail-charts-row">
+            <div class="av-detail-chart-card">
+              <div class="av-detail-chart-head">
+                <h5>Execution Outcome Breakdown</h5>
+                <span>${confirmedCnt} confirmed total</span>
+              </div>
+              <div class="av-detail-donut-wrap">
+                <div class="av-detail-svg-ring-box">
+                  <svg class="av-detail-svg-ring" viewBox="0 0 118 118">
+                    <circle cx="59" cy="59" r="${r}" fill="none" stroke="#F1F5F9" stroke-width="14"></circle>
+                    ${sigDonutCircles}
+                  </svg>
+                  <div class="av-detail-ring-center">
+                    <strong>${confRatePct}%</strong>
+                    <span>Confirmed</span>
+                  </div>
+                </div>
+                <div class="av-detail-legend">
+                  ${sigSegs.map(item => `<div class="av-detail-legend-row">
+                    <span class="av-detail-legend-lhs"><span class="av-detail-dot" style="background:${item.color};"></span>${esc(item.label)}</span>
+                    <span class="av-detail-legend-val">${item.val}</span>
+                  </div>`).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="av-detail-chart-card">
+              <div class="av-detail-chart-head">
+                <h5>Top Country Participation</h5>
+                <span>Confirmed vs Eligible</span>
+              </div>
+              <div class="av-detail-bars">
+                ${topCountries.length ? topCountries.map(c => {
+                  const elig = Number(c.eligible || 0);
+                  const conf = Number(c.confirmed || 0);
+                  const pct = Math.min(100, Math.round(((conf > 0 ? conf : elig) / maxCountryVal) * 100));
+                  const barCol = conf > 0 ? '#0052FF' : '#94A3B8';
+                  return `<div class="av-detail-bar-item">
+                    <div class="av-detail-bar-top"><span>${esc(c.country)}</span><strong>${conf} confirmed / ${elig} eligible</strong></div>
+                    <div class="av-detail-bar-track"><div class="av-detail-bar-fill" style="width:${pct}%; background:${barCol};"></div></div>
+                  </div>`;
+                }).join('') : `<div style="font-size:12px; color:#64748B; padding:16px 0; text-align:center;">No eligible country activity recorded yet for this signal.</div>`}
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div class="card" style="padding:14px;">
-          <div style="font-weight:800;margin-bottom:10px;">Audience &amp; Outcome Summary</div>
-          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;">
-            <div class="stat-card"><div class="stat-label">Countries With Eligible Users</div><div class="stat-value">${audience.countries_with_eligible_users || 0}</div></div>
-            <div class="stat-card"><div class="stat-label">Eligible / Available Users</div><div class="stat-value">${audience.eligible_users || 0}</div></div>
-            <div class="stat-card"><div class="stat-label">Confirmed</div><div class="stat-value">${a.confirmed_users || 0}</div></div>
-            <div class="stat-card"><div class="stat-label">Profit Credited</div><div class="stat-value">${money(a.total_profit_credited)}</div></div>
-            <div class="stat-card"><div class="stat-label">Confirmed, No Profit</div><div class="stat-value">${a.confirmed_without_profit_users || 0}</div></div>
-            <div class="stat-card"><div class="stat-label">Failed Execution</div><div class="stat-value">${a.failed_execution_users || 0}</div></div>
-            <div class="stat-card"><div class="stat-label">Eligible, Not Confirmed</div><div class="stat-value">${a.eligible_not_confirmed_users || 0}</div></div>
-            <div class="stat-card"><div class="stat-label">Not Eligible / Not Shown</div><div class="stat-value">${audience.not_eligible_or_not_shown_users || 0}</div></div>
+          ${a.note ? `<div style="padding:10px 13px; border-radius:12px; background:#FFFFFF; border:1px solid #E2E8F0; color:#475569; font-size:11.5px; line-height:1.5;">${esc(a.note)}</div>` : ''}
+
+          <div class="av-detail-tabs" role="tablist" aria-label="Signal country filters">
+            <button type="button" class="av-detail-tab-btn active" onclick="App.switchSignalDetailTab('users', this)">User Executions (${users.length})</button>
+            <button type="button" class="av-detail-tab-btn" onclick="App.switchSignalDetailTab('shown', this)">Eligible Countries (${(countries.shown || []).length})</button>
+            <button type="button" class="av-detail-tab-btn" onclick="App.switchSignalDetailTab('confirmed', this)">With Confirmations (${(countries.confirmed || []).length})</button>
+            <button type="button" class="av-detail-tab-btn" onclick="App.switchSignalDetailTab('failed', this)">Failed / No Profit (${(countries.failed_or_no_profit || []).length})</button>
+            <button type="button" class="av-detail-tab-btn" onclick="App.switchSignalDetailTab('not_shown', this)">Not Eligible (${(countries.not_shown_or_not_eligible || []).length})</button>
           </div>
-          <div style="margin-top:10px;padding:9px;border-radius:8px;background:#F7F8FA;border:1px solid #EEF1F6;color:#4B5563;font-size:11px;line-height:1.5;">${esc(a.note || '')}</div>
-        </div>
 
-        <div class="card" style="padding:14px;overflow:auto;">
-          <div style="font-weight:800;margin-bottom:10px;">Country-by-Country Signal Detail</div>
-          <table class="admin-table mobile-detail-table"><thead><tr><th>Country</th><th>Users</th><th>Eligible / Shown</th><th>Confirmed</th><th>Profit Credited</th><th>No Profit</th><th>Failed</th><th>Not Confirmed</th></tr></thead><tbody>
-            ${countryTable(countries.shown || [], 'No eligible countries recorded.')}
-          </tbody></table>
-        </div>
+          <div class="card av-sig-det-pane" data-pane="users" style="padding:14px;overflow:auto;">
+            <div class="av-detail-chart-head" style="margin-bottom:10px;"><h5>Every User — Signal Result</h5><span>${users.length} accounts</span></div>
+            <table class="admin-table mobile-detail-table"><thead><tr><th>Email</th><th>Country</th><th>Result</th><th>Profit Credited</th><th>Profit Principal</th><th>Balance Before</th><th>Balance After</th><th>Execution</th><th>Reason / Detail</th><th>Confirmed At</th></tr></thead><tbody>${userTable}</tbody></table>
+          </div>
 
-        <div class="card" style="padding:14px;overflow:auto;">
-          <div style="font-weight:800;margin-bottom:10px;">Countries With Confirmations</div>
-          <table class="admin-table mobile-detail-table"><thead><tr><th>Country</th><th>Users</th><th>Eligible</th><th>Confirmed</th><th>Profit</th><th>No Profit</th><th>Failed</th><th>Not Confirmed</th></tr></thead><tbody>
-            ${countryTable(countries.confirmed || [], 'No confirmations recorded yet.')}
-          </tbody></table>
-        </div>
+          <div class="card av-sig-det-pane" data-pane="shown" style="display:none;padding:14px;overflow:auto;">
+            <div class="av-detail-chart-head" style="margin-bottom:10px;"><h5>Country-by-Country Eligible Detail</h5><span>${(countries.shown || []).length} countries</span></div>
+            <table class="admin-table mobile-detail-table"><thead><tr><th>Country</th><th>Users</th><th>Eligible / Shown</th><th>Confirmed</th><th>Profit Credited</th><th>No Profit</th><th>Failed</th><th>Not Confirmed</th></tr></thead><tbody>${countryTable(countries.shown || [], 'No eligible countries recorded.')}</tbody></table>
+          </div>
 
-        <div class="card" style="padding:14px;overflow:auto;">
-          <div style="font-weight:800;margin-bottom:10px;">Countries With Failed / No-Profit Outcomes</div>
-          <table class="admin-table mobile-detail-table"><thead><tr><th>Country</th><th>Users</th><th>Eligible</th><th>Confirmed</th><th>Profit</th><th>No Profit</th><th>Failed</th><th>Not Confirmed</th></tr></thead><tbody>
-            ${countryTable(countries.failed_or_no_profit || [], 'No failed or no-profit outcomes recorded.')}
-          </tbody></table>
-        </div>
+          <div class="card av-sig-det-pane" data-pane="confirmed" style="display:none;padding:14px;overflow:auto;">
+            <div class="av-detail-chart-head" style="margin-bottom:10px;"><h5>Countries With Confirmations</h5><span>${(countries.confirmed || []).length} countries</span></div>
+            <table class="admin-table mobile-detail-table"><thead><tr><th>Country</th><th>Users</th><th>Eligible</th><th>Confirmed</th><th>Profit</th><th>No Profit</th><th>Failed</th><th>Not Confirmed</th></tr></thead><tbody>${countryTable(countries.confirmed || [], 'No confirmations recorded yet.')}</tbody></table>
+          </div>
 
-        <div class="card" style="padding:14px;overflow:auto;">
-          <div style="font-weight:800;margin-bottom:10px;">Countries With No Eligible / Not-Shown Users</div>
-          <table class="admin-table mobile-detail-table"><thead><tr><th>Country</th><th>Users</th><th>Eligible</th><th>Confirmed</th><th>Profit</th><th>No Profit</th><th>Failed</th><th>Not Confirmed</th></tr></thead><tbody>
-            ${countryTable(countries.not_shown_or_not_eligible || [], 'Every represented country currently has at least one eligible user.')}
-          </tbody></table>
-        </div>
+          <div class="card av-sig-det-pane" data-pane="failed" style="display:none;padding:14px;overflow:auto;">
+            <div class="av-detail-chart-head" style="margin-bottom:10px;"><h5>Countries With Failed / No-Profit Outcomes</h5><span>${(countries.failed_or_no_profit || []).length} countries</span></div>
+            <table class="admin-table mobile-detail-table"><thead><tr><th>Country</th><th>Users</th><th>Eligible</th><th>Confirmed</th><th>Profit</th><th>No Profit</th><th>Failed</th><th>Not Confirmed</th></tr></thead><tbody>${countryTable(countries.failed_or_no_profit || [], 'No failed or no-profit outcomes recorded.')}</tbody></table>
+          </div>
 
-        <div class="card" style="padding:14px;overflow:auto;">
-          <div style="font-weight:800;margin-bottom:10px;">Every User — Signal Result</div>
-          <table class="admin-table mobile-detail-table"><thead><tr><th>Email</th><th>Country</th><th>Result</th><th>Profit Credited</th><th>Profit Principal</th><th>Balance Before</th><th>Balance After</th><th>Execution</th><th>Reason / Detail</th><th>Confirmed At</th></tr></thead><tbody>${userTable}</tbody></table>
+          <div class="card av-sig-det-pane" data-pane="not_shown" style="display:none;padding:14px;overflow:auto;">
+            <div class="av-detail-chart-head" style="margin-bottom:10px;"><h5>Countries With No Eligible Users</h5><span>${(countries.not_shown_or_not_eligible || []).length} countries</span></div>
+            <table class="admin-table mobile-detail-table"><thead><tr><th>Country</th><th>Users</th><th>Eligible</th><th>Confirmed</th><th>Profit</th><th>No Profit</th><th>Failed</th><th>Not Confirmed</th></tr></thead><tbody>${countryTable(countries.not_shown_or_not_eligible || [], 'Every represented country currently has at least one eligible user.')}</tbody></table>
+          </div>
         </div>`;
       body.querySelectorAll('.mobile-detail-table').forEach(table => {
         const labels = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
@@ -8168,6 +8425,15 @@ const App = {
     } catch (e) {
       body.innerHTML = `<div style="color:var(--negative);padding:14px;">Unable to load signal detail. ${this.escapeHtml(e?.message || 'Please try again.')}</div>`;
     }
+  },
+
+  switchSignalDetailTab(paneName, btnEl) {
+    const body = document.getElementById('signal-detail-body');
+    if (!body) return;
+    body.querySelectorAll('.av-detail-tab-btn').forEach(b => b.classList.toggle('active', b === btnEl));
+    body.querySelectorAll('.av-sig-det-pane').forEach(p => {
+      p.style.display = p.getAttribute('data-pane') === paneName ? 'block' : 'none';
+    });
   },
 
   async expireAdminSignal(sigId) {
@@ -10469,6 +10735,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     `;
 
     container.innerHTML = rootTabsHtml + treesHtml;
+    this.centerReferralTreeScroll(container);
   },
 
   toggleAdminTreeNode(childrenId, btn) {
@@ -12304,11 +12571,15 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   openSupportIntake(preselectTopic = '', prefillDesc = '') {
     const intake = document.getElementById('chat-intake-view');
     const stream = document.getElementById('chat-stream-view');
+    const historyView = document.getElementById('chat-history-view');
+    const historyBtn = document.getElementById('btn-chat-history');
     const backBtn = document.getElementById('btn-chat-back-stream');
     const descBox = document.getElementById('chat-intake-desc-box');
     const descInp = document.getElementById('chat-intake-desc');
     const hasMsgs = Array.isArray(this.state.userSupportMessages) && this.state.userSupportMessages.length > 0;
 
+    if (historyView) historyView.style.display = 'none';
+    if (historyBtn) historyBtn.classList.remove('active');
     if (intake) intake.style.display = 'flex';
     if (stream) stream.style.display = 'none';
     if (backBtn) backBtn.style.display = hasMsgs ? 'inline-flex' : 'none';
@@ -12328,9 +12599,154 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   closeSupportIntake() {
     const intake = document.getElementById('chat-intake-view');
     const stream = document.getElementById('chat-stream-view');
+    const historyView = document.getElementById('chat-history-view');
+    const historyBtn = document.getElementById('btn-chat-history');
+    if (historyView) historyView.style.display = 'none';
+    if (historyBtn) historyBtn.classList.remove('active');
     if (intake) intake.style.display = 'none';
     if (stream) stream.style.display = 'flex';
     this.renderUserSupportChat(true);
+  },
+
+  toggleSupportHistory() {
+    const historyView = document.getElementById('chat-history-view');
+    const isVisible = historyView && historyView.style.display === 'flex';
+    if (isVisible) {
+      this.closeSupportHistory();
+    } else {
+      this.openSupportHistory();
+    }
+  },
+
+  openSupportHistory() {
+    const intake = document.getElementById('chat-intake-view');
+    const stream = document.getElementById('chat-stream-view');
+    const historyView = document.getElementById('chat-history-view');
+    const listPane = document.getElementById('chat-history-list-pane');
+    const detailPane = document.getElementById('chat-history-detail-pane');
+    const historyBtn = document.getElementById('btn-chat-history');
+
+    if (intake) intake.style.display = 'none';
+    if (stream) stream.style.display = 'none';
+    if (historyView) historyView.style.display = 'flex';
+    if (listPane) listPane.style.display = 'flex';
+    if (detailPane) detailPane.style.display = 'none';
+    if (historyBtn) historyBtn.classList.add('active');
+    this.renderSupportHistory();
+  },
+
+  closeSupportHistory() {
+    const hasMsgs = Array.isArray(this.state.userSupportMessages) && this.state.userSupportMessages.length > 0;
+    if (hasMsgs) {
+      this.closeSupportIntake();
+    } else {
+      this.openSupportIntake('', '');
+    }
+  },
+
+  openSupportHistoryDetail(ticketId) {
+    const history = Array.isArray(this.state.userSupportHistory) ? this.state.userSupportHistory : [];
+    const item = history.find(h => String(h.id) === String(ticketId));
+    if (!item) return;
+
+    this.state.userSupportHistoryActiveId = item.id;
+    const listPane = document.getElementById('chat-history-list-pane');
+    const detailPane = document.getElementById('chat-history-detail-pane');
+    const subjEl = document.getElementById('chat-history-detail-subject');
+    const statusEl = document.getElementById('chat-history-detail-status');
+    const msgsEl = document.getElementById('chat-history-detail-messages');
+
+    if (listPane) listPane.style.display = 'none';
+    if (detailPane) detailPane.style.display = 'flex';
+    if (subjEl) subjEl.textContent = item.subject || 'Resolved Issue';
+    if (statusEl) {
+      const st = String(item.status || 'RESOLVED').toUpperCase();
+      statusEl.textContent = st === 'CLOSED' ? 'Closed' : 'Resolved';
+    }
+    if (!msgsEl) return;
+
+    const msgs = Array.isArray(item.messages) ? item.messages : [];
+    if (!msgs.length) {
+      msgsEl.innerHTML = '<div style="margin:auto;color:#6B7280;font-size:13px;">No messages recorded for this resolved ticket.</div>';
+      return;
+    }
+
+    const userAvatarUrl = this.getUserAvatar(this.state.user);
+    const userInitials = this.getSupportInitials(this.state.user?.first_name || this.state.user?.email || 'You');
+    const clientAvatarHtml = userAvatarUrl ? `<img src="${this.escapeHtml(userAvatarUrl)}" alt="You">` : this.escapeHtml(userInitials);
+
+    let lastDivider = '';
+    const htmlParts = [];
+    msgs.forEach(m => {
+      const divider = this.formatChatDateDivider(m.created_at);
+      if (divider && divider !== lastDivider) {
+        lastDivider = divider;
+        htmlParts.push(`<div class="av-chat-date-divider"><span>${this.escapeHtml(divider)}</span></div>`);
+      }
+      const isUser = String(m.sender_role || '').toUpperCase() === 'USER';
+      const clock = this.formatChatClock(m.created_at) || this.formatAdminDate(m.created_at);
+      const parsed = this.parseSupportTopicMessage(m.message || '');
+      const topicPillHtml = parsed.topic ? `<div class="av-chat-topic-pill">${this.escapeHtml(parsed.topic)}</div>` : '';
+      htmlParts.push(`
+        <div class="av-chat-row ${isUser ? 'is-outgoing' : 'is-incoming'}">
+          <div class="av-chat-avatar ${isUser ? 'is-client' : 'is-concierge'}" aria-hidden="true">${isUser ? clientAvatarHtml : 'PX'}</div>
+          <div class="av-chat-msg-stack">
+            <div class="av-chat-bubble">${topicPillHtml}<div>${this.escapeHtml(parsed.body)}</div></div>
+            <span class="av-chat-meta">${isUser ? 'You' : 'Support Desk'} · ${this.escapeHtml(clock)}</span>
+          </div>
+        </div>
+      `);
+    });
+    msgsEl.innerHTML = htmlParts.join('');
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  },
+
+  closeSupportHistoryDetail() {
+    const listPane = document.getElementById('chat-history-list-pane');
+    const detailPane = document.getElementById('chat-history-detail-pane');
+    if (detailPane) detailPane.style.display = 'none';
+    if (listPane) listPane.style.display = 'flex';
+  },
+
+  updateSupportHistoryBadge() {
+    const badge = document.getElementById('chat-history-badge');
+    const count = Array.isArray(this.state.userSupportHistory) ? this.state.userSupportHistory.length : 0;
+    if (!badge) return;
+    badge.textContent = String(count);
+    badge.style.display = count > 0 ? 'inline-flex' : 'none';
+  },
+
+  renderSupportHistory() {
+    const listEl = document.getElementById('chat-history-list');
+    if (!listEl) return;
+    const history = Array.isArray(this.state.userSupportHistory) ? this.state.userSupportHistory : [];
+    if (!history.length) {
+      listEl.innerHTML = `<div class="av-sup-history-empty">No resolved chats yet. When our support team marks your current issue as resolved, it moves here automatically and you can start a fresh chat.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = history.map(item => {
+      const tid = String(item.id || '');
+      const st = String(item.status || 'RESOLVED').toUpperCase();
+      const label = st === 'CLOSED' ? 'Closed' : 'Resolved';
+      const parsed = this.parseSupportTopicMessage(item.last_message || '');
+      const snippet = parsed.body || item.subject || 'Support conversation';
+      const when = this.formatSupportListTime(item.resolved_at || item.updated_at || item.created_at) || 'Archived';
+      const msgCount = Number(item.message_count || (Array.isArray(item.messages) ? item.messages.length : 0));
+      return `
+        <button type="button" class="av-sup-history-card" onclick="App.openSupportHistoryDetail('${this.escapeHtml(tid)}')">
+          <div class="av-sup-history-card-top">
+            <strong>${this.escapeHtml(item.subject || 'Platform Support Inquiry')}</strong>
+            <span class="av-sup-history-pill">${this.escapeHtml(label)}</span>
+          </div>
+          <div class="av-sup-history-snippet">${this.escapeHtml(snippet)}</div>
+          <div class="av-sup-history-meta">
+            <span>${msgCount} message${msgCount === 1 ? '' : 's'}</span>
+            <span>${this.escapeHtml(when)} · View chat ›</span>
+          </div>
+        </button>
+      `;
+    }).join('');
   },
 
   selectSupportIssueOption(topic, btnEl) {
@@ -12387,7 +12803,9 @@ STORAGE_BUCKET_MARKETING=marketing-assets
         this.state.userSupportTicket = res.data.ticket || null;
         this.state.userSupportActiveTicketId = res.data.ticket?.id || this.state.userSupportActiveTicketId;
         this.state.userSupportTickets = Array.isArray(res.data.tickets) ? res.data.tickets : [];
+        this.state.userSupportHistory = Array.isArray(res.data.history) ? res.data.history : (this.state.userSupportHistory || []);
         this.state.userSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
+        this.updateSupportHistoryBadge();
         this.closeSupportIntake();
         this.toast('Your issue description has been sent to Support.', 'success');
       } else {
@@ -12445,13 +12863,41 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       : '';
     const res = await this.api(`/support/chat.php${qs}`);
     if (res && res.success && res.data) {
+      const prevActiveId = this.state.userSupportActiveTicketId;
       const prevCount = Array.isArray(this.state.userSupportMessages) ? this.state.userSupportMessages.length : 0;
       const nextMsgs = Array.isArray(res.data.messages) ? res.data.messages : [];
+      const nextHistory = Array.isArray(res.data.history) ? res.data.history : [];
+      const nextTicket = res.data.ticket || null;
+
       this.state.userSupportTickets = Array.isArray(res.data.tickets) ? res.data.tickets : [];
-      this.state.userSupportTicket = res.data.ticket || null;
-      this.state.userSupportActiveTicketId = res.data.ticket?.id || null;
+      this.state.userSupportHistory = nextHistory;
+      this.state.userSupportTicket = nextTicket;
+      this.state.userSupportActiveTicketId = nextTicket?.id || null;
       this.state.userSupportMessages = nextMsgs;
-      this.renderUserSupportChat(nextMsgs.length !== prevCount || !silent);
+      this.updateSupportHistoryBadge();
+
+      const historyView = document.getElementById('chat-history-view');
+      const viewingHistory = historyView && historyView.style.display === 'flex';
+
+      const wasResolvedNow = Boolean(
+        prevActiveId &&
+        !nextTicket &&
+        nextHistory.some(h => String(h.id) === String(prevActiveId))
+      );
+
+      if (wasResolvedNow) {
+        this.toast('Your support issue was resolved and saved to History. Start a new chat anytime.', 'success');
+        if (!viewingHistory) {
+          this.openSupportIntake('', '');
+          return;
+        }
+      }
+
+      if (viewingHistory) {
+        this.renderSupportHistory();
+      } else {
+        this.renderUserSupportChat(nextMsgs.length !== prevCount || !silent);
+      }
     } else if (!silent) {
       this.toast(res?.message || 'Unable to load support conversation.', 'error');
     }
@@ -12582,6 +13028,10 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       this.state.userSupportTicket = res.data.ticket || null;
       this.state.userSupportActiveTicketId = res.data.ticket?.id || null;
       this.state.userSupportTickets = Array.isArray(res.data.tickets) ? res.data.tickets : [];
+      if (Array.isArray(res.data.history)) {
+        this.state.userSupportHistory = res.data.history;
+        this.updateSupportHistoryBadge();
+      }
       this.state.userSupportMessages = Array.isArray(res.data.messages) ? res.data.messages : [];
       this.renderUserSupportChat(true);
     } else {
@@ -12903,13 +13353,16 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   inspectAdminSupportUser() {
     const tickets = Array.isArray(this.state.adminSupportTickets) ? this.state.adminSupportTickets : [];
     const active = tickets.find(t => String(t.id) === String(this.state.adminSupportActiveId));
-    if (!active || !active.user_email) return;
-    this.setAdminTab('users');
-    const searchInput = document.getElementById('adm-users-search');
-    if (searchInput) {
-      searchInput.value = active.user_email;
+    if (!active) {
+      this.toast('Select a support conversation first.', 'warning');
+      return;
     }
-    this.filterAdminUsers();
+    const lookupKey = String(active.user_id || active.user_email || '').trim();
+    if (!lookupKey) {
+      this.toast('User identifier is missing on this ticket.', 'warning');
+      return;
+    }
+    this.viewUserDossier(lookupKey);
   },
 
   renderAdminSupportThread(scrollToBottom = true) {

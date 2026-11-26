@@ -1,6 +1,9 @@
 <?php
 /**
- * Admin Support Desk Endpoint (Single WhatsApp-Style Conversation per User)
+ * Admin Support Desk Endpoint
+ * - Resolves user profiles reliably (select=* + targeted lookup + Supabase Auth metadata fallback)
+ * - Keeps active WhatsApp-style thread per user while preserving resolved tickets independently
+ * - Updates only the targeted ticket_id on reply or status change
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/auth_tokens.php';
@@ -13,32 +16,12 @@ if (!$supabase->isConfigured()) {
 
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
-$fetchUserMergedMessages = static function (SupabaseClient $sb, string $userId, string $fallbackTicketId): array {
-    $ticketIds = [];
-    if ($userId !== '') {
-        $tRes = $sb->select('support_tickets', [
-            'user_id' => 'eq.' . $userId,
-            'select' => 'id',
-            'limit' => '50'
-        ]);
-        if (!empty($tRes['success']) && is_array($tRes['data'])) {
-            foreach ($tRes['data'] as $row) {
-                $tid = trim((string)($row['id'] ?? ''));
-                if ($tid !== '') {
-                    $ticketIds[] = $tid;
-                }
-            }
-        }
-    }
-    if (empty($ticketIds) && $fallbackTicketId !== '') {
-        $ticketIds[] = $fallbackTicketId;
-    }
-    if (empty($ticketIds)) {
+$fetchTicketMessages = static function (SupabaseClient $sb, string $ticketId): array {
+    if ($ticketId === '') {
         return [];
     }
-    $inList = '(' . implode(',', array_unique($ticketIds)) . ')';
     $res = $sb->select('support_messages', [
-        'ticket_id' => 'in.' . $inList,
+        'ticket_id' => 'eq.' . $ticketId,
         'is_internal' => 'eq.0',
         'order' => 'created_at.asc',
         'limit' => '500'
@@ -50,15 +33,15 @@ if ($method === 'GET') {
     $results = $supabase->selectMany([
         'tickets' => [
             'table' => 'support_tickets',
-            'params' => ['order' => 'created_at.asc,id.asc', 'limit' => '500']
+            'params' => ['order' => 'created_at.asc,id.asc', 'limit' => '800']
         ],
         'profiles' => [
             'table' => 'profiles',
-            'params' => ['select' => 'id,email,first_name,last_name,numeric_uid,avatar', 'limit' => '1000']
+            'params' => ['select' => '*', 'limit' => '2000']
         ],
         'messages' => [
             'table' => 'support_messages',
-            'params' => ['is_internal' => 'eq.0', 'order' => 'created_at.asc', 'limit' => '3000']
+            'params' => ['is_internal' => 'eq.0', 'order' => 'created_at.asc', 'limit' => '5000']
         ]
     ]);
 
@@ -73,46 +56,103 @@ if ($method === 'GET') {
         }
     }
 
-    $ticketOwnerById = [];
-    $userTicketsMap = [];
+    // Batch-resolve any ticket user_ids missing from initial profiles query
+    $missingUids = [];
     foreach ($tickets as $t) {
-        $tid = (string)($t['id'] ?? '');
-        $uid = (string)($t['user_id'] ?? '');
-        if ($tid === '') continue;
-        $ownerKey = $uid !== '' ? $uid : ('ticket:' . $tid);
-        $ticketOwnerById[$tid] = $ownerKey;
-        $userTicketsMap[$ownerKey][] = $t;
+        $uid = trim((string)($t['user_id'] ?? ''));
+        if ($uid !== '' && !isset($profileById[$uid])) {
+            $missingUids[$uid] = $uid;
+        }
+    }
+    if (!empty($missingUids)) {
+        $inList = '(' . implode(',', array_values($missingUids)) . ')';
+        $extraRes = $supabase->select('profiles', ['id' => 'in.' . $inList, 'select' => '*']);
+        if (!empty($extraRes['success']) && is_array($extraRes['data'])) {
+            foreach ($extraRes['data'] as $ep) {
+                if (!empty($ep['id'])) {
+                    $profileById[(string)$ep['id']] = $ep;
+                    unset($missingUids[(string)$ep['id']]);
+                }
+            }
+        }
+        // Fallback to Supabase Auth metadata for any remaining user IDs
+        foreach (array_slice(array_values($missingUids), 0, 25) as $uid) {
+            if (!method_exists($supabase, 'authAdminGetUser')) break;
+            try {
+                $authGet = $supabase->authAdminGetUser($uid);
+                if (!empty($authGet['success']) && is_array($authGet['data'] ?? null)) {
+                    $au = $authGet['data'];
+                    $meta = is_array($au['user_metadata'] ?? null) ? $au['user_metadata'] : [];
+                    $profileById[$uid] = [
+                        'id' => $uid,
+                        'email' => (string)($au['email'] ?? ''),
+                        'first_name' => (string)($meta['first_name'] ?? ''),
+                        'last_name' => (string)($meta['last_name'] ?? ''),
+                        'numeric_uid' => $meta['numeric_uid'] ?? null,
+                        'avatar' => $meta['avatar'] ?? ''
+                    ];
+                }
+            } catch (Throwable $e) {}
+        }
     }
 
-    $messagesByUser = [];
+    $messagesByTicket = [];
     foreach ($allMessages as $m) {
-        $tid = (string)($m['ticket_id'] ?? '');
-        if ($tid === '' || !isset($ticketOwnerById[$tid])) continue;
-        $ownerKey = $ticketOwnerById[$tid];
-        $messagesByUser[$ownerKey][] = $m;
+        $tid = trim((string)($m['ticket_id'] ?? ''));
+        if ($tid === '') continue;
+        $messagesByTicket[$tid][] = $m;
+    }
+
+    // Group active open tickets per user (single live conversation), while keeping
+    // each resolved/closed ticket as its own historical thread so resolved issues
+    // remain distinct from subsequent new conversations.
+    $groups = [];
+    foreach ($tickets as $t) {
+        $tid = trim((string)($t['id'] ?? ''));
+        if ($tid === '') continue;
+        $uid = trim((string)($t['user_id'] ?? ''));
+        $st = strtoupper(trim((string)($t['status'] ?? 'OPEN')));
+        $isClosed = in_array($st, ['RESOLVED', 'CLOSED'], true);
+        $groupKey = $isClosed
+            ? ('resolved:' . $tid)
+            : ($uid !== '' ? ('active_user:' . $uid) : ('active_ticket:' . $tid));
+        $groups[$groupKey][] = $t;
     }
 
     $enriched = [];
     $openCount = 0;
     $needsReplyCount = 0;
+    $messagesByGroupKey = [];
 
-    foreach ($userTicketsMap as $ownerKey => $uTickets) {
-        $primaryTicket = $uTickets[0];
-        // Pick latest ticket metadata for status & subject while keeping canonical primary ticket ID
-        $latestTicket = $uTickets[count($uTickets) - 1];
-        foreach ($uTickets as $cand) {
+    foreach ($groups as $groupKey => $gTickets) {
+        $latestTicket = $gTickets[count($gTickets) - 1];
+        foreach ($gTickets as $cand) {
             if (strcmp((string)($cand['updated_at'] ?? ''), (string)($latestTicket['updated_at'] ?? '')) >= 0) {
                 $latestTicket = $cand;
             }
         }
 
-        $tid = (string)($primaryTicket['id'] ?? '');
-        $uid = (string)($primaryTicket['user_id'] ?? '');
+        $tid = (string)($latestTicket['id'] ?? '');
+        $uid = trim((string)($latestTicket['user_id'] ?? ''));
         $prof = $profileById[$uid] ?? [];
         $fullName = trim((string)($prof['first_name'] ?? '') . ' ' . (string)($prof['last_name'] ?? ''));
-        $tMsgs = $messagesByUser[$ownerKey] ?? [];
+
+        $tMsgs = [];
+        foreach ($gTickets as $gt) {
+            $gtid = trim((string)($gt['id'] ?? ''));
+            if ($gtid !== '' && !empty($messagesByTicket[$gtid])) {
+                foreach ($messagesByTicket[$gtid] as $m) {
+                    $tMsgs[] = $m;
+                }
+            }
+        }
+        usort($tMsgs, static function ($a, $b) {
+            return strcmp((string)($a['created_at'] ?? ''), (string)($b['created_at'] ?? ''));
+        });
+        $messagesByGroupKey[$tid] = $tMsgs;
+
         $lastMsg = !empty($tMsgs) ? $tMsgs[count($tMsgs) - 1] : null;
-        $status = strtoupper((string)($latestTicket['status'] ?? ($primaryTicket['status'] ?? 'OPEN')));
+        $status = strtoupper((string)($latestTicket['status'] ?? 'OPEN'));
         $lastRole = strtoupper((string)($lastMsg['sender_role'] ?? 'USER'));
         $isClosed = in_array($status, ['RESOLVED', 'CLOSED'], true);
         $needsReply = !$isClosed && ($lastMsg !== null ? $lastRole === 'USER' : true);
@@ -124,12 +164,15 @@ if ($method === 'GET') {
             $needsReplyCount++;
         }
 
-        $row = $primaryTicket;
+        $resolvedEmail = trim((string)($prof['email'] ?? ''));
+        $fallbackUserLabel = $uid !== '' ? ('User ' . substr($uid, 0, 8)) : ('Ticket #' . substr($tid, 0, 8));
+        $row = $latestTicket;
+        $row['id'] = $tid;
         $row['status'] = $status;
-        $row['subject'] = (string)($latestTicket['subject'] ?? ($primaryTicket['subject'] ?? 'Support Inquiry'));
-        $row['updated_at'] = (string)($latestTicket['updated_at'] ?? ($primaryTicket['updated_at'] ?? ($primaryTicket['created_at'] ?? '')));
-        $row['user_email'] = (string)($prof['email'] ?? 'Unknown user');
-        $row['user_name'] = $fullName !== '' ? $fullName : explode('@', (string)$row['user_email'])[0];
+        $row['subject'] = (string)($latestTicket['subject'] ?? 'Support Inquiry');
+        $row['updated_at'] = (string)($latestTicket['updated_at'] ?? ($latestTicket['created_at'] ?? ''));
+        $row['user_email'] = $resolvedEmail !== '' ? $resolvedEmail : $fallbackUserLabel;
+        $row['user_name'] = $fullName !== '' ? $fullName : ($resolvedEmail !== '' ? explode('@', $resolvedEmail)[0] : $fallbackUserLabel);
         $row['user_avatar'] = !empty($prof) ? primex_get_user_avatar($prof) : '';
         $row['numeric_uid'] = $prof['numeric_uid'] ?? null;
         $row['message_count'] = count($tMsgs);
@@ -137,7 +180,7 @@ if ($method === 'GET') {
         $row['last_sender_role'] = $lastRole;
         $row['last_message_at'] = (string)($lastMsg['created_at'] ?? $row['updated_at']);
         $row['needs_reply'] = $needsReply;
-        $row['all_ticket_ids'] = array_values(array_map(static function ($x) { return (string)($x['id'] ?? ''); }, $uTickets));
+        $row['all_ticket_ids'] = array_values(array_map(static function ($x) { return (string)($x['id'] ?? ''); }, $gTickets));
         $enriched[] = $row;
     }
 
@@ -147,27 +190,22 @@ if ($method === 'GET') {
 
     $requestedId = trim((string)($_GET['ticket_id'] ?? ''));
     $activeId = '';
-    $activeOwnerKey = '';
     if ($requestedId !== '') {
         foreach ($enriched as $et) {
             if ((string)$et['id'] === $requestedId || in_array($requestedId, $et['all_ticket_ids'] ?? [], true)) {
                 $activeId = (string)$et['id'];
-                $uid = (string)($et['user_id'] ?? '');
-                $activeOwnerKey = $uid !== '' ? $uid : ('ticket:' . $activeId);
                 break;
             }
         }
     }
     if ($activeId === '' && !empty($enriched)) {
         $activeId = (string)$enriched[0]['id'];
-        $uid = (string)($enriched[0]['user_id'] ?? '');
-        $activeOwnerKey = $uid !== '' ? $uid : ('ticket:' . $activeId);
     }
 
     sendSuccess([
         'tickets' => $enriched,
         'active_ticket_id' => $activeId,
-        'messages' => $activeOwnerKey !== '' ? ($messagesByUser[$activeOwnerKey] ?? []) : [],
+        'messages' => $activeId !== '' ? ($messagesByGroupKey[$activeId] ?? []) : [],
         'open_count' => $openCount,
         'needs_reply_count' => $needsReplyCount
     ], 'Support tickets loaded');
@@ -217,12 +255,11 @@ if ($method === 'POST') {
         if (!in_array($nextStatus, ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_USER', 'RESOLVED'], true)) {
             $nextStatus = 'WAITING_FOR_USER';
         }
-        $updFilter = $targetUserId !== '' ? ['user_id' => 'eq.' . $targetUserId] : ['id' => 'eq.' . $ticketId];
         $updRes = $supabase->update('support_tickets', [
             'status' => $nextStatus,
             'assigned_staff' => (string)($admin['email'] ?? 'admin'),
             'updated_at' => $now
-        ], $updFilter);
+        ], ['id' => 'eq.' . $ticketId]);
         $updatedTicket = (!empty($updRes['success']) && !empty($updRes['data'][0])) ? $updRes['data'][0] : $ticket;
 
         primex_record_log('ADMIN_SUPPORT', 'ADMIN_REPLY_SENT', 'Admin replied to support conversation', [
@@ -232,7 +269,7 @@ if ($method === 'POST') {
 
         sendSuccess([
             'ticket' => $updatedTicket,
-            'messages' => $fetchUserMergedMessages($supabase, $targetUserId, $ticketId)
+            'messages' => $fetchTicketMessages($supabase, $ticketId)
         ], 'Reply sent to user');
     }
 
@@ -241,7 +278,7 @@ if ($method === 'POST') {
         if (!in_array($nextStatus, ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_USER', 'RESOLVED', 'CLOSED'], true)) {
             sendError('VALIDATION_ERROR', 'Invalid ticket status.', 400);
         }
-        $updFilter = $targetUserId !== '' ? ['user_id' => 'eq.' . $targetUserId] : ['id' => 'eq.' . $ticketId];
+        $updFilter = ['id' => 'eq.' . $ticketId];
         $updRes = $supabase->update('support_tickets', [
             'status' => $nextStatus,
             'assigned_staff' => (string)($admin['email'] ?? 'admin'),
@@ -249,6 +286,16 @@ if ($method === 'POST') {
         ], $updFilter);
         if (empty($updRes['success'])) {
             sendError('STATUS_UPDATE_FAILED', 'Unable to update ticket status.', 500);
+        }
+        // If marking RESOLVED/CLOSED, also close any older unresolved tickets for this user so a fresh chat opens cleanly
+        if (in_array($nextStatus, ['RESOLVED', 'CLOSED'], true) && $targetUserId !== '') {
+            @$supabase->update('support_tickets', [
+                'status' => $nextStatus,
+                'updated_at' => $now
+            ], [
+                'user_id' => 'eq.' . $targetUserId,
+                'status' => 'not.in.(RESOLVED,CLOSED)'
+            ]);
         }
         $updatedTicket = (!empty($updRes['data'][0])) ? $updRes['data'][0] : array_merge($ticket, ['status' => $nextStatus, 'updated_at' => $now]);
 

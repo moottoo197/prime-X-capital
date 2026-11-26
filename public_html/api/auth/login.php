@@ -154,7 +154,7 @@ sendSuccess([
         'referred_by' => $userProfile['referred_by'] ?? null,
         'country' => $userProfile['country'] ?? '',
         'two_factor_enabled' => !empty($userProfile['two_factor_enabled']),
-        'has_withdrawal_pin' => !empty($userProfile['has_withdrawal_pin']) || !empty($userProfile['withdrawal_pin']) || !empty($userProfile['withdrawal_pin_hash']),
+        'has_withdrawal_pin' => primex_has_withdrawal_pin_resolved($userProfile, $supabase),
         'email_verified' => $resolvedEmailVerified,
         'avatar' => primex_get_user_avatar($userProfile),
         'is_admin' => $isAdmin

@@ -37,7 +37,7 @@ sendSuccess([
         'referral_code' => $user['referral_code'] ?? '',
         'referred_by' => $user['referred_by'] ?? null,
         'two_factor_enabled' => !empty($user['two_factor_enabled']),
-        'has_withdrawal_pin' => !empty($user['has_withdrawal_pin']) || !empty($user['withdrawal_pin']) || !empty($user['withdrawal_pin_hash']),
+        'has_withdrawal_pin' => primex_has_withdrawal_pin_resolved($user, $supabase),
         'email_verified' => $emailVerified,
         'country' => $country,
         'timezone' => $timezone,

@@ -982,3 +982,100 @@ if (!function_exists('primex_get_user_avatar')) {
         return '';
     }
 }
+
+if (!function_exists('primex_pin_store_dir')) {
+    function primex_pin_store_dir(): ?string {
+        $candidates = [
+            dirname(__DIR__, 3) . '/server/storage/pins',
+            rtrim(sys_get_temp_dir(), '/\\') . '/primex_pins',
+        ];
+        foreach ($candidates as $dir) {
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0750, true);
+            }
+            if (is_dir($dir) && is_writable($dir)) {
+                return $dir;
+            }
+        }
+        return null;
+    }
+}
+
+if (!function_exists('primex_pin_store_file')) {
+    function primex_pin_store_file(string $userId, string $email = ''): ?string {
+        $dir = primex_pin_store_dir();
+        if ($dir === null) {
+            return null;
+        }
+        $seed = trim($userId) !== '' ? ('id:' . trim($userId)) : ('em:' . strtolower(trim($email)));
+        if ($seed === 'id:' || $seed === 'em:') {
+            return null;
+        }
+        return $dir . '/pin_' . hash('sha256', $seed) . '.json';
+    }
+}
+
+if (!function_exists('primex_save_user_pin_hash')) {
+    function primex_save_user_pin_hash(string $userId, string $pinHash, string $email = ''): void {
+        if (trim($pinHash) === '') {
+            return;
+        }
+        $paths = array_filter([
+            primex_pin_store_file($userId, ''),
+            $email !== '' ? primex_pin_store_file('', $email) : null,
+        ]);
+        $payload = json_encode([
+            'user_id'    => $userId,
+            'pin_hash'   => $pinHash,
+            'updated_at' => gmdate('c'),
+        ], JSON_UNESCAPED_SLASHES);
+        foreach ($paths as $path) {
+            @file_put_contents($path, $payload, LOCK_EX);
+        }
+    }
+}
+
+if (!function_exists('primex_get_user_pin_hash')) {
+    function primex_get_user_pin_hash(string $userId, string $email = ''): string {
+        $paths = array_filter([
+            primex_pin_store_file($userId, ''),
+            $email !== '' ? primex_pin_store_file('', $email) : null,
+        ]);
+        foreach ($paths as $path) {
+            if (!is_file($path)) {
+                continue;
+            }
+            $data = json_decode((string)@file_get_contents($path), true);
+            if (is_array($data) && !empty($data['pin_hash'])) {
+                return (string)$data['pin_hash'];
+            }
+        }
+        return '';
+    }
+}
+
+if (!function_exists('primex_has_withdrawal_pin_resolved')) {
+    function primex_has_withdrawal_pin_resolved(array $user, ?SupabaseClient $supabase = null): bool {
+        if (!empty($user['withdrawal_pin_hash']) || !empty($user['withdrawal_pin']) || !empty($user['has_withdrawal_pin'])) {
+            return true;
+        }
+        $uid = trim((string)($user['id'] ?? ''));
+        $email = strtolower(trim((string)($user['email'] ?? '')));
+        if (primex_get_user_pin_hash($uid, $email) !== '') {
+            return true;
+        }
+        if ($supabase !== null && $uid !== '' && method_exists($supabase, 'authAdminGetUser')) {
+            try {
+                $authRes = $supabase->authAdminGetUser($uid);
+                if (!empty($authRes['success']) && is_array($authRes['data'] ?? null)) {
+                    $meta = is_array($authRes['data']['user_metadata'] ?? null) ? $authRes['data']['user_metadata'] : [];
+                    if (!empty($meta['has_withdrawal_pin'])) {
+                        return true;
+                    }
+                }
+            } catch (Throwable $e) {}
+        }
+        return false;
+    }
+}
+
