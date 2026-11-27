@@ -419,10 +419,10 @@ if (!function_exists('primex_send_smtp_email')) {
 }
 
 if (!function_exists('primex_send_templated_email')) {
-    function primex_send_templated_email(string $to, array $template): array {
+    function primex_send_templated_email(string $to, array $template, ?array $overrideConfig = null): array {
         $subject = (string)($template['subject'] ?? 'Prime X Capital Notification');
         $html = (string)($template['html'] ?? '');
         $text = isset($template['text']) ? (string)$template['text'] : null;
-        return primex_send_smtp_email($to, $subject, $html, null, $text);
+        return primex_send_smtp_email($to, $subject, $html, $overrideConfig, $text);
     }
 }

@@ -572,7 +572,9 @@ if (!function_exists('primex_email_template_kyc_status')) {
         string $reviewedAtUtc,
         string $platformUrl
     ): array {
-        $isApproved = in_array(strtoupper(trim($decision)), ['APPROVE', 'APPROVED', 'VERIFIED'], true);
+        $upperDecision = strtoupper(trim($decision));
+        $isApproved = in_array($upperDecision, ['APPROVE', 'APPROVED', 'VERIFIED'], true);
+        $isResubmit = in_array($upperDecision, ['RESUBMIT', 'RESUBMIT_REQUIRED', 'RESUBMIT_DOCUMENTS'], true);
         $greeting = $recipientName !== '' ? ('Hello ' . $recipientName . ',') : 'Hello,';
         $safeGreeting = primex_email_escape($greeting);
         $safeTime = primex_email_escape($reviewedAtUtc);
@@ -603,6 +605,30 @@ if (!function_exists('primex_email_template_kyc_status')) {
                 '#ECFDF5'
             );
             $text = "{$greeting}\n\nYour Prime X Capital identity verification (KYC) has been approved.\nAll trading and withdrawal features are now active.\nApproved At: {$reviewedAtUtc}\n\nOpen platform: {$platformUrl}\n\nPrime X Capital\nhttps://prime-x-capital.com";
+        } elseif ($isResubmit) {
+            $subject = 'KYC document resubmission requested — Prime X Capital';
+            $bodyHtml = ''
+                . '<p style="margin:0 0 14px;font-size:14.5px;line-height:1.65;color:#374151;">' . $safeGreeting . '</p>'
+                . '<p style="margin:0 0 18px;font-size:14.5px;line-height:1.65;color:#374151;">Our compliance team requires you to <strong>resubmit your KYC identity verification documents</strong>. Please open KYC Verification and upload updated documents.</p>'
+                . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background-color:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;">'
+                . '<tr><td style="padding:16px;font-size:13px;line-height:1.75;color:#92400E;">'
+                . '<strong>Status:</strong> Resubmission Requested<br>'
+                . '<strong>Compliance Note:</strong> ' . $safeReason . '<br>'
+                . '<strong>Requested At:</strong> ' . $safeTime
+                . '</td></tr></table>'
+                . '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td>'
+                . '<a href="' . $safeUrl . '" style="display:inline-block;padding:14px 26px;background-color:#0052FF;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;border-radius:12px;">Resubmit KYC Now</a>'
+                . '</td></tr></table>';
+            $html = primex_email_layout(
+                'KYC Resubmission Requested',
+                'Please submit updated verification documents inside Prime X Capital.',
+                $bodyHtml,
+                'Need assistance? Contact Prime X Capital support inside the app.',
+                'ACTION REQUIRED',
+                '#D97706',
+                '#FFFBEB'
+            );
+            $text = "{$greeting}\n\nOur compliance team requested updated KYC verification documents.\nNote: " . ($reason ?: 'Please upload clearer identity documents.') . "\nRequested At: {$reviewedAtUtc}\n\nResubmit at: {$platformUrl}\n\nPrime X Capital\nhttps://prime-x-capital.com";
         } else {
             $subject = 'Identity verification (KYC) update — Prime X Capital';
             $bodyHtml = ''

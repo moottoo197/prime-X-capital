@@ -485,6 +485,8 @@ const App = {
       await this.loadTickers().catch(() => {});
       await this.loadSystemConfig().catch(() => {});
       if (this.state.user) {
+        this.sendUserHeartbeat(false, this.state.currentView || 'home');
+        this.startPresenceTracking();
         await this.loadBalances().catch(() => {});
         await this.loadNotifications().catch(() => {});
         await this.loadSignals().catch(() => {});
@@ -493,6 +495,7 @@ const App = {
       }
     }).catch(() => {});
 
+    this.startPresenceTracking();
     this.startPolling();
   },
 
@@ -1291,6 +1294,10 @@ const App = {
       this.renderEarnSavings();
     } else if (view === 'earn-loan') {
       this.calcCollateralLoan();
+    }
+
+    if (this.state.user) {
+      this.sendUserHeartbeat(false, view);
     }
 
     if (window.Engine3D && typeof window.Engine3D.refreshTilt === 'function') {
@@ -2669,11 +2676,12 @@ const App = {
         kycBadge.className = 'badge badge-warning';
         kycBadge.style.color = '#D97706';
         kycBadge.style.background = '#FFFBEB';
-      } else if (kycStatus === 'REJECTED') {
-        kycBadge.textContent = 'KYC Rejected ✕';
-        kycBadge.className = 'badge badge-negative';
-        kycBadge.style.color = '#DC2626';
-        kycBadge.style.background = '#FEF2F2';
+      } else if (kycStatus === 'REJECTED' || kycStatus === 'RESUBMIT_REQUIRED') {
+        const isResub = kycStatus === 'RESUBMIT_REQUIRED';
+        kycBadge.textContent = isResub ? 'Resubmit KYC ↻' : 'KYC Rejected ✕';
+        kycBadge.className = isResub ? 'badge badge-warning' : 'badge badge-negative';
+        kycBadge.style.color = isResub ? '#D97706' : '#DC2626';
+        kycBadge.style.background = isResub ? '#FFFBEB' : '#FEF2F2';
       } else {
         kycBadge.textContent = 'Unverified (Verify)';
         kycBadge.className = 'badge badge-warning';
@@ -2683,7 +2691,7 @@ const App = {
     }
 
     if (kycBanner) {
-      if (kycStatus === 'PENDING') {
+      if (kycStatus === 'PENDING' || kycStatus === 'UNDER_REVIEW') {
         kycBanner.style.display = 'block';
         kycBanner.innerHTML = `
           <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 12px;">
@@ -2694,15 +2702,16 @@ const App = {
             <button onclick="App.navigate('kyc')" style="background: #FEF3C7; border: 1px solid #F59E0B; color: #B45309; border-radius: 8px; padding: 4px 10px; font-size: 11px; cursor: pointer; font-weight: 700;">View Status</button>
           </div>
         `;
-      } else if (kycStatus === 'REJECTED') {
+      } else if (kycStatus === 'REJECTED' || kycStatus === 'RESUBMIT_REQUIRED') {
+        const isResub = kycStatus === 'RESUBMIT_REQUIRED';
         kycBanner.style.display = 'block';
         kycBanner.innerHTML = `
-          <div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 12px;">
-            <div style="display: flex; align-items: center; gap: 8px; color: #DC2626;">
-              <span style="font-size: 16px;">⚠️</span>
-              <span><strong>KYC Action Required:</strong> Identity verification was declined. Please resubmit your document.</span>
+          <div style="background: ${isResub ? '#FFFBEB' : '#FEF2F2'}; border: 1px solid ${isResub ? '#FDE68A' : '#FECACA'}; border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px; color: ${isResub ? '#B45309' : '#DC2626'};">
+              <span style="font-size: 16px;">${isResub ? '🔄' : '⚠️'}</span>
+              <span><strong>${isResub ? 'KYC Resubmission Requested:' : 'KYC Action Required:'}</strong> ${isResub ? 'Compliance requested updated identity documents. Please resubmit your KYC.' : 'Identity verification was declined. Please resubmit your document.'}</span>
             </div>
-            <button onclick="App.navigate('kyc')" style="background: #FEE2E2; border: 1px solid #EF4444; color: #DC2626; border-radius: 8px; padding: 4px 10px; font-size: 11px; cursor: pointer; font-weight: 700;">Resubmit KYC</button>
+            <button onclick="App.navigate('kyc')" style="background: ${isResub ? '#FEF3C7' : '#FEE2E2'}; border: 1px solid ${isResub ? '#F59E0B' : '#EF4444'}; color: ${isResub ? '#B45309' : '#DC2626'}; border-radius: 8px; padding: 4px 10px; font-size: 11px; cursor: pointer; font-weight: 700;">Resubmit KYC</button>
           </div>
         `;
       } else {
@@ -5794,6 +5803,9 @@ const App = {
 
   async logout() {
     try {
+      await this.sendUserHeartbeat(true);
+    } catch (e) {}
+    try {
       await this.api('/auth/logout.php', 'POST');
     } catch (e) {}
     
@@ -6063,6 +6075,92 @@ const App = {
     await Promise.all([usersPromise, supportPromise]);
   },
 
+  syncAdminQueueBadges(counts = {}) {
+    const updateBadge = (ids, count) => {
+      if (count === undefined || count === null || Number.isNaN(Number(count))) return;
+      const n = Math.max(0, Number(count));
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.textContent = String(n);
+          el.style.display = n > 0 ? 'inline-flex' : 'none';
+        }
+      });
+    };
+
+    if (counts.kyc !== undefined) {
+      const k = Math.max(0, Number(counts.kyc || 0));
+      updateBadge(['adm-badge-kyc', 'adm-pill-badge-kyc', 'adm-bottom-badge-kyc'], k);
+      const qKyc = document.getElementById('adm-quick-kyc');
+      const kpiKyc = document.getElementById('adm-kyc-pending');
+      if (qKyc) qKyc.textContent = k > 0 ? `${k} Pending` : 'All Clear';
+      if (kpiKyc) kpiKyc.textContent = String(k);
+    }
+
+    if (counts.withdrawals !== undefined) {
+      const w = Math.max(0, Number(counts.withdrawals || 0));
+      updateBadge(['adm-badge-with', 'adm-pill-badge-with', 'adm-bottom-badge-with'], w);
+      const qWith = document.getElementById('adm-quick-with');
+      if (qWith) qWith.textContent = w > 0 ? `${w} Pending` : 'All Clear';
+    }
+
+    if (counts.deposits !== undefined) {
+      const d = Math.max(0, Number(counts.deposits || 0));
+      updateBadge(['adm-badge-dep', 'adm-pill-badge-dep', 'adm-bottom-badge-dep'], d);
+      const qDep = document.getElementById('adm-quick-dep');
+      if (qDep) {
+        qDep.textContent = d > 0 ? `${d} Pending` : 'Vaults OK';
+        qDep.className = d > 0 ? 'av-adm-action-count warn' : 'av-adm-action-count good';
+      }
+    }
+
+    if (counts.supportNeeds !== undefined || counts.supportOpen !== undefined) {
+      const needs = Math.max(0, Number(counts.supportNeeds ?? 0));
+      const open = Math.max(0, Number(counts.supportOpen ?? needs));
+      updateBadge(['adm-badge-support', 'adm-pill-badge-support'], needs);
+      const qSup = document.getElementById('adm-quick-support');
+      if (qSup) {
+        if (needs > 0) {
+          qSup.textContent = `${needs} Needs Reply`;
+          qSup.className = 'av-adm-action-count warn';
+        } else {
+          qSup.textContent = `${open} Open`;
+          qSup.className = 'av-adm-action-count';
+        }
+      }
+    }
+
+    if (counts.onlineNow !== undefined) {
+      updateBadge(['adm-badge-online', 'adm-pill-badge-online'], counts.onlineNow);
+    }
+  },
+
+  async refreshAdminBadges() {
+    if (!this.state.user || this.state.currentView !== 'admin' || !this.isStaffOrAdmin(this.state.user)) return;
+    if (this._refreshAdminBadgesBusy) return;
+    this._refreshAdminBadgesBusy = true;
+    try {
+      const res = await this.api('/admin/overview.php');
+      if (res && res.success && res.data) {
+        this.state.adminMetrics = res.data;
+        const m = res.data.metrics || {};
+        this.syncAdminQueueBadges({
+          kyc: m.kyc_pending ?? 0,
+          deposits: m.pending_deposits ?? 0,
+          withdrawals: m.pending_withdrawals ?? 0,
+          supportNeeds: m.support_needs_reply ?? 0,
+          supportOpen: m.support_open ?? 0
+        });
+        if (this.state.adminTab === 'overview') {
+          this.renderAdminOverviewPendingKyc(res.data.pending_kyc_preview || []);
+        }
+      }
+    } catch (e) {}
+    finally {
+      this._refreshAdminBadgesBusy = false;
+    }
+  },
+
   renderAdminOverview() {
     const data = this.state.adminMetrics;
     if (!data) return;
@@ -6095,33 +6193,85 @@ const App = {
       btnLabel.textContent = mode === 'LIVE' ? 'DEMO' : 'LIVE';
     }
 
-    // Update Quick Counts & Badges across Sidebar, Mobile Pill Nav, Quick Circles, and Mobile Bottom Bar
-    const qKyc = document.getElementById('adm-quick-kyc');
-    const qWith = document.getElementById('adm-quick-with');
-    const qDep = document.getElementById('adm-quick-dep');
-    const kycCount = m.kyc_pending || 0;
-    const withCount = m.pending_withdrawals || 0;
-    const depCount = m.pending_deposits || 0;
+    this.syncAdminQueueBadges({
+      kyc: m.kyc_pending || 0,
+      withdrawals: m.pending_withdrawals || 0,
+      deposits: m.pending_deposits || 0,
+      supportNeeds: m.support_needs_reply ?? undefined,
+      supportOpen: m.support_open ?? undefined
+    });
 
-    if (qKyc) qKyc.textContent = kycCount > 0 ? `${kycCount} Pending` : 'All Clear';
-    if (qWith) qWith.textContent = withCount > 0 ? `${withCount} Pending` : 'All Clear';
-    if (qDep) qDep.textContent = depCount > 0 ? `${depCount} Pending` : 'Vaults OK';
-
-    const updateBadge = (ids, count) => {
-      ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-          el.textContent = count;
-          el.style.display = (count > 0) ? 'inline-flex' : 'none';
-        }
-      });
-    };
-
-    updateBadge(['adm-badge-kyc', 'adm-pill-badge-kyc', 'adm-bottom-badge-kyc'], kycCount);
-    updateBadge(['adm-badge-with', 'adm-pill-badge-with', 'adm-bottom-badge-with'], withCount);
-    updateBadge(['adm-badge-dep', 'adm-pill-badge-dep', 'adm-bottom-badge-dep'], depCount);
-
+    this.renderAdminOverviewPendingKyc(data.pending_kyc_preview || []);
     this.renderAdminAnalyticsChart(this.state.adminAnalyticsSeries || 'deposits');
+  },
+
+  renderAdminOverviewPendingKyc(list = []) {
+    const countEl = document.getElementById('adm-overview-pending-kyc-count');
+    const host = document.getElementById('adm-overview-pending-kyc-list');
+    const items = Array.isArray(list) ? list : [];
+
+    if (countEl) {
+      countEl.textContent = `${items.length} Pending`;
+      countEl.className = items.length > 0 ? 'badge badge-warning' : 'badge badge-positive';
+    }
+    if (!host) return;
+
+    if (!items.length) {
+      host.innerHTML = `<div style="padding:18px; text-align:center; color:#64748B; font-size:12.5px;">All identity submissions reviewed — zero pending KYC requests.</div>`;
+      return;
+    }
+
+    host.innerHTML = items.slice(0, 8).map(item => {
+      const idStr = String(item.id || '');
+      const initial = this.escapeHtml(String(item.legal_name || item.email || 'U').trim().charAt(0).toUpperCase() || 'U');
+      const when = this.escapeHtml(this.formatAdminDate(item.created_at));
+      const uidTag = item.numeric_uid ? ` · UID #${this.escapeHtml(String(item.numeric_uid))}` : '';
+      return `
+        <div class="av-adm-overview-kyc-row">
+          <div class="av-adm-overview-kyc-user">
+            <span class="av-adm-user-avatar" aria-hidden="true">${initial}</span>
+            <div style="min-width:0;">
+              <div style="font-size:13.5px; font-weight:800; color:#0F172A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${this.escapeHtml(item.legal_name || 'Applicant')}</div>
+              <div style="font-size:11.5px; color:#64748B; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${this.escapeHtml(item.email || '')}${uidTag} · ${this.escapeHtml(item.country || 'Global')}</div>
+              <div style="font-size:11px; color:#94A3B8; margin-top:2px;">${this.escapeHtml(item.document_type || 'ID Card')} · Submitted ${when}</div>
+            </div>
+          </div>
+          <div class="av-adm-overview-kyc-actions">
+            <button type="button" class="av-adm-btn-chip soft-blue" onclick="App.openKycFromOverview('${this.escapeJsStr(idStr)}')">Inspect Docs</button>
+            <button type="button" class="av-adm-btn-chip green" onclick="App.quickOverviewKycDecision('${this.escapeJsStr(idStr)}', 'APPROVED')">Approve</button>
+            <button type="button" class="av-adm-btn-chip danger" onclick="App.quickOverviewKycDecision('${this.escapeJsStr(idStr)}', 'REJECTED')">Reject</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  async openKycFromOverview(subId) {
+    this.state.selectedKycId = String(subId || '');
+    await this.setAdminTab('kyc');
+    if (this.state.selectedKycId) {
+      this.filterAdminKyc();
+    }
+  },
+
+  async quickOverviewKycDecision(subId, decision) {
+    const reason = decision === 'APPROVED'
+      ? 'Identity and documents verified successfully'
+      : 'Document illegible or information mismatch';
+    const res = await this.api('/admin/kyc.php', 'POST', {
+      submission_id: subId,
+      decision,
+      reason
+    });
+    if (res && res.success) {
+      this.toast(`KYC submission ${decision.toLowerCase()} successfully`, 'success');
+      await this.loadAdminData();
+      if (this.state.adminTab === 'kyc') {
+        await this.loadAdminKyc();
+      }
+    } else {
+      this.toast(res?.message || 'Failed to update KYC decision', 'error');
+    }
   },
 
   setAdminAnalyticsSeries(series, btnEl) {
@@ -6282,7 +6432,7 @@ const App = {
 
   setAdminTab(tab) {
     const allowedTabs = [
-      'overview', 'users', 'referrals', 'deposits', 'withdrawals',
+      'overview', 'analytics', 'users', 'referrals', 'deposits', 'withdrawals',
       'kyc', 'support', 'signals', 'signal-schedules', 'adjustments', 'settings'
     ];
     if (!allowedTabs.includes(tab)) {
@@ -6306,6 +6456,7 @@ const App = {
 
     const tabTitles = {
       overview: 'Overview Dashboard',
+      analytics: 'Live User Analytics & Tracking',
       signals: 'Signal Studio (6 PM / 8 PM / 9:30 PM)',
       deposits: 'Incoming Deposits',
       withdrawals: 'Withdrawals Desk',
@@ -6339,6 +6490,18 @@ const App = {
         this.loadAdminUsers();
       }
       this.loadAdminSupport({ silent: true }).catch(() => {});
+    }
+    if (tab === 'analytics') {
+      this.loadAdminAnalytics();
+      if (this._adminAnalyticsPollTimer) clearInterval(this._adminAnalyticsPollTimer);
+      this._adminAnalyticsPollTimer = setInterval(() => {
+        if (!document.hidden && this.state?.adminTab === 'analytics' && this.state?.currentView === 'admin') {
+          this.loadAdminAnalytics({ silent: true });
+        }
+      }, 12000);
+    } else if (this._adminAnalyticsPollTimer) {
+      clearInterval(this._adminAnalyticsPollTimer);
+      this._adminAnalyticsPollTimer = null;
     }
     if (tab === 'users') this.loadAdminUsers();
     if (tab === 'kyc') this.loadAdminKyc();
@@ -8658,20 +8821,25 @@ const App = {
 
   filterAdminKyc() {
     const allSubs = Array.isArray(this.state.adminKycList) ? this.state.adminKycList : [];
-    const pendingTotal = allSubs.filter(s => (s.status || 'PENDING').toUpperCase() === 'PENDING').length;
+    const pendingTotal = allSubs.filter(s => ['PENDING', 'UNDER_REVIEW'].includes((s.status || 'PENDING').toUpperCase())).length;
     const approvedTotal = allSubs.filter(s => (s.status || '').toUpperCase() === 'APPROVED').length;
 
     const pendingEl = document.getElementById('adm-kyc-count-pending');
     const approvedEl = document.getElementById('adm-kyc-count-approved');
     if (pendingEl) pendingEl.textContent = `${pendingTotal} Pending Reviews`;
     if (approvedEl) approvedEl.textContent = `${approvedTotal} Approved`;
+    this.syncAdminQueueBadges({ kyc: pendingTotal });
 
     const q = (document.getElementById('adm-kyc-search')?.value || '').trim().toLowerCase();
     const statusFilter = (document.getElementById('adm-kyc-filter')?.value || 'ALL').toUpperCase();
 
     const filtered = allSubs.filter(s => {
       const st = (s.status || 'PENDING').toUpperCase();
-      if (statusFilter !== 'ALL' && st !== statusFilter) return false;
+      if (statusFilter === 'PENDING') {
+        if (!['PENDING', 'UNDER_REVIEW'].includes(st)) return false;
+      } else if (statusFilter !== 'ALL' && st !== statusFilter) {
+        return false;
+      }
       if (!q) return true;
       return (
         String(s.email || '').toLowerCase().includes(q) ||
@@ -8702,7 +8870,9 @@ const App = {
       const st = (s.status || 'PENDING').toUpperCase();
       const activeCls = String(s.id) === String(this.state.selectedKycId) ? 'active' : '';
       const badgeCls = st === 'APPROVED' ? 'badge-positive' : (st === 'REJECTED' ? 'badge-negative' : 'badge-warning');
-      const badgeLabel = st === 'PENDING' ? 'Awaiting Review' : st;
+      const badgeLabel = (st === 'PENDING' || st === 'UNDER_REVIEW')
+        ? 'Awaiting Review'
+        : (st === 'RESUBMIT_REQUIRED' ? 'Resubmit Req' : st);
       const initial = this.escapeHtml(String(s.legal_name || s.email || 'U').trim().charAt(0).toUpperCase() || 'U');
       const sidEsc = this.escapeHtml(String(s.id || ''));
       return `
@@ -8737,6 +8907,7 @@ const App = {
     const esc = v => this.escapeHtml(v ?? '—');
     const st = (s.status || 'PENDING').toUpperCase();
     const badgeCls = st === 'APPROVED' ? 'badge-positive' : (st === 'REJECTED' ? 'badge-negative' : 'badge-warning');
+    const stDisplay = st === 'RESUBMIT_REQUIRED' ? 'RESUBMIT REQUESTED' : st;
     const docCard = (label, url) => `
       <div class="av-adm-kyc-doc-card">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
@@ -8753,6 +8924,43 @@ const App = {
       </div>
     `;
 
+    let actionPanelHtml = '';
+    if (st === 'APPROVED' || st === 'REJECTED') {
+      const isApproved = st === 'APPROVED';
+      actionPanelHtml = `
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:10px 12px; border-radius:11px; background:${isApproved ? '#ECFDF5' : '#FEF2F2'}; border:1px solid ${isApproved ? '#A7F3D0' : '#FECACA'};">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="badge ${isApproved ? 'badge-positive' : 'badge-negative'}" style="font-size:12px; padding:5px 12px; font-weight:800;">${isApproved ? '✓ Approved' : '✕ Rejected'}</span>
+              <span style="font-size:12px; font-weight:600; color:${isApproved ? '#047857' : '#B91C1C'};">${isApproved ? 'Identity verification approved' : 'Identity verification declined'}</span>
+            </div>
+            <button type="button" class="av-adm-btn-chip cobalt" style="min-height:38px; padding:7px 16px;" onclick="App.submitInlineKycDecision('${esc(s.id)}', 'RESUBMIT_REQUIRED')">↻ Resubmit</button>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input type="text" id="kyc-inline-reason" placeholder="Optional instruction if requesting KYC resubmission..." style="flex:1 1 200px; min-width:0;" value="${esc(s.review_reason || '')}">
+          </div>
+        </div>
+      `;
+    } else if (st === 'RESUBMIT_REQUIRED') {
+      actionPanelHtml = `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:10px 12px; border-radius:11px; background:#FFFBEB; border:1px solid #FDE68A;">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span class="badge badge-warning" style="font-size:12px; padding:5px 12px; font-weight:800;">↻ Resubmit Requested</span>
+            <span style="font-size:12px; font-weight:600; color:#B45309;">User has been prompted to re-upload documents and resubmit KYC.</span>
+          </div>
+        </div>
+      `;
+    } else {
+      actionPanelHtml = `
+        <label class="form-label" for="kyc-inline-reason">Compliance Review Note / Reason</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <input type="text" id="kyc-inline-reason" placeholder="Reason for approval or rejection..." style="flex:1 1 180px; min-width:0;" value="${esc(s.review_reason || '')}">
+          <button type="button" class="av-adm-btn-chip danger" style="min-height:42px; padding:8px 16px;" onclick="App.submitInlineKycDecision('${esc(s.id)}', 'REJECTED')">Reject Request</button>
+          <button type="button" class="av-adm-btn-chip cobalt" style="min-height:42px; padding:8px 18px;" onclick="App.submitInlineKycDecision('${esc(s.id)}', 'APPROVED')">Approve KYC Verification</button>
+        </div>
+      `;
+    }
+
     inspectorEl.innerHTML = `
       <div class="card" style="padding:16px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
@@ -8761,7 +8969,7 @@ const App = {
             <h3 style="margin:3px 0 2px; font-size:17px; font-weight:800;">${esc(s.legal_name || s.email || 'Applicant')} — #${esc(s.id)}</h3>
             <div style="font-size:12.5px; color:#4B5563;">${esc(s.email)} • ${esc(s.country || 'Global')}</div>
           </div>
-          <span class="badge ${badgeCls}" style="font-size:12px; padding:6px 12px;">${st}</span>
+          <span class="badge ${badgeCls}" style="font-size:12px; padding:6px 12px;">${stDisplay}</span>
         </div>
       </div>
 
@@ -8788,26 +8996,30 @@ const App = {
       </div>
 
       <div class="card" style="padding:16px;">
-        <label class="form-label" for="kyc-inline-reason">Compliance Review Note / Reason</label>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <input type="text" id="kyc-inline-reason" placeholder="Reason for approval or rejection..." style="flex:1 1 180px; min-width:0;" value="${esc(s.review_reason || '')}">
-          <button type="button" class="av-adm-btn-chip danger" style="min-height:42px; padding:8px 16px;" onclick="App.submitInlineKycDecision('${esc(s.id)}', 'REJECTED')">Reject Request</button>
-          <button type="button" class="av-adm-btn-chip cobalt" style="min-height:42px; padding:8px 18px;" onclick="App.submitInlineKycDecision('${esc(s.id)}', 'APPROVED')">Approve KYC Verification</button>
-        </div>
+        ${actionPanelHtml}
       </div>
     `;
   },
 
   async submitInlineKycDecision(subId, decision) {
+    const norm = String(decision || 'APPROVED').toUpperCase();
     const inlineReason = document.getElementById('kyc-inline-reason')?.value?.trim();
-    const reason = inlineReason || (decision === 'APPROVED' ? 'Identity and documents verified successfully' : 'Document illegible or information mismatch');
+    const defaultReason = norm === 'APPROVED'
+      ? 'Identity and documents verified successfully'
+      : (norm === 'RESUBMIT_REQUIRED'
+        ? 'Please upload clearer identity documents and resubmit your KYC verification.'
+        : 'Document illegible or information mismatch');
+    const reason = inlineReason || defaultReason;
     const res = await this.api('/admin/kyc.php', 'POST', {
       submission_id: subId,
-      decision,
+      decision: norm,
       reason
     });
     if (res.success) {
-      this.toast(`KYC submission successfully ${decision.toLowerCase()}`, 'success');
+      const msg = norm === 'RESUBMIT_REQUIRED'
+        ? 'KYC resubmission requested from user'
+        : `KYC submission successfully ${norm.toLowerCase()}`;
+      this.toast(msg, 'success');
       await this.loadAdminKyc();
       this.loadAdminData();
     } else {
@@ -8925,6 +9137,7 @@ const App = {
     if (elBatchAmt) elBatchAmt.textContent = `$${Number(batchAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     if (elTodayAmt) elTodayAmt.textContent = `$${Number(todayAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
     if (elTodayCnt) elTodayCnt.textContent = `${todayCnt} approved today`;
+    this.syncAdminQueueBadges({ withdrawals: pendingCount });
   },
 
   toggleWithdrawBatchMode(enabled) {
@@ -9265,6 +9478,7 @@ const App = {
     if (elPendAmt) elPendAmt.textContent = `$${Number(pendingAmt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Awaiting Review`;
     if (elChains) elChains.textContent = `${nets.length || 3} Chains Active`;
     if (elChainsList) elChainsList.textContent = nets.join(', ');
+    this.syncAdminQueueBadges({ deposits: pendingCount });
   },
 
   setAdminDepositNetworkFilter(net = 'ALL', btn) {
@@ -10243,6 +10457,7 @@ const App = {
    */
   startPolling() {
     if (this._pollingInterval) clearInterval(this._pollingInterval);
+    if (this._adminBadgePollInterval) clearInterval(this._adminBadgePollInterval);
     if (this._balanceFastInterval) clearInterval(this._balanceFastInterval);
     if (this._tickerPollInterval) clearInterval(this._tickerPollInterval);
     if (this._notificationPollInterval) clearInterval(this._notificationPollInterval);
@@ -10276,7 +10491,13 @@ const App = {
       this.loadPositions();
     }, 10000);
 
-    // Admin overview is deliberately slow and only active on the admin view.
+    // Fast Admin Sidebar/Top Badge Sync (6s across ALL admin tabs — fixes 2-3 min deposit badge lag)
+    this._adminBadgePollInterval = setInterval(() => {
+      if (document.hidden || !this.state.user || this.state.currentView !== 'admin' || !this.isStaffOrAdmin(this.state.user)) return;
+      this.refreshAdminBadges();
+    }, 6000);
+
+    // Admin view-specific refresh
     this._pollingInterval = setInterval(() => {
       if (document.hidden || !this.state.user) return;
       if (this.state.currentView === 'admin' && this.state.adminTab === 'overview') {
@@ -10284,7 +10505,7 @@ const App = {
       } else if (this.state.currentView === 'admin' && this.state.adminTab === 'deposits') {
         this.loadAdminDeposits();
       }
-    }, 30000);
+    }, 20000);
   },
 
   render() {
@@ -10934,9 +11155,12 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       if (kyc === 'APPROVED') {
         badge.textContent = 'Verified (Tier 2) ✓';
         badge.style.color = '#00c087';
-      } else if (kyc === 'PENDING') {
+      } else if (kyc === 'PENDING' || kyc === 'UNDER_REVIEW') {
         badge.textContent = 'Pending Review ⏳';
         badge.style.color = '#f59e0b';
+      } else if (kyc === 'RESUBMIT_REQUIRED') {
+        badge.textContent = 'Resubmit Requested ↻';
+        badge.style.color = '#d97706';
       } else if (kyc === 'REJECTED') {
         badge.textContent = 'Rejected (Resubmit) ✕';
         badge.style.color = '#ef4444';
@@ -10957,13 +11181,23 @@ STORAGE_BUCKET_MARKETING=marketing-assets
             </div>
           </div>
         `;
-      } else if (kyc === 'PENDING') {
+      } else if (kyc === 'PENDING' || kyc === 'UNDER_REVIEW') {
         bannerBox.innerHTML = `
           <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 10px; padding: 14px; display: flex; align-items: center; gap: 12px;">
             <div style="font-size: 26px;">⏳</div>
             <div>
               <div style="font-weight: 700; color: #f59e0b; font-size: 14px;">Verification Under Compliance Review</div>
               <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Your documents have been encrypted and submitted to the institutional compliance queue. Review is typically completed within 1 to 2 hours.</div>
+            </div>
+          </div>
+        `;
+      } else if (kyc === 'RESUBMIT_REQUIRED') {
+        bannerBox.innerHTML = `
+          <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 10px; padding: 14px; display: flex; align-items: center; gap: 12px;">
+            <div style="font-size: 26px;">🔄</div>
+            <div>
+              <div style="font-weight: 700; color: #D97706; font-size: 14px;">KYC Resubmission Requested</div>
+              <div style="font-size: 12px; color: #92400E; margin-top: 2px;">Compliance requested that you re-upload your identity photos and resubmit KYC verification below.</div>
             </div>
           </div>
         `;
@@ -11151,10 +11385,14 @@ STORAGE_BUCKET_MARKETING=marketing-assets
         el.textContent = 'Verified (Tier 2)';
         el.className = 'badge badge-positive';
         el.style.color = '#00c087';
-      } else if (kyc === 'PENDING') {
+      } else if (kyc === 'PENDING' || kyc === 'UNDER_REVIEW') {
         el.textContent = 'Pending Review';
         el.className = 'badge badge-warning';
         el.style.color = '#f59e0b';
+      } else if (kyc === 'RESUBMIT_REQUIRED') {
+        el.textContent = 'Resubmit Required';
+        el.className = 'badge badge-warning';
+        el.style.color = '#d97706';
       } else if (kyc === 'REJECTED') {
         el.textContent = 'Rejected';
         el.className = 'badge badge-negative';
@@ -11992,13 +12230,28 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     return Number.isNaN(fallback) ? 0 : fallback;
   },
 
+  isValidUserNotification(item) {
+    if (!item || typeof item !== 'object') return false;
+    const id = String(item.id || '').trim().toLowerCase();
+    const type = String(item.type || '').trim().toUpperCase();
+    const title = String(item.title || '').trim().toLowerCase();
+    const message = String(item.message || '').trim();
+    if (type === 'READ_CURSOR') return false;
+    if (id.startsWith('notif_read_cursor_') || id.startsWith('notif_db_notif_read_cursor_')) return false;
+    if (title === 'notification read state') return false;
+    if (/^\s*\{.*"ids"\s*:.*"before_ts"\s*:/s.test(message) || message.includes('"before_ts":')) return false;
+    if (/^\s*\{.*"ids"\s*:.*"before_ts"\s*:/s.test(String(item.title || ''))) return false;
+    return true;
+  },
+
   applyLocalNotificationReadState(list) {
     const readStore = this.getLocalReadNotifs();
     const idSet = new Set(readStore.ids || []);
     const beforeMs = Number(readStore.beforeTs || 0);
     let unreadCount = 0;
 
-    const mapped = (Array.isArray(list) ? list : []).map(item => {
+    const clean = (Array.isArray(list) ? list : []).filter(item => this.isValidUserNotification(item));
+    const mapped = clean.map(item => {
       const copy = { ...item };
       const id = String(copy.id || '');
       const createdMs = this.parseNotifTimestampMs(copy.created_at);
@@ -12095,7 +12348,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     if (tab === 'notifications') {
       if (subTitle) subTitle.textContent = 'Real-time account alerts & trade executions';
       if (actionsBar) actionsBar.style.display = 'flex';
-      const list = this.state.notifications || [];
+      const list = (this.state.notifications || []).filter(item => this.isValidUserNotification(item));
       if (!list.length) {
         listEl.innerHTML = `
           <div style="text-align: center; padding: 40px 16px; color: #6B7280;">
@@ -12178,12 +12431,13 @@ STORAGE_BUCKET_MARKETING=marketing-assets
         if (!this.state.adminPreviewUserId && (srvReadIds.length || srvBeforeSec > 0)) {
           this.saveLocalReadNotifs(srvReadIds, srvBeforeSec > 0 ? (srvBeforeSec * 1000) : 0);
         }
+        const cleanList = (Array.isArray(res.data.notifications) ? res.data.notifications : []).filter(item => this.isValidUserNotification(item));
         const applied = this.state.adminPreviewUserId
           ? {
-              notifications: Array.isArray(res.data.notifications) ? res.data.notifications : [],
-              unreadCount: Number(res.data.unread_count || 0)
+              notifications: cleanList,
+              unreadCount: cleanList.filter(item => Number(item.is_read || 0) === 0).length
             }
-          : this.applyLocalNotificationReadState(res.data.notifications || []);
+          : this.applyLocalNotificationReadState(cleanList);
         this.state.notifications = applied.notifications;
         this.state.unreadNotificationsCount = applied.unreadCount;
         this.writeFastCache('notifications', {
@@ -12232,7 +12486,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     const banner = document.getElementById('home-active-notification-banner');
     if (!banner) return;
 
-    const list = this.state.notifications || [];
+    const list = (this.state.notifications || []).filter(item => this.isValidUserNotification(item));
     if (!list.length) {
       banner.style.display = 'none';
       return;
@@ -12265,6 +12519,12 @@ STORAGE_BUCKET_MARKETING=marketing-assets
       borderColor = '#A7F3D0';
       badgeBg = '#ECFDF5';
       badgeColor = '#059669';
+    } else if (latest.type?.includes('KYC_RESUBMIT')) {
+      icon = '🔄';
+      badgeText = 'KYC RESUBMIT';
+      borderColor = '#FDE68A';
+      badgeBg = '#FFFBEB';
+      badgeColor = '#D97706';
     } else if (latest.type?.includes('KYC_REJECTED')) {
       icon = '❌';
       badgeText = 'KYC DECLINED';
@@ -12346,7 +12606,7 @@ STORAGE_BUCKET_MARKETING=marketing-assets
     }
 
     if (subTitleEl) subTitleEl.textContent = 'Real-time account alerts & trade executions';
-    const list = this.state.notifications || [];
+    const list = (this.state.notifications || []).filter(item => this.isValidUserNotification(item));
     if (!list.length) {
       listEl.innerHTML = `
         <div class="av-notif-empty">
@@ -12381,6 +12641,11 @@ STORAGE_BUCKET_MARKETING=marketing-assets
         toneClass = 'is-success';
         tagText = 'KYC VERIFIED';
         actionBtn = `<button type="button" class="av-notif-action-btn" onclick="App.closeModal('modal-notifications'); App.navigate('futures');">Start Trading →</button>`;
+      } else if (nType === 'KYC_RESUBMIT_REQUIRED') {
+        icon = '🔄';
+        toneClass = 'is-warning';
+        tagText = 'KYC RESUBMIT';
+        actionBtn = `<button type="button" class="av-notif-action-btn" onclick="App.closeModal('modal-notifications'); App.navigate('kyc');">Resubmit KYC →</button>`;
       } else if (nType === 'KYC_REJECTED') {
         icon = '❌';
         toneClass = 'is-danger';
@@ -13307,7 +13572,9 @@ STORAGE_BUCKET_MARKETING=marketing-assets
   async selectAdminSupportTicket(ticketId) {
     this.state.adminSupportActiveId = ticketId;
     const splitEl = document.getElementById('adm-sup-split');
+    const secEl = document.getElementById('adm-sec-support');
     if (splitEl) splitEl.classList.add('is-thread-open');
+    if (secEl) secEl.classList.add('is-mobile-thread-open');
     this.filterAdminSupport();
 
     const res = await this.api(`/admin/support.php?ticket_id=${encodeURIComponent(ticketId)}`);
@@ -13326,7 +13593,9 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
   closeMobileSupportThread() {
     const splitEl = document.getElementById('adm-sup-split');
+    const secEl = document.getElementById('adm-sec-support');
     if (splitEl) splitEl.classList.remove('is-thread-open');
+    if (secEl) secEl.classList.remove('is-mobile-thread-open');
   },
 
   updateAdminSupportCharCount() {
@@ -13594,8 +13863,11 @@ STORAGE_BUCKET_MARKETING=marketing-assets
         if (kyc === 'APPROVED') {
           kycEl.textContent = 'Verified';
           kycEl.className = 'badge badge-positive';
-        } else if (kyc === 'PENDING') {
+        } else if (kyc === 'PENDING' || kyc === 'UNDER_REVIEW') {
           kycEl.textContent = 'Pending';
+          kycEl.className = 'badge badge-warning';
+        } else if (kyc === 'RESUBMIT_REQUIRED') {
+          kycEl.textContent = 'Resubmit';
           kycEl.className = 'badge badge-warning';
         } else {
           kycEl.textContent = 'Not Verified';
@@ -13607,8 +13879,12 @@ STORAGE_BUCKET_MARKETING=marketing-assets
           miniKycEl.textContent = 'Verified';
           miniKycEl.style.background = '#ECFDF5';
           miniKycEl.style.color = '#059669';
-        } else if (kyc === 'PENDING') {
+        } else if (kyc === 'PENDING' || kyc === 'UNDER_REVIEW') {
           miniKycEl.textContent = 'Pending';
+          miniKycEl.style.background = '#FFFBEB';
+          miniKycEl.style.color = '#D97706';
+        } else if (kyc === 'RESUBMIT_REQUIRED') {
+          miniKycEl.textContent = 'Resubmit';
           miniKycEl.style.background = '#FFFBEB';
           miniKycEl.style.color = '#D97706';
         } else {
@@ -14823,6 +15099,496 @@ STORAGE_BUCKET_MARKETING=marketing-assets
 
   openFaqAnswer(title = 'Help Topic', body = '') {
     this.toast(`${title}: ${body || 'Contact 24/7 support for full guidance.'}`, 'info');
+  },
+
+  /* ==========================================================================
+     REAL-TIME PRESENCE HEARTBEAT & ADMIN ANALYTICS COMMAND DESK
+     ========================================================================== */
+  _readCsrfCookieValue() {
+    try {
+      const m = document.cookie.match(/(?:^|;\s*)alphavest_csrf=([^;]+)/);
+      return m ? decodeURIComponent(m[1]).trim() : '';
+    } catch (e) {
+      return '';
+    }
+  },
+
+  detectClientRuntimeMeta() {
+    const ua = navigator.userAgent || '';
+    let device = 'Desktop';
+    if (/iPad|Tablet|PlayBook|Silk|(Android(?!.*Mobile))/i.test(ua)) device = 'Tablet';
+    else if (/Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) device = 'Mobile';
+
+    let os = 'Desktop OS';
+    if (/Android/i.test(ua)) os = 'Android';
+    else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+    else if (/Windows/i.test(ua)) os = 'Windows';
+    else if (/Mac OS X|Macintosh/i.test(ua)) os = 'macOS';
+    else if (/Linux/i.test(ua)) os = 'Linux';
+
+    let browser = 'Browser';
+    if (/Edg\//i.test(ua)) browser = 'Edge';
+    else if (/OPR\/|Opera/i.test(ua)) browser = 'Opera';
+    else if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua)) browser = 'Chrome';
+    else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = 'Safari';
+    else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+
+    return { device, os, browser };
+  },
+
+  async sendUserHeartbeat(isOffline = false, forcedView = null) {
+    if (!this.state.user) return;
+    const view = String(forcedView || this.state.currentView || 'home');
+    const meta = this.detectClientRuntimeMeta();
+    const payload = {
+      view: view === 'admin' && this.state.adminTab ? `admin:${this.state.adminTab}` : view,
+      page_title: document.title || 'Prime X Capital',
+      offline: Boolean(isOffline),
+      device: meta.device,
+      os: meta.os,
+      browser: meta.browser
+    };
+
+    if (isOffline) {
+      try {
+        const csrf = this._readCsrfCookieValue();
+        const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+        if (csrf) headers['X-CSRF-Token'] = csrf;
+        await fetch('/api/user/heartbeat.php', {
+          method: 'POST',
+          keepalive: true,
+          credentials: 'include',
+          headers,
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {}
+      return;
+    }
+
+    try {
+      await this.api('/user/heartbeat.php', 'POST', payload, 0);
+    } catch (e) {}
+  },
+
+  startPresenceTracking() {
+    if (!this._presenceListenersAttached) {
+      this._presenceListenersAttached = true;
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this.state.user) {
+          this.sendUserHeartbeat(false, this.state.currentView || 'home');
+          if (this.state.currentView === 'admin' && this.isStaffOrAdmin(this.state.user)) {
+            this.refreshAdminBadges();
+            if (this.state.adminTab === 'analytics') {
+              this.loadAdminAnalytics({ silent: true });
+            }
+          }
+        }
+      });
+      window.addEventListener('focus', () => {
+        if (this.state.user && this.state.currentView === 'admin' && this.isStaffOrAdmin(this.state.user)) {
+          this.refreshAdminBadges();
+        }
+      });
+      const sendOfflineBeacon = () => {
+        if (this.state.user) {
+          this.sendUserHeartbeat(true, this.state.currentView || 'home');
+        }
+      };
+      window.addEventListener('pagehide', sendOfflineBeacon);
+      window.addEventListener('beforeunload', sendOfflineBeacon);
+    }
+
+    if (this._presenceInterval) clearInterval(this._presenceInterval);
+    this._presenceInterval = setInterval(() => {
+      if (!document.hidden && this.state.user) {
+        this.sendUserHeartbeat(false, this.state.currentView || 'home');
+      }
+    }, 20000);
+  },
+
+  async loadAdminAnalytics(opts = {}) {
+    const silent = Boolean(opts && opts.silent);
+    const manual = Boolean(opts && opts.manual);
+    const btn = document.getElementById('btn-adm-ana-refresh');
+    if (manual && btn) {
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+    }
+
+    try {
+      const res = await this.api('/admin/analytics.php');
+      if (res && res.success && res.data) {
+        this.state.adminAnalyticsData = res.data;
+        if (!this.state.adminAnalyticsChartType) this.state.adminAnalyticsChartType = 'signups';
+        if (!this.state.adminAnalyticsPresenceFilter) this.state.adminAnalyticsPresenceFilter = 'ALL';
+        this.renderAdminAnalytics();
+        if (manual) {
+          this.toast('Live user presence & analytics synced', 'success');
+        }
+      } else if (!silent) {
+        this.toast(res?.message || 'Unable to load real-time analytics.', 'error');
+      }
+    } catch (e) {
+      if (!silent) this.toast('Failed to fetch live analytics.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('is-loading');
+      }
+    }
+  },
+
+  setAdminAnalyticsChartType(metric = 'signups') {
+    const allowed = ['signups', 'deposits', 'withdrawals', 'executions'];
+    const target = allowed.includes(metric) ? metric : 'signups';
+    this.state.adminAnalyticsChartType = target;
+    document.querySelectorAll('.av-adm-ana-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-ana-metric') === target);
+    });
+    const series = Array.isArray(this.state.adminAnalyticsData?.daily_series)
+      ? this.state.adminAnalyticsData.daily_series
+      : [];
+    this.renderAnalyticsSeriesSvg(series, target);
+  },
+
+  setAdminAnalyticsPresenceFilter(status = 'ALL') {
+    const allowed = ['ALL', 'ONLINE', 'IDLE', 'OFFLINE'];
+    const target = allowed.includes(String(status).toUpperCase()) ? String(status).toUpperCase() : 'ALL';
+    this.state.adminAnalyticsPresenceFilter = target;
+    document.querySelectorAll('.av-adm-ana-chip').forEach(btn => {
+      btn.classList.toggle('active', String(btn.getAttribute('data-presence') || '').toUpperCase() === target);
+    });
+    this.filterAdminAnalyticsTable();
+  },
+
+  formatPresenceAgo(tsSec, fallbackIso = '') {
+    const nowSec = Math.floor(Date.now() / 1000);
+    let targetSec = Number(tsSec || 0);
+    if (!targetSec && fallbackIso) {
+      const parsed = this.parseNotifTimestampMs(fallbackIso);
+      if (parsed > 0) targetSec = Math.floor(parsed / 1000);
+    }
+    if (!targetSec) return 'No activity yet';
+    const diff = Math.max(0, nowSec - targetSec);
+    if (diff < 20) return 'Just now';
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  },
+
+  formatDurationShort(sec) {
+    const s = Math.max(0, Math.floor(Number(sec || 0)));
+    if (s < 60) return `${s}s`;
+    const mins = Math.floor(s / 60);
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    const remM = mins % 60;
+    return remM > 0 ? `${hrs}h ${remM}m` : `${hrs}h`;
+  },
+
+  formatViewDisplayName(viewSlug) {
+    const raw = String(viewSlug || '').trim();
+    if (!raw) return 'Not active';
+    const map = {
+      home: 'Home Dashboard',
+      market: 'Markets Overview',
+      futures: 'Futures Terminal',
+      signals: 'Trading Signals',
+      wallet: 'Wallet & Vaults',
+      referrals: 'Referral Network',
+      kyc: 'KYC Verification',
+      settings: 'Account Settings',
+      security: 'Security Center',
+      notice: 'Notifications',
+      records: 'Order Records',
+      ledger: 'Ledger History'
+    };
+    if (raw.startsWith('admin:')) {
+      return `Admin · ${raw.slice(6).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`;
+    }
+    return map[raw] || raw.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  },
+
+  renderAdminAnalytics() {
+    const data = this.state.adminAnalyticsData;
+    if (!data) return;
+    const s = data.summary || {};
+
+    const totalUsers = Number(s.total_users || 0);
+    const onlineNow = Number(s.online_now || 0);
+    const idleNow = Number(s.idle_now || 0);
+    const offlineNow = Number(s.offline_now || 0);
+    const onlinePct = totalUsers > 0 ? Math.round(((onlineNow + idleNow) / totalUsers) * 100) : 0;
+
+    const setText = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(val);
+    };
+
+    setText('adm-ana-online', onlineNow.toLocaleString());
+    setText('adm-ana-online-pct', `${onlinePct}% active right now`);
+    setText('adm-ana-idle', idleNow.toLocaleString());
+    setText('adm-ana-offline', offlineNow.toLocaleString());
+    setText('adm-ana-verified-sub', `${Number(s.verified_users || 0).toLocaleString()} KYC verified`);
+    setText('adm-ana-active-today', Number(s.active_today || 0).toLocaleString());
+    setText('adm-ana-new-today', `${Number(s.new_users_today || 0).toLocaleString()} new signups today`);
+    setText('adm-ana-deposits-today', `$${Number(s.deposits_today_usdt || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    setText('adm-ana-dep-total-sub', `$${Number(s.total_deposits_usdt || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} all-time`);
+    setText('adm-ana-execs-today', Number(s.signal_executions_today || 0).toLocaleString());
+    setText('adm-ana-exec-total-sub', `${Number(s.signal_executions_total || 0).toLocaleString()} total · $${Number(s.withdrawals_today_usdt || 0).toLocaleString()} out`);
+    setText('adm-ana-sync-time', data.server_time_utc ? this.formatAdminDate(data.server_time_utc) : 'Just now');
+
+    this.syncAdminQueueBadges({ onlineNow });
+
+    // 1. Presence Ring Donut SVG
+    this.renderAnalyticsDonutSvg(onlineNow, idleNow, offlineNow);
+
+    // 2. Device Breakdown Bars
+    const devHost = document.getElementById('adm-ana-device-bars');
+    if (devHost) {
+      const devMap = data.device_breakdown || {};
+      const entries = Object.entries(devMap).filter(([, cnt]) => Number(cnt) > 0);
+      const maxDev = entries.reduce((mx, [, c]) => Math.max(mx, Number(c)), 0) || 1;
+      if (!entries.length) {
+        devHost.innerHTML = `<div style="font-size:12px; color:#64748B;">No active client telemetry recorded yet.</div>`;
+      } else {
+        devHost.innerHTML = entries.map(([name, cnt], idx) => {
+          const pct = Math.max(6, Math.round((Number(cnt) / maxDev) * 100));
+          return `
+            <div class="av-adm-ana-bar-row">
+              <div class="av-adm-ana-bar-head"><span>${this.escapeHtml(name)}</span><span>${Number(cnt).toLocaleString()}</span></div>
+              <div class="av-adm-ana-bar-track"><div class="av-adm-ana-bar-fill av-ana-bar-anim" style="width:${pct}%; animation-delay:${idx * 60}ms;"></div></div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // 3. 7-Day Activity Series SVG
+    this.renderAnalyticsSeriesSvg(Array.isArray(data.daily_series) ? data.daily_series : [], this.state.adminAnalyticsChartType || 'signups');
+
+    // 4. Live Active Screens
+    const viewsHost = document.getElementById('adm-ana-views-list');
+    if (viewsHost) {
+      const views = Array.isArray(data.view_breakdown) ? data.view_breakdown : [];
+      const maxV = views.reduce((mx, v) => Math.max(mx, Number(v.count || 0)), 0) || 1;
+      if (!views.length) {
+        viewsHost.innerHTML = `<div style="font-size:12px; color:#64748B; padding:10px 0;">No users are currently viewing pages right now.</div>`;
+      } else {
+        viewsHost.innerHTML = views.map((v, idx) => {
+          const pct = Math.max(8, Math.round((Number(v.count || 0) / maxV) * 100));
+          return `
+            <div class="av-adm-ana-bar-row">
+              <div class="av-adm-ana-bar-head"><span>${this.escapeHtml(this.formatViewDisplayName(v.view))}</span><span>${Number(v.count || 0)} active</span></div>
+              <div class="av-adm-ana-bar-track"><div class="av-adm-ana-bar-fill av-ana-bar-anim" style="width:${pct}%; background:linear-gradient(90deg,#00B87C 0%,#10B981 100%); animation-delay:${idx * 50}ms;"></div></div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // 5. Country Breakdown
+    const countriesHost = document.getElementById('adm-ana-countries-list');
+    if (countriesHost) {
+      const countries = Array.isArray(data.country_breakdown) ? data.country_breakdown : [];
+      const maxC = countries.reduce((mx, c) => Math.max(mx, Number(c.count || 0)), 0) || 1;
+      if (!countries.length) {
+        countriesHost.innerHTML = `<div style="font-size:12px; color:#64748B; padding:10px 0;">No geographic records available yet.</div>`;
+      } else {
+        countriesHost.innerHTML = countries.map((c, idx) => {
+          const pct = Math.max(8, Math.round((Number(c.count || 0) / maxC) * 100));
+          return `
+            <div class="av-adm-ana-bar-row">
+              <div class="av-adm-ana-bar-head"><span>${this.escapeHtml(c.country || 'Unspecified')}</span><span>${Number(c.count || 0)}</span></div>
+              <div class="av-adm-ana-bar-track"><div class="av-adm-ana-bar-fill av-ana-bar-anim" style="width:${pct}%; animation-delay:${idx * 50}ms;"></div></div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // 6. Full User Track Record Table
+    this.filterAdminAnalyticsTable();
+  },
+
+  renderAnalyticsDonutSvg(online = 0, idle = 0, offline = 0) {
+    const host = document.getElementById('adm-ana-donut-svg');
+    if (!host) return;
+    const total = Math.max(1, online + idle + offline);
+    const r = 46;
+    const circ = 2 * Math.PI * r;
+    const segs = [
+      { label: 'Online', val: online, color: '#00B87C' },
+      { label: 'Idle', val: idle, color: '#F59E0B' },
+      { label: 'Offline', val: offline, color: '#CBD5E1' }
+    ];
+
+    let offset = 0;
+    const circles = segs.map(seg => {
+      const len = (seg.val / total) * circ;
+      const dash = `${len.toFixed(2)} ${(circ - len).toFixed(2)}`;
+      const el = `<circle cx="60" cy="60" r="${r}" fill="none" stroke="${seg.color}" stroke-width="14" stroke-dasharray="${dash}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 60 60)" class="av-ana-ring-anim"></circle>`;
+      offset += len;
+      return el;
+    }).join('');
+
+    host.innerHTML = `
+      <svg width="120" height="120" viewBox="0 0 120 120" role="img" aria-label="Online, idle, and offline distribution" style="flex-shrink:0;">
+        <circle cx="60" cy="60" r="${r}" fill="none" stroke="#F1F5F9" stroke-width="14"></circle>
+        ${circles}
+        <text x="60" y="56" text-anchor="middle" font-size="18" font-weight="800" fill="#0F172A" style="font-family:var(--font-mono);">${online + idle}</text>
+        <text x="60" y="72" text-anchor="middle" font-size="10" font-weight="700" fill="#64748B">ACTIVE</text>
+      </svg>
+      <div style="display:flex; flex-direction:column; gap:7px; font-size:12px; min-width:110px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;"><span style="display:inline-flex; align-items:center; gap:6px; font-weight:700; color:#0F172A;"><i style="width:9px;height:9px;border-radius:50%;background:#00B87C;display:inline-block;"></i>Online</span><strong class="mono">${online}</strong></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;"><span style="display:inline-flex; align-items:center; gap:6px; font-weight:700; color:#0F172A;"><i style="width:9px;height:9px;border-radius:50%;background:#F59E0B;display:inline-block;"></i>Idle</span><strong class="mono">${idle}</strong></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;"><span style="display:inline-flex; align-items:center; gap:6px; font-weight:700; color:#64748B;"><i style="width:9px;height:9px;border-radius:50%;background:#CBD5E1;display:inline-block;"></i>Offline</span><strong class="mono">${offline}</strong></div>
+      </div>
+    `;
+  },
+
+  renderAnalyticsSeriesSvg(series = [], metric = 'signups') {
+    const host = document.getElementById('adm-ana-series-svg');
+    const subEl = document.getElementById('adm-ana-series-sub');
+    if (!host) return;
+
+    const metaMap = {
+      signups: { field: 'signups', color: '#0052FF', prefix: '', title: 'New account registrations (last 7 PKT days)' },
+      deposits: { field: 'deposits_usdt', color: '#00B87C', prefix: '$', title: 'Approved deposit inflows in USDT (last 7 PKT days)' },
+      withdrawals: { field: 'withdrawals_usdt', color: '#F59E0B', prefix: '$', title: 'Approved payout outflows in USDT (last 7 PKT days)' },
+      executions: { field: 'signal_executions', color: '#4F46E5', prefix: '', title: 'Verified signal confirmations (last 7 PKT days)' }
+    };
+    const cfg = metaMap[metric] || metaMap.signups;
+    if (subEl) subEl.textContent = cfg.title;
+
+    const rows = Array.isArray(series) && series.length
+      ? series
+      : [{ label: 'Today', [cfg.field]: 0 }];
+    const vals = rows.map(r => Number(r[cfg.field] || 0));
+    const maxVal = Math.max(1, ...vals);
+
+    const w = 500;
+    const h = 165;
+    const padL = 16;
+    const padR = 16;
+    const padT = 22;
+    const padB = 26;
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+    const step = plotW / Math.max(1, rows.length);
+    const barW = Math.min(34, Math.max(16, step * 0.48));
+
+    const gridLines = [0.25, 0.55, 0.85].map(g => {
+      const gy = Number((padT + plotH * g).toFixed(1));
+      return `<line x1="${padL}" y1="${gy}" x2="${w - padR}" y2="${gy}" stroke="#EEF2F7" stroke-width="1" stroke-dasharray="3 4"></line>`;
+    }).join('');
+
+    const barsHtml = rows.map((r, idx) => {
+      const val = Number(r[cfg.field] || 0);
+      const barH = val > 0 ? Math.max(6, (val / maxVal) * plotH) : 2;
+      const cx = padL + step * idx + step / 2;
+      const x = Number((cx - barW / 2).toFixed(1));
+      const y = Number((padT + plotH - barH).toFixed(1));
+      const valTxt = cfg.prefix ? `${cfg.prefix}${val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val.toFixed(0)}` : String(val);
+      return `
+        <g class="av-ana-series-path" style="animation-delay:${idx * 45}ms;">
+          <rect x="${x}" y="${y}" width="${barW}" height="${barH.toFixed(1)}" rx="6" fill="${cfg.color}" fill-opacity="${val > 0 ? '0.88' : '0.2'}"></rect>
+          <text x="${cx}" y="${Math.max(12, y - 5)}" text-anchor="middle" font-size="10" font-weight="700" fill="#334155">${this.escapeHtml(valTxt)}</text>
+          <text x="${cx}" y="${h - 6}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#64748B">${this.escapeHtml(r.label || r.date || '')}</text>
+        </g>
+      `;
+    }).join('');
+
+    host.innerHTML = `
+      <svg viewBox="0 0 ${w} ${h}" width="100%" height="165" style="display:block; overflow:visible;" role="img" aria-label="7-day authentic activity chart">
+        ${gridLines}
+        ${barsHtml}
+      </svg>
+    `;
+  },
+
+  filterAdminAnalyticsTable() {
+    const tbody = document.getElementById('adm-ana-users-tbody');
+    const metaEl = document.getElementById('adm-ana-table-meta');
+    if (!tbody) return;
+
+    const all = Array.isArray(this.state.adminAnalyticsData?.users) ? this.state.adminAnalyticsData.users : [];
+    const filter = String(this.state.adminAnalyticsPresenceFilter || 'ALL').toUpperCase();
+    const q = (document.getElementById('adm-ana-search')?.value || '').trim().toLowerCase();
+
+    const filtered = all.filter(u => {
+      const st = String(u.presence_status || 'OFFLINE').toUpperCase();
+      if (filter !== 'ALL' && st !== filter) return false;
+      if (!q) return true;
+      const hay = `${u.email || ''} ${u.full_name || ''} ${u.numeric_uid || ''} ${u.country || ''} ${u.device || ''} ${u.os || ''} ${u.current_view || ''} ${u.ip || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+
+    if (metaEl) {
+      metaEl.textContent = filtered.length === all.length
+        ? `${all.length} Users`
+        : `${filtered.length} of ${all.length} Users`;
+    }
+
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:26px; color:#64748B;">No user activity records match the selected status or search.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(u => {
+      const st = String(u.presence_status || 'OFFLINE').toUpperCase();
+      const pillCls = st === 'ONLINE' ? 'is-online' : (st === 'IDLE' ? 'is-idle' : 'is-offline');
+      const stLabel = st === 'ONLINE' ? 'Online' : (st === 'IDLE' ? 'Idle' : 'Offline');
+      const viewLabel = st === 'OFFLINE'
+        ? (u.current_view ? `Last: ${this.formatViewDisplayName(u.current_view)}` : 'Session Closed')
+        : this.formatViewDisplayName(u.current_view || 'home');
+      const durText = st !== 'OFFLINE' && Number(u.session_duration_sec || 0) > 0
+        ? ` · ${this.formatDurationShort(u.session_duration_sec)}`
+        : '';
+      const agoText = st === 'ONLINE' ? 'Live now' : this.formatPresenceAgo(u.last_seen_ts, u.last_seen_at);
+      const idArg = this.escapeJsStr(u.id || '');
+      const initial = this.escapeHtml(String(u.full_name || u.email || 'U').trim().charAt(0).toUpperCase() || 'U');
+
+      return `
+        <tr>
+          <td data-label="User">
+            <div class="av-adm-user-cell">
+              <span class="av-adm-user-avatar" aria-hidden="true">${initial}</span>
+              <div class="av-adm-user-meta">
+                <strong class="av-adm-user-name">${this.escapeHtml(u.full_name || 'Member')}</strong>
+                <span class="av-adm-user-sub">${this.escapeHtml(u.email || u.id)} ${u.numeric_uid ? `· #${this.escapeHtml(String(u.numeric_uid))}` : ''}</span>
+              </div>
+            </div>
+          </td>
+          <td data-label="Status"><span class="av-adm-presence-pill ${pillCls}">${stLabel}</span></td>
+          <td data-label="Screen &amp; Session">
+            <div style="font-size:12.5px; font-weight:700; color:#0F172A;">${this.escapeHtml(viewLabel)}${this.escapeHtml(durText)}</div>
+            <div style="font-size:11px; color:#64748B;">${this.escapeHtml(u.country || 'Unspecified')}</div>
+          </td>
+          <td data-label="Device / OS / IP">
+            <div style="font-size:12px; font-weight:600; color:#0F172A;">${this.escapeHtml(u.device || 'Unknown')} · ${this.escapeHtml(u.os || 'Unknown')}</div>
+            <div style="font-size:11px; color:#64748B; font-family:var(--font-mono);">${this.escapeHtml(u.browser || '')}${u.ip ? ` · ${this.escapeHtml(u.ip)}` : ''}</div>
+          </td>
+          <td data-label="Last Seen" style="font-size:12px; font-weight:600; color:#334155; white-space:nowrap;">${this.escapeHtml(agoText)}</td>
+          <td data-label="Deposits" class="mono">
+            <strong style="color:#059669;">$${Number(u.deposits_total_usdt || 0).toFixed(2)}</strong>
+            <div style="font-size:11px; color:#64748B;">${Number(u.deposits_count || 0)} tx</div>
+          </td>
+          <td data-label="Withdrawals" class="mono">
+            <strong>$${Number(u.withdrawals_total_usdt || 0).toFixed(2)}</strong>
+            <div style="font-size:11px; color:#64748B;">${Number(u.withdrawals_count || 0)} tx</div>
+          </td>
+          <td data-label="Signals" class="mono">
+            <strong style="color:#0052FF;">${Number(u.signal_executions_count || 0)}</strong>
+            <div style="font-size:11px; color:#64748B;">+$${Number(u.signal_profit_usdt || 0).toFixed(2)}</div>
+          </td>
+          <td data-label="Action">
+            <button type="button" class="av-adm-btn-chip soft-blue" onclick="App.viewUserDossier('${idArg}')">Detail</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 };
 

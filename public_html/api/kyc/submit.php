@@ -67,6 +67,8 @@ $payload = [
     'selfie_path' => $selfiePath,
     'holding_id_path' => $holdingPath,
     'status' => 'PENDING',
+    'rejection_reason' => null,
+    'reviewer_notes' => 'Submitted for institutional compliance review',
     'updated_at' => gmdate('Y-m-d H:i:s')
 ];
 

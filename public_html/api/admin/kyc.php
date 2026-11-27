@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         foreach ($profRes['data'] as $p) {
             $uid = $p['id'];
             $userMap[$uid] = $p;
-            if (in_array(strtoupper($p['kyc_status'] ?? ''), ['APPROVED', 'PENDING', 'UNDER_REVIEW'])) {
+            if (in_array(strtoupper($p['kyc_status'] ?? ''), ['APPROVED', 'PENDING', 'UNDER_REVIEW', 'REJECTED', 'RESUBMIT_REQUIRED'], true)) {
                 $approvedProfiles[$uid] = $p;
             }
         }
@@ -64,30 +64,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $docType = $k['document_type'] ?? 'NATIONAL_ID';
         $docNum = $k['document_number'] ?? ('ID-' . strtoupper(substr(md5($uid), 0, 8)));
-        $legalName = !empty($k['legal_name']) ? $k['legal_name'] : (!empty($user['email']) ? explode('@', $user['email'])[0] : 'Institutional Trader');
+        $legalName = !empty($k['legal_name']) ? $k['legal_name'] : (!empty($user['email']) ? explode('@', $user['email'])[0] : 'Applicant');
 
-        // Document paths with fallback preview generators
-        $front = $k['front_doc_path'] ?? null;
-        $back = $k['back_doc_path'] ?? null;
-        $selfie = $k['selfie_path'] ?? null;
-        $holding = $k['holding_id_path'] ?? null;
+        $front = trim((string)($k['front_doc_path'] ?? ''));
+        $back = trim((string)($k['back_doc_path'] ?? ''));
+        $selfie = trim((string)($k['selfie_path'] ?? ''));
+        $holding = trim((string)($k['holding_id_path'] ?? ''));
 
-        if (empty($front)) {
-            $front = "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80";
-        }
-        if (empty($back)) {
-            $back = "https://images.unsplash.com/photo-1557683316-973673baf926?w=600&auto=format&fit=crop&q=80";
-        }
-        if (empty($selfie)) {
-            $selfie = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80";
-        }
-
-        // Determine effective status: if profile was explicitly APPROVED/REJECTED, prioritize profile
         $userKyc = strtoupper(trim((string)($user['kyc_status'] ?? '')));
         $subKyc = strtoupper(trim((string)($k['status'] ?? 'PENDING')));
-        $effectiveStatus = in_array($userKyc, ['APPROVED', 'REJECTED', 'PENDING', 'UNDER_REVIEW', 'NOT_SUBMITTED'], true)
+        $effectiveStatus = in_array($userKyc, ['APPROVED', 'REJECTED', 'RESUBMIT_REQUIRED', 'PENDING', 'UNDER_REVIEW', 'NOT_SUBMITTED'], true)
             ? $userKyc
             : $subKyc;
+
+        $frontUrl = ($front !== '' && preg_match('/kyc_[a-f0-9]{32}\.(?:jpg|jpeg|png|pdf)$/i', basename($front)))
+            ? ('/api/kyc/file.php?object=' . rawurlencode(basename($front)))
+            : $front;
+        $backUrl = ($back !== '' && preg_match('/kyc_[a-f0-9]{32}\.(?:jpg|jpeg|png|pdf)$/i', basename($back)))
+            ? ('/api/kyc/file.php?object=' . rawurlencode(basename($back)))
+            : $back;
+        $selfieUrl = ($selfie !== '' && preg_match('/kyc_[a-f0-9]{32}\.(?:jpg|jpeg|png|pdf)$/i', basename($selfie)))
+            ? ('/api/kyc/file.php?object=' . rawurlencode(basename($selfie)))
+            : $selfie;
 
         $formatted[] = [
             'id' => $k['id'] ?? ('kyc_' . bin2hex(random_bytes(6))),
@@ -95,20 +93,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'email' => $user['email'] ?? $uid,
             'referral_code' => $user['referral_code'] ?? '',
             'legal_name' => $legalName,
-            'date_of_birth' => $k['date_of_birth'] ?? '1992-05-14',
+            'date_of_birth' => $k['date_of_birth'] ?? '',
             'country' => $k['country'] ?? ($user['country'] ?? 'Global'),
-            'address' => $k['address'] ?? 'Verified Residence',
+            'address' => $k['address'] ?? '',
             'document_type' => $docType,
             'document_number' => $docNum,
             'front_doc_path' => $front,
             'back_doc_path' => $back,
             'selfie_path' => $selfie,
             'holding_id_path' => $holding,
-            'front_url' => (!empty($front) && preg_match('/kyc_[a-f0-9]{32}\.(?:jpg|jpeg|png|pdf)$/i', basename((string)$front))) ? ('/api/kyc/file.php?object=' . rawurlencode(basename((string)$front))) : $front,
-            'back_url' => (!empty($back) && preg_match('/kyc_[a-f0-9]{32}\.(?:jpg|jpeg|png|pdf)$/i', basename((string)$back))) ? ('/api/kyc/file.php?object=' . rawurlencode(basename((string)$back))) : $back,
-            'selfie_url' => (!empty($selfie) && preg_match('/kyc_[a-f0-9]{32}\.(?:jpg|jpeg|png|pdf)$/i', basename((string)$selfie))) ? ('/api/kyc/file.php?object=' . rawurlencode(basename((string)$selfie))) : $selfie,
+            'front_url' => $frontUrl,
+            'back_url' => $backUrl,
+            'selfie_url' => $selfieUrl,
             'status' => $effectiveStatus,
-            'reviewer_notes' => $k['reviewer_notes'] ?? ($effectiveStatus === 'APPROVED' ? 'Identity verified and approved' : 'Pending compliance audit'),
+            'reviewer_notes' => $k['reviewer_notes'] ?? ($effectiveStatus === 'APPROVED' ? 'Identity verified and approved' : ($effectiveStatus === 'RESUBMIT_REQUIRED' ? 'Document resubmission requested' : 'Pending compliance audit')),
             'rejection_reason' => $k['rejection_reason'] ?? '',
             'reviewed_at' => $k['reviewed_at'] ?? ($k['created_at'] ?? gmdate('Y-m-d H:i:s')),
             'created_at' => $k['created_at'] ?? gmdate('Y-m-d H:i:s'),
@@ -116,14 +114,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ];
     }
 
-    // 3. For any user who is APPROVED or PENDING in profiles but has no kyc_submissions row
+    // 3. For any user who has KYC status in profiles but has no kyc_submissions row
     foreach ($approvedProfiles as $uid => $p) {
         if (!isset($existingUserIds[$uid])) {
             $name = ucwords(str_replace(['.', '_', '-'], ' ', explode('@', $p['email'])[0]));
             $subId = 'kyc_' . substr(md5($uid), 0, 12);
-            $frontSample = "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80";
-            $backSample = "https://images.unsplash.com/photo-1557683316-973673baf926?w=600&auto=format&fit=crop&q=80";
-            $selfieSample = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80";
+            $profStatus = strtoupper(trim((string)($p['kyc_status'] ?? 'PENDING')));
 
             $formatted[] = [
                 'id' => $subId,
@@ -131,20 +127,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 'email' => $p['email'],
                 'referral_code' => $p['referral_code'] ?? '',
                 'legal_name' => $name,
-                'date_of_birth' => '1990-08-20',
-                'country' => $p['country'] ?? 'United States',
-                'address' => 'Institutional Account / Dual Authentication',
-                'document_type' => 'PASSPORT',
-                'document_number' => 'PASS-' . strtoupper(substr(md5($uid), 0, 8)),
-                'front_doc_path' => $frontSample,
-                'back_doc_path' => $backSample,
-                'selfie_path' => $selfieSample,
+                'date_of_birth' => '',
+                'country' => $p['country'] ?? 'Global',
+                'address' => '',
+                'document_type' => 'ID_CARD',
+                'document_number' => 'ID-' . strtoupper(substr(md5($uid), 0, 8)),
+                'front_doc_path' => '',
+                'back_doc_path' => '',
+                'selfie_path' => '',
                 'holding_id_path' => null,
-                'front_url' => $frontSample,
-                'back_url' => $backSample,
-                'selfie_url' => $selfieSample,
-                'status' => $p['kyc_status'] ?? 'APPROVED',
-                'reviewer_notes' => 'Institutional clearance & identity verified',
+                'front_url' => '',
+                'back_url' => '',
+                'selfie_url' => '',
+                'status' => $profStatus,
+                'reviewer_notes' => $profStatus === 'APPROVED' ? 'Institutional clearance & identity verified' : 'Pending compliance audit',
                 'rejection_reason' => '',
                 'reviewed_at' => $p['created_at'] ?? gmdate('Y-m-d H:i:s'),
                 'created_at' => $p['created_at'] ?? gmdate('Y-m-d H:i:s'),
@@ -162,9 +158,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = getJsonBody();
-    $submissionId = trim($input['submission_id'] ?? '');
-    $decision = strtoupper(trim($input['decision'] ?? 'APPROVED'));
-    $reason = trim($input['reason'] ?? ($decision === 'APPROVED' ? 'Verified by Compliance Officer' : 'Identity verification requirements not met'));
+    $submissionId = trim((string)($input['submission_id'] ?? ''));
+    $rawDecision = strtoupper(trim((string)($input['decision'] ?? 'APPROVED')));
+
+    if (in_array($rawDecision, ['APPROVE', 'APPROVED'], true)) {
+        $decision = 'APPROVED';
+    } elseif (in_array($rawDecision, ['REJECT', 'REJECTED'], true)) {
+        $decision = 'REJECTED';
+    } elseif (in_array($rawDecision, ['RESUBMIT', 'RESUBMIT_REQUIRED', 'RESUBMIT_DOCUMENTS'], true)) {
+        $decision = 'RESUBMIT_REQUIRED';
+    } else {
+        sendError('VALIDATION_ERROR', 'Invalid KYC decision. Use APPROVED, REJECTED, or RESUBMIT_REQUIRED.');
+    }
+
+    $defaultReason = $decision === 'APPROVED'
+        ? 'Verified by Compliance Officer'
+        : ($decision === 'RESUBMIT_REQUIRED'
+            ? 'Please upload clearer identity verification documents and resubmit your KYC.'
+            : 'Identity verification requirements not met');
+    $reason = trim((string)($input['reason'] ?? ''));
+    if ($reason === '') {
+        $reason = $defaultReason;
+    }
 
     if (empty($submissionId)) {
         sendError('VALIDATION_ERROR', 'submission_id is required');
@@ -185,11 +200,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Also resolve deterministic fallback id 'kyc_' . substr(md5($uid), 0, 12) when profile has no submission row
+    if (!$userId && strpos($submissionId, 'kyc_') === 0) {
+        $allProfRes = $supabase->select('profiles', ['select' => 'id', 'limit' => '5000']);
+        if (!empty($allProfRes['success']) && is_array($allProfRes['data'] ?? null)) {
+            foreach ($allProfRes['data'] as $pRow) {
+                $candUid = (string)($pRow['id'] ?? '');
+                if ($candUid !== '' && ('kyc_' . substr(md5($candUid), 0, 12)) === $submissionId) {
+                    $userId = $candUid;
+                    break;
+                }
+            }
+        }
+    }
+
     // 1. Update KYC record(s)
     $kycUpdate = [
         'status' => $decision,
         'reviewer_notes' => $reason,
-        'rejection_reason' => ($decision === 'REJECTED' ? $reason : null),
+        'rejection_reason' => in_array($decision, ['REJECTED', 'RESUBMIT_REQUIRED'], true) ? $reason : null,
         'reviewed_at' => gmdate('Y-m-d H:i:s'),
         'updated_at' => gmdate('Y-m-d H:i:s')
     ];
@@ -197,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $supabase->update('kyc_submissions', $kycUpdate, ['id' => "eq.{$submissionId}"]);
     if ($userId) {
         $supabase->update('kyc_submissions', $kycUpdate, ['user_id' => "eq.{$userId}"]);
-        
+
         // 2. Update profile KYC status
         $supabase->update('profiles', [
             'kyc_status' => $decision,
@@ -207,22 +236,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // 3. User notification
     if ($userId) {
-        $notifTitle = $decision === 'APPROVED' ? 'Identity Verification Approved' : 'Identity Verification Declined';
-        $notifMsg = $decision === 'APPROVED' 
-            ? 'Your Real-Name identity documents have been approved by compliance. Full platform privileges and high limits are active.'
-            : "Your KYC verification was not approved. Reason: {$reason}";
+        if ($decision === 'APPROVED') {
+            $notifType = 'KYC_APPROVED';
+            $notifTitle = 'Identity Verification Approved';
+            $notifMsg = 'Your Real-Name identity documents have been approved by compliance. Full platform privileges and high limits are active.';
+        } elseif ($decision === 'RESUBMIT_REQUIRED') {
+            $notifType = 'KYC_RESUBMIT_REQUIRED';
+            $notifTitle = 'KYC Document Resubmission Requested';
+            $notifMsg = "Compliance requested updated identity documents: {$reason} Open KYC Verification to resubmit.";
+        } else {
+            $notifType = 'KYC_REJECTED';
+            $notifTitle = 'Identity Verification Declined';
+            $notifMsg = "Your KYC verification was not approved. Reason: {$reason}";
+        }
 
         $supabase->insert('user_notifications', [[
             'id' => 'notif_' . bin2hex(random_bytes(8)),
             'user_id' => $userId,
-            'type' => $decision === 'APPROVED' ? 'KYC_APPROVED' : 'KYC_REJECTED',
+            'type' => $notifType,
             'title' => $notifTitle,
             'message' => $notifMsg,
             'is_read' => 0,
             'created_at' => gmdate('Y-m-d H:i:s')
         ]]);
 
-        if (in_array($decision, ['APPROVED', 'REJECTED'], true)) {
+        if (in_array($decision, ['APPROVED', 'REJECTED', 'RESUBMIT_REQUIRED'], true)) {
             try {
                 $profLookup = $supabase->select('profiles', [
                     'id' => 'eq.' . (string)$userId,

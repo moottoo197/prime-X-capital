@@ -1,8 +1,16 @@
 <?php
 /**
- * Auth Logout - Invalidate Session
+ * Auth Logout - Invalidate Session & Mark Presence Offline
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/presence.php';
+
+$currentUser = getCurrentUser();
+if ($currentUser) {
+    try {
+        primex_touch_user_presence(getSupabaseClient(), $currentUser, ['offline' => true]);
+    } catch (Throwable $e) {}
+}
 
 $token = extractBearerToken();
 if (!empty($token)) {

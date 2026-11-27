@@ -4,6 +4,7 @@
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/auth_tokens.php';
+require_once dirname(__DIR__) . '/lib/presence.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendError('METHOD_NOT_ALLOWED', 'POST method required', 405);
@@ -131,6 +132,9 @@ $userProfile['email_verified'] = $resolvedEmailVerified;
 
 // Create an opaque server session with DB + server-side fallback persistence.
 $sessionMeta = primex_create_session($userProfile);
+try {
+    primex_touch_user_presence($supabase, $userProfile, ['view' => 'home']);
+} catch (Throwable $e) {}
 
 $isAdmin = in_array(strtoupper((string)($userProfile['role'] ?? '')), $adminRoles, true);
 primex_record_log('AUTH', 'LOGIN_SUCCESS', 'User signed in', [

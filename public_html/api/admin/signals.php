@@ -462,6 +462,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
 
     $rawSignals = is_array($sigRes['data']) ? $sigRes['data'] : [];
+    primex_promote_due_signals($supabase, $rawSignals);
     $adminNow = new DateTime('now', new DateTimeZone('Asia/Karachi'));
     $adminToday = $adminNow->format('Y-m-d');
     $signals = [];

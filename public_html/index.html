@@ -4191,7 +4191,7 @@ html.color-mode-red-up .market-rate-pill.neg {
 }
 
   </style>
-  <link rel="stylesheet" href="/assets/css/app.css?v=20261126_v136_fixes_details_history">
+  <link rel="stylesheet" href="/assets/css/app.css?v=20261126_v137_notif_kyc_mail_analytics">
 
 <style id="alphavest-translation-widget-style">
 /* GTranslate does not inject Google's old top translation banner. Keep its selector mounted off-screen. */
@@ -6082,6 +6082,13 @@ window.gtranslateSettings = {
               </span>
               <span class="nav-label">Overview</span>
             </button>
+            <button class="admin-nav-item adm-tab-btn" data-adm="analytics" onclick="App.setAdminTab('analytics')">
+              <span class="nav-icon">
+                <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+              </span>
+              <span class="nav-label">Analytics</span>
+              <span id="adm-badge-online" class="nav-badge badge-positive" style="display:none;"></span>
+            </button>
             <button class="admin-nav-item adm-tab-btn" data-adm="signals" onclick="App.setAdminTab('signals')">
               <span class="nav-icon">
                 <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
@@ -6184,6 +6191,9 @@ window.gtranslateSettings = {
           <!-- Horizontal Desk Switcher -->
           <div class="admin-mobile-pill-nav" id="admin-mobile-pill-nav">
             <button class="adm-pill-btn adm-tab-btn active" data-adm="overview" onclick="App.setAdminTab('overview')">Overview</button>
+            <button class="adm-pill-btn adm-tab-btn" data-adm="analytics" onclick="App.setAdminTab('analytics')">
+              Analytics <span id="adm-pill-badge-online" class="pill-badge badge-positive" style="display:none;"></span>
+            </button>
             <button class="adm-pill-btn adm-tab-btn" data-adm="users" onclick="App.setAdminTab('users')">Users</button>
             <button class="adm-pill-btn adm-tab-btn" data-adm="referrals" onclick="App.setAdminTab('referrals')">Referral Trees</button>
             <button class="adm-pill-btn adm-tab-btn" data-adm="deposits" onclick="App.setAdminTab('deposits')">
@@ -6374,7 +6384,43 @@ window.gtranslateSettings = {
                       <span class="av-adm-chevron">›</span>
                     </div>
                   </button>
+
+                  <button type="button" class="av-adm-action-row" onclick="App.setAdminTab('analytics')">
+                    <span class="av-adm-action-icon emerald">
+                      <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+                    </span>
+                    <div class="av-adm-action-text">
+                      <div class="av-adm-action-title">Live User Analytics</div>
+                      <div class="av-adm-action-sub">Online / Offline presence &amp; records</div>
+                    </div>
+                    <div class="av-adm-action-right">
+                      <span id="adm-quick-analytics" class="av-adm-action-count good">Live</span>
+                      <span class="av-adm-chevron">›</span>
+                    </div>
+                  </button>
                 </div>
+              </div>
+            </div>
+
+            <!-- Overview: Pending KYC Verification Queue -->
+            <div id="adm-overview-pending-kyc-card" class="card av-adm-table-card av-adm-overview-kyc-card" style="margin-bottom:16px;">
+              <div class="av-adm-section-head">
+                <div>
+                  <h4 style="display:flex; align-items:center; gap:8px;">
+                    Pending KYC Verifications
+                    <span id="adm-overview-pending-kyc-count" class="badge badge-warning" style="font-size:11.5px; padding:3px 9px;">0 Pending</span>
+                  </h4>
+                  <p style="margin:3px 0 0; font-size:12px; color:#64748B;">
+                    Real-time incoming identity submissions ready for instant verification or full inspection
+                  </p>
+                </div>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <button type="button" class="btn-secondary" style="font-size:12px; padding:6px 12px;" onclick="App.loadAdminData()">Refresh</button>
+                  <button type="button" class="btn-primary" style="font-size:12px; padding:6px 14px;" onclick="App.setAdminTab('kyc')">Open KYC Desk →</button>
+                </div>
+              </div>
+              <div id="adm-overview-pending-kyc-list" class="av-adm-overview-kyc-list">
+                <div style="padding:18px; text-align:center; color:#64748B; font-size:12.5px;">Checking KYC verification queue...</div>
               </div>
             </div>
 
@@ -6881,6 +6927,7 @@ window.gtranslateSettings = {
                     <option value="PENDING">Pending Review</option>
                     <option value="APPROVED">Approved</option>
                     <option value="REJECTED">Rejected</option>
+                    <option value="RESUBMIT_REQUIRED">Resubmit Requested</option>
                   </select>
                   <button type="button" class="btn-secondary" style="font-size:12px; padding:7px 12px;" onclick="App.loadAdminKyc()">Refresh Queue</button>
                 </div>
@@ -7322,45 +7369,44 @@ window.gtranslateSettings = {
             </div>
           </div>
 
-          <!-- Admin Tab: Support Chat Desk -->
+          <!-- Admin Tab: Support Chat Desk (Clean White/Cobalt/Slate Command Workspace) -->
           <div id="adm-sec-support" class="admin-panel-sec" style="display:none;">
-            <!-- Obsidian Midnight Command Header -->
-            <div class="av-adm-sup-hero">
-              <div class="av-adm-sup-hero-grid" aria-hidden="true"></div>
-              <div class="av-adm-sup-hero-inner">
-                <div class="av-adm-sup-hero-left">
-                  <div class="av-adm-sup-hero-mark" aria-hidden="true">
-                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <div class="av-adm-sup-command card">
+              <div class="av-adm-sup-command-top">
+                <div class="av-adm-sup-command-brand">
+                  <div class="av-adm-sup-command-mark" aria-hidden="true">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                   </div>
-                  <div class="av-adm-sup-hero-copy">
-                    <div class="av-adm-sup-hero-eyebrow">PRIME X DESK · LIVE QUEUE</div>
-                    <h3>Live Support Command</h3>
-                    <p>Direct client inquiries, KYC verification reviews, and treasury desk triage</p>
+                  <div class="av-adm-sup-command-copy">
+                    <div class="av-adm-sup-command-eyebrow">
+                      <span class="av-adm-sup-live-dot" aria-hidden="true"></span>
+                      LIVE CLIENT SUPPORT DESK
+                    </div>
+                    <h3>Support Command Workspace</h3>
+                    <p>Unified ticket triage, instant client dossier lookup, and priority response queue</p>
                   </div>
                 </div>
-                <div class="av-adm-sup-hero-metrics" aria-label="Support queue summary">
-                  <div class="av-adm-sup-metric">
-                    <span class="av-adm-sup-metric-label">Total</span>
-                    <strong id="adm-sup-kpi-total" class="av-adm-sup-metric-val">0</strong>
+
+                <div class="av-adm-sup-kpi-strip" aria-label="Support queue summary">
+                  <div class="av-adm-sup-kpi-chip">
+                    <span class="av-adm-sup-kpi-lbl">Total Threads</span>
+                    <strong id="adm-sup-kpi-total" class="av-adm-sup-kpi-val">0</strong>
                   </div>
-                  <div class="av-adm-sup-metric">
-                    <span class="av-adm-sup-metric-label">Needs Reply</span>
-                    <strong id="adm-sup-kpi-needs" class="av-adm-sup-metric-val is-amber">0</strong>
+                  <div class="av-adm-sup-kpi-chip is-amber">
+                    <span class="av-adm-sup-kpi-lbl">Needs Reply</span>
+                    <strong id="adm-sup-kpi-needs" class="av-adm-sup-kpi-val">0</strong>
                   </div>
-                  <div class="av-adm-sup-metric">
-                    <span class="av-adm-sup-metric-label">Active Open</span>
-                    <strong id="adm-sup-kpi-open" class="av-adm-sup-metric-val is-blue">0</strong>
+                  <div class="av-adm-sup-kpi-chip is-blue">
+                    <span class="av-adm-sup-kpi-lbl">Active Open</span>
+                    <strong id="adm-sup-kpi-open" class="av-adm-sup-kpi-val">0</strong>
                   </div>
-                  <div class="av-adm-sup-metric">
-                    <span class="av-adm-sup-metric-label">Resolved</span>
-                    <strong id="adm-sup-kpi-resolved" class="av-adm-sup-metric-val is-emerald">0</strong>
+                  <div class="av-adm-sup-kpi-chip is-emerald">
+                    <span class="av-adm-sup-kpi-lbl">Resolved</span>
+                    <strong id="adm-sup-kpi-resolved" class="av-adm-sup-kpi-val">0</strong>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Interactive Filter & Search Controls Above Chat List -->
-            <div class="av-adm-sup-toolbar card">
               <div class="av-adm-sup-toolbar-row">
                 <div class="av-adm-sup-seg-tabs" role="tablist" aria-label="Filter support conversations">
                   <button type="button" class="av-adm-sup-seg-btn active" role="tab" aria-selected="true" data-sup-filter="ALL" onclick="App.setAdminSupportFilter('ALL')">
@@ -7457,6 +7503,178 @@ window.gtranslateSettings = {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Admin Tab: Real-Time User Analytics & Presence Tracking -->
+          <div id="adm-sec-analytics" class="admin-panel-sec" style="display:none;">
+            <div class="card av-adm-ana-header">
+              <div class="av-adm-ana-title-wrap">
+                <div class="av-adm-ana-mark" aria-hidden="true">
+                  <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+                </div>
+                <div>
+                  <div class="av-adm-ana-eyebrow">
+                    <span class="av-adm-ana-live-dot" aria-hidden="true"></span>
+                    AUTHENTIC REAL-TIME TELEMETRY
+                  </div>
+                  <h3>Live User Presence &amp; Activity Analytics</h3>
+                  <p>Live Online / Idle / Offline heartbeat state, active workspace screens, and verified account track records</p>
+                </div>
+              </div>
+              <div class="av-adm-ana-header-actions">
+                <div class="av-adm-ana-sync-pill">
+                  <span>Last Sync</span>
+                  <strong id="adm-ana-sync-time">—</strong>
+                </div>
+                <button type="button" id="btn-adm-ana-refresh" class="av-adm-btn-chip cobalt" onclick="App.loadAdminAnalytics({ manual: true })">
+                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                  <span>Refresh Live</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="av-adm-ana-kpi-grid">
+              <div class="av-adm-ana-kpi is-emerald">
+                <div class="av-adm-ana-kpi-top">
+                  <span>Online Now</span>
+                  <span class="av-adm-ana-pulse-dot" aria-hidden="true"></span>
+                </div>
+                <strong id="adm-ana-online" class="av-adm-ana-kpi-val">0</strong>
+                <span id="adm-ana-online-pct" class="av-adm-ana-kpi-sub">0% of accounts</span>
+              </div>
+              <div class="av-adm-ana-kpi is-amber">
+                <div class="av-adm-ana-kpi-top">
+                  <span>Idle Sessions</span>
+                </div>
+                <strong id="adm-ana-idle" class="av-adm-ana-kpi-val">0</strong>
+                <span class="av-adm-ana-kpi-sub">Active &le; 15 min</span>
+              </div>
+              <div class="av-adm-ana-kpi is-slate">
+                <div class="av-adm-ana-kpi-top">
+                  <span>Offline Users</span>
+                </div>
+                <strong id="adm-ana-offline" class="av-adm-ana-kpi-val">0</strong>
+                <span id="adm-ana-verified-sub" class="av-adm-ana-kpi-sub">0 KYC verified</span>
+              </div>
+              <div class="av-adm-ana-kpi is-blue">
+                <div class="av-adm-ana-kpi-top">
+                  <span>Active Today</span>
+                </div>
+                <strong id="adm-ana-active-today" class="av-adm-ana-kpi-val">0</strong>
+                <span id="adm-ana-new-today" class="av-adm-ana-kpi-sub">0 new signups today</span>
+              </div>
+              <div class="av-adm-ana-kpi is-cobalt">
+                <div class="av-adm-ana-kpi-top">
+                  <span>Deposits Today</span>
+                </div>
+                <strong id="adm-ana-deposits-today" class="av-adm-ana-kpi-val">$0.00</strong>
+                <span id="adm-ana-dep-total-sub" class="av-adm-ana-kpi-sub">$0.00 all-time</span>
+              </div>
+              <div class="av-adm-ana-kpi is-indigo">
+                <div class="av-adm-ana-kpi-top">
+                  <span>Signals Today</span>
+                </div>
+                <strong id="adm-ana-execs-today" class="av-adm-ana-kpi-val">0</strong>
+                <span id="adm-ana-exec-total-sub" class="av-adm-ana-kpi-sub">0 total · $0.00 out</span>
+              </div>
+            </div>
+
+            <div class="av-adm-ana-charts-grid">
+              <div class="card av-adm-ana-chart-card">
+                <div class="av-adm-ana-card-head">
+                  <div>
+                    <h4>Presence Distribution &amp; Devices</h4>
+                    <p>Live account connectivity &amp; client runtime split</p>
+                  </div>
+                </div>
+                <div class="av-adm-ana-donut-layout">
+                  <div id="adm-ana-donut-svg" class="av-adm-ana-donut-host"></div>
+                  <div class="av-adm-ana-device-col">
+                    <div class="av-adm-ana-device-title">Session Device Breakdown</div>
+                    <div id="adm-ana-device-bars" class="av-adm-ana-bars-stack"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card av-adm-ana-chart-card">
+                <div class="av-adm-ana-card-head">
+                  <div>
+                    <h4>7-Day Authentic Activity Trend</h4>
+                    <p id="adm-ana-series-sub">Daily real platform telemetry (PKT)</p>
+                  </div>
+                  <div class="av-adm-ana-metric-tabs" role="tablist" aria-label="Select 7-day analytics metric">
+                    <button type="button" class="av-adm-ana-tab active" data-ana-metric="signups" onclick="App.setAdminAnalyticsChartType('signups')">Signups</button>
+                    <button type="button" class="av-adm-ana-tab" data-ana-metric="deposits" onclick="App.setAdminAnalyticsChartType('deposits')">Deposits</button>
+                    <button type="button" class="av-adm-ana-tab" data-ana-metric="withdrawals" onclick="App.setAdminAnalyticsChartType('withdrawals')">Withdrawals</button>
+                    <button type="button" class="av-adm-ana-tab" data-ana-metric="executions" onclick="App.setAdminAnalyticsChartType('executions')">Signals</button>
+                  </div>
+                </div>
+                <div id="adm-ana-series-svg" class="av-adm-ana-series-host"></div>
+              </div>
+            </div>
+
+            <div class="av-adm-ana-breakdown-grid">
+              <div class="card av-adm-ana-panel">
+                <div class="av-adm-ana-card-head">
+                  <div>
+                    <h4>Live Active Screens</h4>
+                    <p>Pages currently open by Online &amp; Idle members</p>
+                  </div>
+                </div>
+                <div id="adm-ana-views-list" class="av-adm-ana-bars-stack"></div>
+              </div>
+
+              <div class="card av-adm-ana-panel">
+                <div class="av-adm-ana-card-head">
+                  <div>
+                    <h4>Top User Countries</h4>
+                    <p>Geographic distribution across registered accounts</p>
+                  </div>
+                </div>
+                <div id="adm-ana-countries-list" class="av-adm-ana-bars-stack"></div>
+              </div>
+            </div>
+
+            <div class="card av-adm-table-card">
+              <div class="av-adm-section-head">
+                <div>
+                  <h4 style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    User Online / Offline Track Record
+                    <span id="adm-ana-table-meta" class="av-adm-sup-filter-tag">0 Users</span>
+                  </h4>
+                  <p style="margin:3px 0 0; font-size:12px; color:#64748B;">Complete per-user presence status, device fingerprint, session duration, and verified financial totals</p>
+                </div>
+                <div class="av-adm-ana-table-controls">
+                  <div class="av-adm-ana-filter-chips" role="tablist" aria-label="Filter users by presence status">
+                    <button type="button" class="av-adm-ana-chip active" data-presence="ALL" onclick="App.setAdminAnalyticsPresenceFilter('ALL')">All</button>
+                    <button type="button" class="av-adm-ana-chip" data-presence="ONLINE" onclick="App.setAdminAnalyticsPresenceFilter('ONLINE')">Online</button>
+                    <button type="button" class="av-adm-ana-chip" data-presence="IDLE" onclick="App.setAdminAnalyticsPresenceFilter('IDLE')">Idle</button>
+                    <button type="button" class="av-adm-ana-chip" data-presence="OFFLINE" onclick="App.setAdminAnalyticsPresenceFilter('OFFLINE')">Offline</button>
+                  </div>
+                  <input type="search" id="adm-ana-search" class="av-adm-ana-search" placeholder="Search email, UID, country, device..." oninput="App.filterAdminAnalyticsTable()">
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="admin-table av-mobile-cards av-adm-ana-table">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Status</th>
+                      <th>Active Screen &amp; Session</th>
+                      <th>Device / OS / IP</th>
+                      <th>Last Seen</th>
+                      <th>Deposits</th>
+                      <th>Withdrawals</th>
+                      <th>Signals</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adm-ana-users-tbody">
+                    <tr><td colspan="9" style="text-align:center; padding:24px; color:#64748B;">Loading live analytics records...</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -11266,7 +11484,7 @@ window.gtranslateSettings = {
   </script>
   <script>
 (function(){
-  const CACHE_VERSION = "20261126_v136_fixes_details_history";
+  const CACHE_VERSION = "20261126_v137_notif_kyc_mail_analytics";
   const KEY = "alphavest_cache_version";
   try {
     const old = localStorage.getItem(KEY);
@@ -11298,18 +11516,18 @@ window.gtranslateSettings = {
   } catch(e) {}
 })();
 </script>
-<script defer src="/assets/js/3d-engine.js?v=20261126_v136_fixes_details_history"></script>
-  <script defer src="/assets/js/chart.js?v=20261126_v136_fixes_details_history"></script>
+<script defer src="/assets/js/3d-engine.js?v=20261126_v137_notif_kyc_mail_analytics"></script>
+  <script defer src="/assets/js/chart.js?v=20261126_v137_notif_kyc_mail_analytics"></script>
   <!-- Local Georgian localization only; external Google Translate toolbar disabled. -->
-  <script defer src="/assets/js/app.js?v=20261126_v136_fixes_details_history"></script>
-  <script defer src="/assets/js/georgian-localization.js?v=20261126_v136_fixes_details_history"></script>
+  <script defer src="/assets/js/app.js?v=20261126_v137_notif_kyc_mail_analytics"></script>
+  <script defer src="/assets/js/georgian-localization.js?v=20261126_v137_notif_kyc_mail_analytics"></script>
   <script>
     // PRIME X CAPITAL hot-update manager: detect a new deployment while the page is open,
     // activate the new service worker, then reload once. Auth/session storage is untouched.
     (function(){
       'use strict';
       if (!('serviceWorker' in navigator) || !window.fetch) return;
-      var SW_BUILD = "20261126_v136_fixes_details_history";
+      var SW_BUILD = "20261126_v137_notif_kyc_mail_analytics";
       var CHECK_MS = 120000;
       var VERSION_KEY = 'alphavest_hot_update_version';
       var busy = false;

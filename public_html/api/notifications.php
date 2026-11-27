@@ -40,18 +40,22 @@ if ($supabase->isConfigured()) {
         ],
         'live_signals' => [
             'table' => 'trading_signals',
-            'params' => ['status' => 'in.(PUBLISHED,ACTIVE)', 'select' => 'id,symbol,direction,profit_percentage,duration_minutes,daily_slot,published_at,scheduled_at,expires_at,created_at', 'order' => 'published_at.desc', 'limit' => '10']
+            'params' => ['status' => 'in.(PUBLISHED,ACTIVE,SCHEDULED)', 'select' => 'id,symbol,direction,profit_percentage,duration_minutes,daily_slot,status,published_at,scheduled_at,expires_at,created_at', 'order' => 'published_at.desc', 'limit' => '15']
         ],
         'stored_notifications' => [
             'table' => 'user_notifications',
-            'params' => ['user_id' => "eq.{$userId}", 'select' => 'id,user_id,type,title,message,is_read,created_at', 'order' => 'created_at.desc', 'limit' => '15']
+            'params' => ['user_id' => "eq.{$userId}", 'select' => 'id,user_id,type,title,message,is_read,created_at', 'order' => 'created_at.desc', 'limit' => '25']
         ]
     ]);
 
     // -1. Stored user notifications (e.g. Additional Signal deposit/referral unlocks)
+    // Strictly exclude internal READ_CURSOR metadata rows so JSON cursors never appear in UI.
     $storedRes = $batch['stored_notifications'] ?? ['success' => false];
     if (!empty($storedRes['success']) && is_array($storedRes['data'] ?? null)) {
         foreach ($storedRes['data'] as $sn) {
+            if (!is_array($sn) || primex_is_internal_read_cursor_row($sn)) {
+                continue;
+            }
             $notifications[] = [
                 'id' => 'notif_db_' . ($sn['id'] ?? bin2hex(random_bytes(4))),
                 'user_id' => $userId,
@@ -67,10 +71,16 @@ if ($supabase->isConfigured()) {
     // 0. Live trading signal broadcasts (shown on all user dashboards while active)
     $liveSigRes = $batch['live_signals'] ?? ['success' => false];
     if ($liveSigRes['success'] && is_array($liveSigRes['data'])) {
+        require_once __DIR__ . '/lib/signal_broadcast.php';
+        $liveRows = $liveSigRes['data'];
+        primex_promote_due_signals($supabase, $liveRows);
+        primex_schedule_signal_live_broadcast($supabase, $liveRows);
         $nowUtcTs = time();
-        foreach ($liveSigRes['data'] as $ls) {
+        foreach ($liveRows as $ls) {
             $lsId = trim((string)($ls['id'] ?? ''));
             if ($lsId === '' || strpos($lsId, 'sig_test_') === 0) continue;
+            $lsStatus = strtoupper(trim((string)($ls['status'] ?? '')));
+            if (!in_array($lsStatus, ['PUBLISHED', 'ACTIVE'], true)) continue;
             $pubRaw = (string)($ls['published_at'] ?? $ls['scheduled_at'] ?? $ls['created_at'] ?? '');
             $expRaw = (string)($ls['expires_at'] ?? '');
             $pubTs = $pubRaw !== '' ? strtotime($pubRaw) : false;
@@ -187,6 +197,17 @@ if ($supabase->isConfigured()) {
                     'type' => 'KYC_APPROVED',
                     'title' => 'Identity Verification Approved',
                     'message' => 'Your Real-Name identity documents have been approved by compliance. High withdrawal limits and institutional privileges are active.',
+                    'is_read' => 0,
+                    'created_at' => $time
+                ];
+            } elseif ($status === 'RESUBMIT_REQUIRED') {
+                $reason = !empty($k['reviewer_notes']) ? " Note: {$k['reviewer_notes']}" : (!empty($k['rejection_reason']) ? " Note: {$k['rejection_reason']}" : '');
+                $notifications[] = [
+                    'id' => 'notif_kyc_resubmit_' . ($k['id'] ?? bin2hex(random_bytes(4))) . '_' . substr(md5($time), 0, 6),
+                    'user_id' => $userId,
+                    'type' => 'KYC_RESUBMIT_REQUIRED',
+                    'title' => 'KYC Document Resubmission Requested',
+                    'message' => "Compliance requested updated identity verification documents.{$reason} Please open KYC Verification to resubmit.",
                     'is_read' => 0,
                     'created_at' => $time
                 ];

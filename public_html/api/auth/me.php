@@ -4,6 +4,7 @@
  */
 require_once dirname(__DIR__) . '/bootstrap.php';
 require_once dirname(__DIR__) . '/lib/auth_tokens.php';
+require_once dirname(__DIR__) . '/lib/presence.php';
 
 $user = getCurrentUser();
 if (!$user) {
@@ -22,6 +23,10 @@ $isAdmin = in_array(strtoupper((string)($user['role'] ?? '')), ['SUPER_ADMIN', '
 $country = !empty($user['country']) ? trim((string)$user['country']) : (!empty($_COOKIE['alphavest_country']) ? trim((string)$_COOKIE['alphavest_country']) : '');
 $timezone = !empty($user['timezone']) ? trim((string)$user['timezone']) : (!empty($_COOKIE['alphavest_timezone']) ? trim((string)$_COOKIE['alphavest_timezone']) : 'Asia/Karachi');
 $emailVerified = primex_is_email_verified_resolved($user, $supabase);
+$requestedView = trim((string)($_GET['view'] ?? 'home'));
+try {
+    primex_touch_user_presence($supabase, $user, ['view' => $requestedView]);
+} catch (Throwable $e) {}
 
 sendSuccess([
     'user' => [

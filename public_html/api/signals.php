@@ -62,6 +62,7 @@ $sigRes = $supabase->select('trading_signals', [
     'limit' => '500'
 ]);
 $allSignals = ($sigRes['success'] && is_array($sigRes['data'])) ? $sigRes['data'] : [];
+primex_promote_due_signals($supabase, $allSignals);
 foreach ($allSignals as &$dailyDisplaySignal) {
     $sid = (string)($dailyDisplaySignal['id'] ?? '');
     $dSlot = (int)($dailyDisplaySignal['daily_slot'] ?? 0);
